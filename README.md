@@ -14,7 +14,7 @@ Briefly describe what the project does, who it serves, and the main value (1–2
 
 ## Team
 - Team lead — Shoval Baruch — shovalbaruch111@gmail.com — shovalbaruch11 - 213707805
-- Members — Lior Lifshits — team member — liorlf@post.jce.ac.il - lior97531
+- Members — Lior Lifshits — team member — liorlf@post.jce.ac.il - lior97531 -209389469
 - Members — Tomy Cohen — team member — tomyco@post.jce.ac.il - Tomyco1
 - Members — Tal zada — team member — talzada444@gmail.com - Talzada444
 
