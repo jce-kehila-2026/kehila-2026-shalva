@@ -13,8 +13,11 @@ Briefly describe what the project does, who it serves, and the main value (1–2
 - Key deliverable for them: e.g., "Simple roster export and sign-up form."
 
 ## Team
-- Team lead — Name — email — GitHub  
-- Members — Name — role — GitHub  
+- Team lead — Shoval Baruch — shovalbaruch111@gmail.com — shovalbaruch11 - 213707805
+- Members — Lior Lifshits — team member — liorlf@post.jce.ac.il - lior97531
+- Members — Lior Lifshits — team member — liorlf@post.jce.ac.il - lior97531
+- Members — Lior Lifshits — team member — liorlf@post.jce.ac.il - lior97531
+
 Include student IDs if required.
 
 ## Quick start (local)
