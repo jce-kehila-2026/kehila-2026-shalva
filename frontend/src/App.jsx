@@ -30,7 +30,7 @@ function App() {
         </button>
 
         <button type="button"
-        className="couner"
+        className="couner-"
         onClick={()=> setCount((count)=> count -1)}>
         Count is {count}
         </button>
