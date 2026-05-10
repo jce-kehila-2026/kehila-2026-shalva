@@ -69,18 +69,14 @@ const UserList = () => {
                 </div>
                 <div className="user-details">
                   <div className="user-name">
-                    {user.name || 'Unnamed User'}
+                    {user.firstName +" "+ user.lastName || 'Unnamed User'}
                   </div>
                   <div className="user-email">
-                    {user.email || user.id}
+                    {user.id}
                   </div>
                 </div>
               </div>
-              {user.role && (
-                <div className="user-role">
-                  {user.role}
-                </div>
-              )}
+              
             </li>
           ))}
         </ul>
