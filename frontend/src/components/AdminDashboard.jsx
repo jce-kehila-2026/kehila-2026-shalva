@@ -2,6 +2,7 @@ import { useState } from 'react';
 // Import your sub-screens here as you build them:
 // import GroupManagement from './GroupManagement';
 // import VolunteerManagement from './VolunteerManagement';
+ import GuideManagement from './GuideManagement';
 
 function AdminDashboard() {
   // 'menu' means we show the main 5 option buttons
@@ -30,6 +31,7 @@ function AdminDashboard() {
         <div>
           <button onClick={() => setCurrentView('menu')}>← Back to Menu</button>
           <h3>Guide Management Screen (Screen 9)</h3>
+          { <GuideManagement /> }
         </div>
       );
     case 'events':
