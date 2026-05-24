@@ -4,9 +4,7 @@ import { auth } from './firebase'
 import './App.css'
 import Login from './components/Login'
 import UserList from './components/UserList'
-import GuideDashboard from './components/GuideDashboard';
-import { BrowserRouter } from 'react-router-dom';
-/* eslint-disable */
+
 function App() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -35,11 +33,7 @@ function App() {
       </div>
     )
   }
-  return (
-    <BrowserRouter>
-      <GuideDashboard />
-    </BrowserRouter>
-  );
+  
 
   return (
     <div style={{ width: '100%', padding: '20px', boxSizing: 'border-box' }}>
