@@ -4,6 +4,8 @@ import { auth } from './firebase'
 import './App.css'
 import Login from './components/Login'
 import UserList from './components/UserList'
+import GroupManagement from './components/GroupManagement'
+
 
 function App() {
   const [user, setUser] = useState(null)
@@ -24,14 +26,18 @@ function App() {
       console.error('Error logging out:', error)
     }
   }
+  
 
   if (loading) {
-    
+
+
     return (
+      
       <div id="center">
         <div className="counter">Loading...</div>
       </div>
     )
+    
   }
   
 
@@ -43,7 +49,8 @@ function App() {
             <h2 style={{ margin: 0 }}>Welcome, {user.email}</h2>
             <button className="counter" onClick={handleLogout} style={{ margin: 0 }}>Logout</button>
           </header>
-          <UserList />
+          {/* <UserList /> */}
+          <GroupManagement />
         </div>
       ) : (
         <div id="center">
@@ -53,5 +60,6 @@ function App() {
     </div>
   )
 }
+
 
 export default App
