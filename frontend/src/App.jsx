@@ -1,21 +1,52 @@
 import { useState, useEffect } from 'react'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
-import { auth } from './firebase'
+import { auth, db } from './firebase' // Ensure 'db' is exported from your firebase.js
+import { doc, getDoc } from 'firebase/firestore'
 import './App.css'
+
 import Login from './components/Login'
 import UserList from './components/UserList'
+import AdminDashboard from './components/AdminDashboard'
 
 function App() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser)
-      setLoading(false)
-    })
-    return () => unsubscribe()
-  }, [])
+    // This is the listener for the Auth state
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      try {
+        if (currentUser) {
+          // 1. Reference the specific document in the 'users' collection
+          const userDocRef = doc(db, 'users', currentUser.uid);
+          
+          // 2. Fetch the document
+          const userDocSnap = await getDoc(userDocRef);
+
+          if (userDocSnap.exists()) {
+            const userData = userDocSnap.data();
+            // 3. Merge Auth data + Firestore data
+            setUser({
+              ...currentUser,
+              role: userData.role // This pulls 'admin', 'guide', etc.
+            });
+          } else {
+            console.warn("No user document found in Firestore!");
+            setUser({ ...currentUser, role: 'viewer' }); // Fallback
+          }
+        } else {
+          setUser(null);
+        }
+      } catch (error) {
+        console.error("Error fetching user role:", error);
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -25,10 +56,26 @@ function App() {
     }
   }
 
+  const renderRoleContent = () => {
+    if (!user) return <Login />;
+
+    // Use the role we just fetched, defaulting to 'viewer'
+    const role = user.role || 'viewer'; 
+
+    switch (role) {
+      case 'admin':
+        return <AdminDashboard />;
+      case 'guide':
+        return <div>Guide Panel (Coming Soon)</div>;
+      default:
+        return <UserList />;
+    }
+  }
+
   if (loading) {
     return (
       <div id="center">
-        <div className="counter">Loading...</div>
+        <div className="counter">Loading Profile...</div>
       </div>
     )
   }
@@ -38,10 +85,17 @@ function App() {
       {user ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '20px', borderBottom: '1px solid var(--border)' }}>
-            <h2 style={{ margin: 0 }}>Welcome, {user.email}</h2>
-            <button className="counter" onClick={handleLogout} style={{ margin: 0 }}>Logout</button>
+            <div>
+              <h2 style={{ margin: 0 }}>Welcome, {user.email}</h2>
+              <p style={{ margin: 0, color: 'gray', fontSize: '0.9rem' }}>
+                Role: <strong>{user.role || 'User'}</strong>
+              </p>
+            </div>
+            <button className="counter" onClick={handleLogout}>Logout</button>
           </header>
-          <UserList />
+          
+          {renderRoleContent()}
+          
         </div>
       ) : (
         <div id="center">
