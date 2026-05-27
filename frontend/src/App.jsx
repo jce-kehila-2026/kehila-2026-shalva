@@ -7,10 +7,17 @@ import './App.css'
 import Login from './components/Login'
 import UserList from './components/UserList'
 import AdminDashboard from './components/AdminDashboard'
+import EventManagement from './components/EventManagement/EventManagement'
+import EventDetails from './components/EventDetails/EventDetails'
+import Reports from './components/Reports/Reports'
+import VolunteerDetails from './components/VolunteerDetails/VolunteerDetails'
 
 function App() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [activeScreen, setActiveScreen] = useState('users')
+  const [selectedEvent, setSelectedEvent] = useState(null)
+  const [selectedVolunteer, setSelectedVolunteer] = useState(null)
 
   useEffect(() => {
     // This is the listener for the Auth state
@@ -56,6 +63,34 @@ function App() {
     }
   }
 
+  const renderScreens = () => {
+    if (selectedEvent) {
+      return (
+        <EventDetails
+          event={selectedEvent}
+          onBack={() => { setSelectedEvent(null); setActiveScreen('events'); }}
+        />
+      );
+    }
+    if (selectedVolunteer) {
+      return (
+        <VolunteerDetails
+          volunteer={selectedVolunteer}
+          onBack={() => { setSelectedVolunteer(null); setActiveScreen('users'); }}
+        />
+      );
+    }
+    switch (activeScreen) {
+      case 'events':
+        return <EventManagement onOpenEventDetails={(ev) => setSelectedEvent(ev)} />;
+      case 'reports':
+        return <Reports />;
+      case 'users':
+      default:
+        return <UserList onOpenVolunteerDetails={(v) => setSelectedVolunteer(v)} />;
+    }
+  }
+
   const renderRoleContent = () => {
     if (!user) return <Login />;
 
@@ -68,7 +103,18 @@ function App() {
       case 'guide':
         return <div>Guide Panel (Coming Soon)</div>;
       default:
-        return <UserList />;
+        return (
+          <>
+            {!selectedEvent && !selectedVolunteer && (
+              <nav style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button className="counter" onClick={() => setActiveScreen('users')}>רשימת מתנדבים</button>
+                <button className="counter" onClick={() => setActiveScreen('events')}>ניהול אירועים</button>
+                <button className="counter" onClick={() => setActiveScreen('reports')}>דוחות</button>
+              </nav>
+            )}
+            {renderScreens()}
+          </>
+        );
     }
   }
 
