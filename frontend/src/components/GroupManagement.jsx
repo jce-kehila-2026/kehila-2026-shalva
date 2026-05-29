@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase'; 
 import './GroupManagement.css'; 
+import GroupDetails from './GroupDetails';
 
 const GroupManagement = () => {
+  const [selectedGroupId, setSelectedGroupId] = useState(null);
   const [groups, setGroups] = useState([]);
   const [volunteers, setVolunteers] = useState([]);
   const [newGroupName, setNewGroupName] = useState('');
@@ -96,12 +98,21 @@ const GroupManagement = () => {
   };
 
   const handleViewDetails = (groupId) => {
-    alert(`הכנה למעבר למסך 7!\nה-ID של הקבוצה שנבחרה הוא:\n${groupId}`);
+    setSelectedGroupId(groupId);
   };
 
   const currentGroupVolunteers = currentGroup 
     ? volunteers.filter(v => v.groupId === currentGroup.id) 
     : [];
+
+if (selectedGroupId) {
+  return (
+    <GroupDetails 
+      groupId={selectedGroupId} 
+      onBack={() => setSelectedGroupId(null)} // פונקציה שמאפסת את הבחירה וחוזרת לטבלה
+    />
+  );
+}
 
   return (
     <div className="admin-container">
