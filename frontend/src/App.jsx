@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
 import { auth } from './firebase'
-import { BrowserRouter } from 'react-router-dom' // הוספנו את הראוטר
+// 1. הוספנו את Routes, Route ו-Navigate מתוך ספריית הניווט
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom' 
 import './App.css'
 import Login from './components/Login'
-// import UserList from './components/UserList'
 import GroupManagement from './components/GroupManagement'
+// 2. הוספנו את הייבוא של מסך המתנדבים החדש
+import VolunteersManagement from './components/VolunteersManagement' 
 
 function App() {
   const [user, setUser] = useState(null)
@@ -36,7 +38,6 @@ function App() {
   }
 
   return (
-    // עטפנו את כל האפליקציה ב-BrowserRouter כדי ש-useNavigate יעבוד
     <BrowserRouter>
       <div style={{ width: '100%', padding: '20px', boxSizing: 'border-box' }}>
         {user ? (
@@ -45,8 +46,19 @@ function App() {
               <h2 style={{ margin: 0 }}>Welcome, {user.email}</h2>
               <button className="counter" onClick={handleLogout} style={{ margin: 0 }}>Logout</button>
             </header>
-            {/* <UserList /> */}
-            <GroupManagement />
+            
+            {/* 3. כאן מתרחש הקסם: החלפנו את הקומפוננטה הקבועה ב-Routes */}
+            <Routes>
+              {/* מסך ברירת המחדל - ניהול קבוצות */}
+              <Route path="/" element={<GroupManagement />} />
+              
+              {/* המסך החדש - ניהול מתנדבים */}
+              <Route path="/volunteers-management" element={<VolunteersManagement />} />
+              
+              {/* אם מישהו מקליד כתובת לא נכונה, נחזיר אותו למסך הראשי */}
+              <Route path="*" element={<Navigate to="/" />} />
+            </Routes>
+
           </div>
         ) : (
           <div id="center">

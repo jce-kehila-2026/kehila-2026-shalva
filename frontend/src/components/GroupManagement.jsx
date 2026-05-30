@@ -6,6 +6,7 @@ import './GroupManagement.css';
 import GroupDetails from './GroupDetails';
 
 const GroupManagement = () => {
+  
   const navigate = useNavigate(); // אתחול הניווט
   const [selectedGroupId, setSelectedGroupId] = useState(null);
   const [groups, setGroups] = useState([]);
