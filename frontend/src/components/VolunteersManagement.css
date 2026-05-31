@@ -45,3 +45,16 @@
 
 /* Reusing general container and table classes from GroupManagement */
 /* Make sure these match the ones in your admin panel */
+.vertical-action-bar {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 15px;
+}
+
+.vertical-action-bar .styled-input {
+  width: min(320px, 100%);
+}
+
+.error-state {
+  color: #e74c3c;
+}

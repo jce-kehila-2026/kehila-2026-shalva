@@ -1,41 +1,18 @@
-import { db } from "./firebase";
-import { collection, addDoc } from "firebase/firestore";
+import { addDoc, collection } from 'firebase/firestore';
 
-const groups = [
-  "תותים",
-  "דובדבן",
-  "אתרוג",
-  "ניצן",
-  "רימונים",
-  "תאנים",
-  "גפן",
-  "רותם",
-  "אלמוג",
-  "הדרים",
-  "אגוז",
-  "ארז",
-  "דולב",
-  "שקדיה",
-  "אלה",
-  "אלונים",
-  "אורנים",
-  "דקל",
-  "עמית",
-  "נעם",
-  "איתן",
-  "לביא",
-];
+import { db } from '../firebase';
+import { GROUP_NAMES } from './groupOptions';
 
 export async function seedGroups() {
-  for (const groupName of groups) {
-    await addDoc(collection(db, "groups"), {
-      groupName: groupName,
-      guideId: "",
-      guideName: "",
-      time: "",
+  for (const groupName of GROUP_NAMES) {
+    await addDoc(collection(db, 'groups'), {
+      groupName,
+      guideId: '',
+      guideName: '',
+      time: '',
       createdAt: new Date(),
     });
   }
 
-  alert("כל הקבוצות נוספו בהצלחה");
+  alert('כל הקבוצות נוספו בהצלחה');
 }

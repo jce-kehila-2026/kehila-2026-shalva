@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useParams, useLocation, useNavigate } from 'react-router-dom'
-import { doc, getDoc, collection, getDocs } from 'firebase/firestore'
+﻿import { useEffect, useMemo, useState } from 'react'
+
+import { collection, getDocs } from 'firebase/firestore'
 
 import { db } from '../../firebase'
 import './VolunteerDetails.css'
@@ -395,38 +395,7 @@ function buildAttendanceSummary(attendanceRows) {
  * Screen 14 — Volunteer Details.
  * Shows personal information, group assignment, and attendance history.
  */
-export default function VolunteerDetails({ volunteer: propVolunteer, onBack }) {
-  const { volunteerId } = useParams();
-  const location = useLocation();
-  const navigate = useNavigate();
-  const [volunteer, setVolunteer] = useState(propVolunteer || location.state?.volunteer || null);
-  const [volunteerLoading, setVolunteerLoading] = useState(!volunteer);
-
-  // Fetch volunteer details if not provided
-  useEffect(() => {
-    if (volunteer) return;
-    let isMounted = true;
-    async function fetchVolunteer() {
-      try {
-        const docRef = doc(db, 'volunteers', volunteerId);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists() && isMounted) {
-          setVolunteer({ id: docSnap.id, ...docSnap.data() });
-        }
-      } catch (error) {
-        console.error("Error fetching volunteer details:", error);
-      } finally {
-        if (isMounted) {
-          setVolunteerLoading(false);
-        }
-      }
-    }
-    fetchVolunteer();
-    return () => {
-      isMounted = false;
-    };
-  }, [volunteerId, volunteer]);
-
+export default function VolunteerDetails({ volunteer, onBack }) {
   // Attendance records loaded from Firestore.
   const [attendanceRecords, setAttendanceRecords] = useState([])
 
@@ -497,19 +466,7 @@ export default function VolunteerDetails({ volunteer: propVolunteer, onBack }) {
   const handleBack = () => {
     if (typeof onBack === 'function') {
       onBack()
-    } else {
-      navigate(-1)
     }
-  }
-
-  if (volunteerLoading) {
-    return (
-      <main className="volunteer-details-container" dir="rtl">
-        <section className="volunteer-details-card" style={{ textAlign: 'center', padding: '40px' }}>
-          טוען פרטי מתנדב...
-        </section>
-      </main>
-    );
   }
 
   if (!volunteer) {

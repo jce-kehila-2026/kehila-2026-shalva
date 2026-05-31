@@ -1,78 +1,98 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { auth, db } from '../firebase'; 
-import { signOut } from 'firebase/auth';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import './GuideDashboard.css';  
+import { useEffect, useState } from 'react';
+import { doc, getDoc } from 'firebase/firestore';
 
-const GuideDashboard = () => {
-  const navigate = useNavigate();
+import { auth, db } from '../firebase';
+import AttendanceScreen from './AttendanceScreen';
+import GroupDetails from './GroupDetails';
+import VolunteersManagement from './VolunteersManagement';
+import './GuideDashboard.css';
+
+const GuideDashboard = ({ user, onLogout }) => {
   const [guideData, setGuideData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [activeView, setActiveView] = useState('menu');
 
   useEffect(() => {
     const fetchGuideData = async () => {
-      const user = auth.currentUser;
-      
-      if (!user) {
-        navigate('/login');
+      const currentUser = user || auth.currentUser;
+
+      if (!currentUser?.uid) {
+        setGuideData(null);
+        setLoading(false);
         return;
       }
 
       try {
-        // 1. Fetch personal details from users
-        const userRef = doc(db, 'users', user.uid);
-        const userSnap = await getDoc(userRef);
-        let firstName = 'מדריך';
-        
-        if (userSnap.exists()) {
-          firstName = userSnap.data().firstName || firstName;
-        }
-
-        // 2. Query groups to find which one is assigned to this guide
-        const groupsRef = collection(db, 'groups');
-        const q = query(groupsRef, where('guideId', '==', user.uid));
-        const groupsSnap = await getDocs(q);
-        
-        let groupId = null;
-        let groupName = 'טרם שויך';
-
-        if (!groupsSnap.empty) {
-          const groupDoc = groupsSnap.docs[0];
-          groupId = groupDoc.id;
-          groupName = groupDoc.data().groupName;
-        }
+        const guideRef = doc(db, 'guides', currentUser.uid);
+        const guideSnap = await getDoc(guideRef);
+        const guideFields = guideSnap.exists() ? guideSnap.data() : {};
 
         setGuideData({
-          id: user.uid,
-          firstName,
-          groupId,
-          groupName
+          id: currentUser.uid,
+          email: currentUser.email,
+          firstName: currentUser.firstName || guideFields.firstName || '',
+          lastName: currentUser.lastName || guideFields.lastName || '',
+          ...guideFields,
         });
       } catch (error) {
-        console.error("שגיאה בשליפת נתוני המדריך והקבוצה:", error);
+        console.error('שגיאה בשליפת נתוני המדריך:', error);
+        setGuideData({
+          id: currentUser.uid,
+          email: currentUser.email,
+          firstName: currentUser.firstName || '',
+          lastName: currentUser.lastName || '',
+        });
       } finally {
         setLoading(false);
       }
     };
 
     fetchGuideData();
-  }, [navigate]);
+  }, [user]);
 
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      navigate('/'); 
-    } catch (error) {
-      console.error("שגיאה בתהליך ההתנתקות:", error);
-    }
+  const guideGroup = {
+    id: guideData?.groupId || '',
+    groupName: guideData?.groupName || '',
   };
+
+  const backToMenu = () => setActiveView('menu');
 
   if (loading) {
     return (
-      <div className="guide-dashboard-container" dir="rtl" style={{ textAlign: 'center', paddingTop: '50px' }}>
-        טוען נתונים...
+      <div className="guide-dashboard-container" dir="rtl">
+        <div className="guide-loading">טוען נתונים...</div>
       </div>
+    );
+  }
+
+  if (activeView === 'group') {
+    return guideGroup.id ? (
+      <GroupDetails groupId={guideGroup.id} onBack={backToMenu} />
+    ) : (
+      <div className="guide-dashboard-container" dir="rtl">
+        <button className="btn btn-outline" onClick={backToMenu}>חזרה</button>
+        <p className="guide-empty-state">עדיין לא שויכה לך קבוצה.</p>
+      </div>
+    );
+  }
+
+  if (activeView === 'attendance') {
+    return (
+      <AttendanceScreen
+        initialGroupId={guideGroup.id}
+        initialGroupName={guideGroup.groupName}
+        lockGroup={Boolean(guideGroup.id || guideGroup.groupName)}
+        onBack={backToMenu}
+      />
+    );
+  }
+
+  if (activeView === 'volunteers') {
+    return (
+      <VolunteersManagement
+        initialGroup={guideGroup}
+        onBack={backToMenu}
+      />
     );
   }
 
@@ -80,60 +100,25 @@ const GuideDashboard = () => {
     <div className="guide-dashboard-container" dir="rtl">
       <header className="guide-header">
         <h1>לוח בקרה - מדריך</h1>
-        <p>ברוך הבא {guideData?.firstName || 'מדריך'}, בחר את הפעולה הרצויה:</p>
-        {guideData?.groupId ? (
-          <p style={{ color: '#0f766e', fontWeight: 'bold' }}>משויך לקבוצה: {guideData.groupName}</p>
-        ) : (
-          <p style={{ color: '#b91c1c', fontWeight: 'bold' }}>טרם שויכת לקבוצה במערכת</p>
-        )}
+        <p>
+          ברוך הבא {guideData?.firstName || guideData?.email || 'מדריך'}, בחר את הפעולה הרצויה.
+        </p>
+        <p className="guide-group-label">
+          קבוצה משויכת: <strong>{guideGroup.groupName || 'טרם שויכה קבוצה'}</strong>
+        </p>
       </header>
 
       <main className="guide-actions">
-        <button 
-          className="action-button secondary" 
-          onClick={() => {
-            if (guideData?.groupId) {
-              navigate(`/group-details/${guideData.groupId}`);
-            } else {
-              alert('טרם שויכת לקבוצה');
-            }
-          }}
-        >
-          👤 הקבוצה שלי (My Group)
-        </button>
-
-        <button 
-          className="action-button primary" 
-          onClick={() => {
-            if (guideData?.groupId) {
-              navigate('/attendance', { state: { groupId: guideData.groupId } });
-            } else {
-              alert('טרם שויכת לקבוצה');
-            }
-          }}
-        >
-          📝 סימון נוכחות (Attendance)
-        </button>
-
-        <button 
-          className="action-button secondary" 
-          onClick={() => {
-            if (guideData?.groupId) {
-              navigate(`/group-details/${guideData.groupId}`);
-            } else {
-              alert('טרם שויכת לקבוצה');
-            }
-          }}
-        >
-          👥 רשימת מתנדבים (Volunteers List)
-        </button>
+        <button className="action-button secondary" onClick={() => setActiveView('group')}>👤 הקבוצה שלי</button>
+        <button className="action-button primary" onClick={() => setActiveView('attendance')}>📝 סימון נוכחות</button>
+        <button className="action-button secondary" onClick={() => setActiveView('volunteers')}>👥 רשימת מתנדבים</button>
       </main>
 
-      <footer className="guide-footer">
-        <button className="logout-button" onClick={handleLogout}>
-          התנתק (Logout)
-        </button>
-      </footer>
+      {typeof onLogout === 'function' && (
+        <footer className="guide-footer">
+          <button className="logout-button" onClick={onLogout}>התנתקות</button>
+        </footer>
+      )}
     </div>
   );
 };

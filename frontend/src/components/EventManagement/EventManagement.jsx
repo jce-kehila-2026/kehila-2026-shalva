@@ -1,29 +1,25 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+﻿import { useEffect, useMemo, useState } from 'react'
 
 import {
   addDoc,
   collection,
   deleteDoc,
   doc,
+  getDocs,
   onSnapshot,
   serverTimestamp,
   updateDoc,
 } from 'firebase/firestore'
 
 import { db } from '../../firebase'
+import { GROUP_NAMES } from '../groupOptions'
 import './EventManagement.css'
 
 // Firestore collection used for storing and reading events.
 const EVENTS_COLLECTION_NAME = 'events'
 
-// Static group options used in the event form.
-const GROUPS = [
-  'קבוצה א׳',
-  'קבוצה ב׳ - מדריכים בכירים',
-  'קבוצה ג׳',
-  'ללא שיוך',
-]
+// Fallback label for events that are not linked to any group.
+const NO_GROUP = 'ללא שיוך'
 
 // Static status options used in the event form.
 const STATUSES = [
@@ -39,7 +35,7 @@ const EMPTY_FORM = {
   date: '',
   location: '',
   description: '',
-  assignedGroup: GROUPS[0],
+  assignedGroup: NO_GROUP,
   status: STATUSES[0],
   contactName: '',
   contactPhone: '',
@@ -79,7 +75,7 @@ function createFormFromEvent(event) {
     date: event.date || '',
     location: event.location || '',
     description: event.description || '',
-    assignedGroup: event.assignedGroup || GROUPS[0],
+    assignedGroup: event.assignedGroup || NO_GROUP,
     status: event.status || STATUSES[0],
     contactName: event.contact?.name || '',
     contactPhone: event.contact?.phone || '',
@@ -146,7 +142,6 @@ function getSubmitButtonText({ saving, isEditing }) {
  * Allows the admin to add, edit, delete, search, and open event details.
  */
 export default function EventManagement({ onOpenEventDetails }) {
-  const navigate = useNavigate()
   // Events loaded from Firestore.
   const [events, setEvents] = useState([])
 
@@ -163,6 +158,9 @@ export default function EventManagement({ onOpenEventDetails }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+
+  // Group names loaded from Firestore so the dropdown stays up to date.
+  const [groupOptions, setGroupOptions] = useState([])
 
   const isEditing = editingEventId !== null
 
@@ -208,6 +206,44 @@ export default function EventManagement({ onOpenEventDetails }) {
   }, [])
 
   /**
+   * Loads the current group names from Firestore so the "assign group"
+   * dropdown always shows the up-to-date groups (with a static fallback).
+   */
+  useEffect(() => {
+    let active = true
+
+    const loadGroups = async () => {
+      let names = []
+
+      try {
+        const snapshot = await getDocs(collection(db, 'groups'))
+        names = snapshot.docs
+          .map((groupDoc) => {
+            const groupData = groupDoc.data()
+            return groupData.groupName || groupData.name || ''
+          })
+          .filter(Boolean)
+      } catch (groupsError) {
+        console.error('Error loading groups:', groupsError)
+      }
+
+      if (names.length === 0) {
+        names = [...GROUP_NAMES]
+      }
+
+      if (active) {
+        setGroupOptions([...new Set(names)])
+      }
+    }
+
+    loadGroups()
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  /**
    * Filters the event list by name, location, group, or status.
    * useMemo avoids recalculating unless the events or search text changed.
    */
@@ -231,6 +267,20 @@ export default function EventManagement({ onOpenEventDetails }) {
       return searchableText.includes(searchValue)
     })
   }, [events, searchTerm])
+
+  /**
+   * Builds the dropdown options: the live groups plus the "no group" option,
+   * and the value currently selected (so editing an old event keeps its group).
+   */
+  const selectableGroups = useMemo(() => {
+    const base = [...groupOptions, NO_GROUP]
+    const withCurrent =
+      form.assignedGroup && !base.includes(form.assignedGroup)
+        ? [form.assignedGroup, ...base]
+        : base
+
+    return [...new Set(withCurrent)]
+  }, [groupOptions, form.assignedGroup])
 
   /**
    * Updates one form field according to the input name.
@@ -338,13 +388,18 @@ export default function EventManagement({ onOpenEventDetails }) {
    * Sends the selected event to Screen 12.
    */
   const handleOpenDetails = (eventItem) => {
-    navigate(`/event-details/${eventItem.id}`, { state: { event: eventItem } })
+    if (typeof onOpenEventDetails === 'function') {
+      onOpenEventDetails(eventItem)
+      return
+    }
+
+    window.alert('מסך פרטי אירוע יחובר בשלב הבא.')
   }
 
   return (
     <main className="event-management-container" dir="rtl">
       <section className="event-management-card">
-        <header className="event-management-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <header className="event-management-header">
           <div>
             <div className="event-management-eyebrow">
               מסך 11
@@ -359,13 +414,10 @@ export default function EventManagement({ onOpenEventDetails }) {
             </p>
           </div>
 
-          <button 
-            type="button" 
-            onClick={() => navigate('/admin')}
-            style={{ padding: '8px 16px', background: '#3498db', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-          >
-            חזור ללוח בקרה ↩
-          </button>
+          <div className="event-management-count">
+            <span>{events.length}</span>
+            <small>אירועים</small>
+          </div>
         </header>
 
         {error && (
@@ -423,7 +475,7 @@ export default function EventManagement({ onOpenEventDetails }) {
                 value={form.assignedGroup}
                 onChange={handleChange}
               >
-                {GROUPS.map((group) => (
+                {selectableGroups.map((group) => (
                   <option key={group} value={group}>
                     {group}
                   </option>

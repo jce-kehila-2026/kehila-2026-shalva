@@ -67,3 +67,46 @@
 .attendance-card button:hover {
   background: #162b63;
 }
+.attendance-header-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.attendance-card select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  font-size: 16px;
+  margin-bottom: 18px;
+}
+
+.attendance-card .attendance-back-button {
+  width: auto;
+  margin-top: 0;
+  padding: 10px 16px;
+  background: transparent;
+  color: #1f3c88;
+  border: 1px solid #1f3c88;
+}
+
+.attendance-card .attendance-back-button:hover {
+  background: #eef2ff;
+}
+
+.locked-group-box {
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  color: #312e81;
+  padding: 12px 14px;
+  border-radius: 10px;
+  margin-bottom: 18px;
+}
+
+.attendance-card button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

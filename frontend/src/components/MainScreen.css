@@ -1,0 +1,109 @@
+.main-container {
+  width: min(1120px, 100%);
+  margin: 0 auto;
+  padding: 32px 20px 56px;
+  box-sizing: border-box;
+  text-align: right;
+}
+
+.main-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  padding: 28px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, #f8fafc, #eef2ff);
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 16px 42px rgba(15, 23, 42, 0.08);
+}
+
+.main-header h1 {
+  margin: 0 0 8px;
+  font-size: clamp(36px, 6vw, 64px);
+  font-weight: 700;
+}
+
+.main-header p {
+  color: #475569;
+}
+
+.header-buttons {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btn-login,
+.btn-register,
+.tab-btn {
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-login {
+  background: #1e293b;
+  color: white;
+}
+
+.btn-register {
+  background: #3b82f6;
+  color: white;
+}
+
+.groups-section {
+  margin-top: 32px;
+  padding: 28px;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+.groups-section h2 {
+  margin-top: 0;
+}
+
+.tabs-header {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+
+.tab-btn {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.tab-btn.active {
+  background: #2563eb;
+  color: white;
+}
+
+.tab-content {
+  border-radius: 18px;
+  background: #f8fafc;
+  padding: 22px;
+  border: 1px solid #e2e8f0;
+}
+
+.tab-content h3 {
+  margin-top: 0;
+  color: #1e293b;
+}
+
+.tab-details {
+  display: grid;
+  gap: 10px;
+}
+
+@media (max-width: 720px) {
+  .main-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

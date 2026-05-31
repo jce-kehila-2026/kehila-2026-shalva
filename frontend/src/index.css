@@ -1,111 +1,313 @@
+/* =====================================================================
+   Kehila Hub — Global Design System
+   One source of truth for colors, typography, spacing and base elements.
+   Built RTL-first using logical properties so it works in Hebrew & English.
+   ===================================================================== */
+
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+  /* Brand (indigo) */
+  --brand-50: #eef2ff;
+  --brand-100: #e0e7ff;
+  --brand-200: #c7d2fe;
+  --brand-400: #818cf8;
+  --brand-500: #6366f1;
+  --brand-600: #4f46e5;
+  --brand-700: #4338ca;
+  --brand: var(--brand-600);
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+  /* Surfaces & neutrals */
+  --bg: #f1f5f9;
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
+  /* Text */
+  --text: #0f172a;
+  --text-muted: #64748b;
+  --text-soft: #94a3b8;
+
+  /* Status */
+  --success: #16a34a;
+  --success-bg: #dcfce7;
+  --danger: #dc2626;
+  --danger-bg: #fee2e2;
+  --warning: #b45309;
+  --warning-bg: #fef3c7;
+  --info: #0ea5e9;
+  --info-bg: #e0f2fe;
+
+  /* Radius */
+  --radius-sm: 10px;
+  --radius: 14px;
+  --radius-lg: 20px;
+  --radius-pill: 999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.08);
+  --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 22px 48px rgba(15, 23, 42, 0.14);
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  --font: 'Heebo', system-ui, 'Segoe UI', Roboto, Arial, sans-serif;
+
+  color-scheme: light;
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.55;
   color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
+  text-rendering: optimizeLegibility;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
-}
-
-body {
-  margin: 0;
-}
-
-#root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+  color: var(--text);
+  background:
+    radial-gradient(1100px 560px at 100% -8%, var(--brand-50), transparent 60%),
+    radial-gradient(820px 460px at -8% 2%, #ecfeff, transparent 55%),
+    var(--bg);
+  background-attachment: fixed;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+/* ---------- Typography ---------- */
 h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
+h2,
+h3,
+h4 {
+  margin: 0 0 0.5em;
+  color: var(--text);
+  font-weight: 700;
+  line-height: 1.2;
 }
 
 h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
+  font-size: clamp(28px, 4vw, 40px);
+  letter-spacing: -0.02em;
 }
+
 h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
+  font-size: clamp(20px, 2.6vw, 26px);
+  letter-spacing: -0.01em;
 }
+
+h3 {
+  font-size: 19px;
+}
+
 p {
-  margin: 0;
+  margin: 0 0 0.6em;
 }
 
-code,
-.counter {
-  font-family: var(--mono);
+a {
+  color: var(--brand-600);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* ---------- Buttons (sensible defaults; classes override) ---------- */
+button {
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
   display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 10px 18px;
+  background: var(--brand-600);
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.12s ease, box-shadow 0.2s ease, background 0.2s ease,
+    border-color 0.2s ease, opacity 0.2s ease;
 }
 
-code {
+button:hover {
+  background: var(--brand-700);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow);
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+button:focus-visible {
+  outline: 3px solid var(--brand-200);
+  outline-offset: 1px;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Button variants (opt-in via class) */
+.btn-ghost {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.btn-ghost:hover {
+  background: var(--surface-2);
+}
+
+.btn-danger {
+  background: var(--danger);
+}
+.btn-danger:hover {
+  background: #b91c1c;
+}
+
+.btn-success {
+  background: var(--success);
+}
+.btn-success:hover {
+  background: #15803d;
+}
+
+/* ---------- Form controls ---------- */
+input,
+select,
+textarea {
+  font: inherit;
+  width: 100%;
+  padding: 11px 14px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-soft);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--brand-500);
+  box-shadow: 0 0 0 4px var(--brand-50);
+}
+
+label {
+  display: inline-block;
+  margin-bottom: 6px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* ---------- Tables ---------- */
+table {
+  width: 100%;
+  border-collapse: collapse;
   font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+}
+
+th,
+td {
+  padding: 12px 14px;
+  text-align: start;
+}
+
+thead th {
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+tbody tr {
+  border-bottom: 1px solid var(--border);
+}
+
+tbody tr:last-child {
+  border-bottom: 0;
+}
+
+tbody tr:hover {
+  background: var(--brand-50);
+}
+
+/* ---------- Reusable utilities ---------- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: var(--space-6);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--brand-50);
+  color: var(--brand-700);
+}
+
+.badge-success {
+  background: var(--success-bg);
+  color: var(--success);
+}
+.badge-danger {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.badge-warning {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+::selection {
+  background: var(--brand-200);
 }

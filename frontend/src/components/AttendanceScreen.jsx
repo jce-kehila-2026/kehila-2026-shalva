@@ -1,174 +1,171 @@
-import React, { useEffect, useState } from "react";
-import { db } from "../firebase";
-import { collection, addDoc, getDocs, query, where } from "firebase/firestore";
-import { useLocation, useNavigate } from "react-router-dom";
-import "./AttendanceScreen.css";
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { addDoc, collection, getDocs } from 'firebase/firestore';
 
-function AttendanceScreen() {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const passedGroupId = location.state?.groupId;
+import { db } from '../firebase';
+import { GROUP_NAMES } from './groupOptions';
+import './AttendanceScreen.css';
 
-  const [dbGroups, setDbGroups] = useState([]);
-  const [selectedGroupId, setSelectedGroupId] = useState(passedGroupId || "");
-  const [selectedGroup, setSelectedGroup] = useState(""); // group name
+function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGroup = false, onBack }) {
+  const [groups, setGroups] = useState([]);
+  const [selectedGroupId, setSelectedGroupId] = useState(initialGroupId);
+  const [selectedGroupName, setSelectedGroupName] = useState(initialGroupName);
   const [volunteers, setVolunteers] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Fetch groups dynamically from database
-  useEffect(() => {
-    const fetchGroups = async () => {
-      try {
-        const snapshot = await getDocs(collection(db, "groups"));
-        const groupsData = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setDbGroups(groupsData);
+  const selectedGroup = useMemo(() => (
+    groups.find((group) => group.id === selectedGroupId || group.groupName === selectedGroupName)
+  ), [groups, selectedGroupId, selectedGroupName]);
 
-        if (passedGroupId) {
-          const matched = groupsData.find((g) => g.id === passedGroupId);
-          if (matched) {
-            setSelectedGroup(matched.groupName);
-          }
-        }
-      } catch (err) {
-        console.error("Error fetching groups:", err);
+  const activeGroupName = selectedGroup?.groupName || selectedGroup?.name || selectedGroupName;
+
+  const fetchGroups = useCallback(async () => {
+    try {
+      const snapshot = await getDocs(collection(db, 'groups'));
+      const groupsData = snapshot.docs.map((documentSnapshot) => ({
+        id: documentSnapshot.id,
+        ...documentSnapshot.data(),
+      }));
+
+      if (groupsData.length > 0) {
+        setGroups(groupsData);
+        return;
       }
-    };
-    fetchGroups();
-  }, [passedGroupId]);
-
-  // Load volunteers when group selection changes
-  useEffect(() => {
-    if (selectedGroupId) {
-      fetchVolunteersByGroup(selectedGroupId);
-    } else {
-      setVolunteers([]);
+    } catch (error) {
+      console.error('Error loading groups:', error);
     }
-  }, [selectedGroupId]);
 
-  const fetchVolunteersByGroup = async (gId) => {
+    setGroups(GROUP_NAMES.map((groupName) => ({ id: groupName, groupName })));
+  }, []);
+
+  const fetchVolunteersByGroup = useCallback(async () => {
+    if (!selectedGroupId && !activeGroupName) {
+      setVolunteers([]);
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const q = query(
-        collection(db, "volunteers"),
-        where("groupId", "==", gId)
-      );
-
-      const snapshot = await getDocs(q);
-
-      const volunteersData = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        status: false,
-      }));
+      const snapshot = await getDocs(collection(db, 'volunteers'));
+      const volunteersData = snapshot.docs
+        .map((documentSnapshot) => ({ id: documentSnapshot.id, ...documentSnapshot.data(), status: false }))
+        .filter((volunteer) => (
+          volunteer.groupId === selectedGroupId ||
+          volunteer.groupName === activeGroupName ||
+          volunteer.group === activeGroupName
+        ));
 
       setVolunteers(volunteersData);
     } catch (error) {
-      console.error("Error loading volunteers:", error);
-      alert("אירעה שגיאה בטעינת המתנדבים");
+      console.error('Error loading volunteers:', error);
+      alert('אירעה שגיאה בטעינת המתנדבים');
     } finally {
       setLoading(false);
     }
+  }, [activeGroupName, selectedGroupId]);
+
+  useEffect(() => {
+    fetchGroups();
+  }, [fetchGroups]);
+
+  useEffect(() => {
+    fetchVolunteersByGroup();
+  }, [fetchVolunteersByGroup]);
+
+  const handleGroupChange = (event) => {
+    const groupId = event.target.value;
+    const group = groups.find((item) => item.id === groupId);
+
+    setSelectedGroupId(groupId);
+    setSelectedGroupName(group?.groupName || group?.name || groupId);
   };
 
   const handleStatusChange = (id) => {
-    setVolunteers((prev) =>
-      prev.map((volunteer) =>
-        volunteer.id === id
-          ? { ...volunteer, status: !volunteer.status }
-          : volunteer
-      )
-    );
+    setVolunteers((previousVolunteers) => (
+      previousVolunteers.map((volunteer) => (
+        volunteer.id === id ? { ...volunteer, status: !volunteer.status } : volunteer
+      ))
+    ));
   };
 
   const handleSaveAttendance = async () => {
-    if (!selectedGroupId || !selectedGroup) {
-      alert("יש לבחור קבוצה");
+    if (!selectedGroupId && !activeGroupName) {
+      alert('יש לבחור קבוצה');
       return;
     }
 
     try {
       for (const volunteer of volunteers) {
-        await addDoc(collection(db, "attendance"), {
-          group: selectedGroup,
-          groupId: selectedGroupId,
+        const volunteerName = volunteer.name || [volunteer.firstName, volunteer.lastName].filter(Boolean).join(' ').trim();
+
+        await addDoc(collection(db, 'attendance'), {
+          groupId: selectedGroupId || selectedGroup?.id || '',
+          group: activeGroupName,
+          groupName: activeGroupName,
           date: new Date(),
           status: volunteer.status,
           volunteerId: volunteer.id,
-          volunteerName:
-            volunteer.name ||
-            `${volunteer.firstName || ""} ${volunteer.lastName || ""}`.trim(),
+          volunteerName,
         });
       }
 
-      alert("הנוכחות נשמרה בהצלחה!");
-      navigate(-1);
+      alert('הנוכחות נשמרה בהצלחה!');
     } catch (error) {
-      console.error("Error saving attendance:", error);
-      alert("אירעה שגיאה בשמירת הנוכחות");
+      console.error('Error saving attendance:', error);
+      alert('אירעה שגיאה בשמירת הנוכחות');
     }
   };
 
   return (
     <div className="attendance-page" dir="rtl">
       <div className="attendance-card">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
-          <h1>סימון נוכחות</h1>
-          <button className="btn btn-outline" onClick={() => navigate(-1)}>
-            ביטול / חזור
-          </button>
+        <div className="attendance-header-row">
+          <div>
+            <h1>סימון נוכחות</h1>
+            <p>בחרו קבוצה וסמנו נוכחות למתנדבים.</p>
+          </div>
+          {typeof onBack === 'function' && (
+            <button className="attendance-back-button" onClick={onBack}>חזרה</button>
+          )}
         </div>
-        <p>בחרו קבוצה וסמנו נוכחות למתנדבים.</p>
 
-        <select 
-          value={selectedGroupId} 
-          onChange={(e) => {
-            const gId = e.target.value;
-            setSelectedGroupId(gId);
-            const matched = dbGroups.find((g) => g.id === gId);
-            setSelectedGroup(matched ? matched.groupName : "");
-          }}
-          disabled={!!passedGroupId}
-        >
-          <option value="">בחר קבוצה</option>
-          {dbGroups.map((group) => (
-            <option key={group.id} value={group.id}>
-              {group.groupName}
-            </option>
-          ))}
-        </select>
+        {lockGroup ? (
+          <div className="locked-group-box">קבוצה: <strong>{activeGroupName || 'לא שויכה קבוצה'}</strong></div>
+        ) : (
+          <select value={selectedGroupId} onChange={handleGroupChange}>
+            <option value="">בחר קבוצה</option>
+            {groups.map((group) => (
+              <option key={group.id} value={group.id}>{group.groupName || group.name || group.id}</option>
+            ))}
+          </select>
+        )}
 
         {loading && <p>טוען מתנדבים...</p>}
 
-        {!loading && selectedGroupId && volunteers.length === 0 && (
+        {!loading && (selectedGroupId || activeGroupName) && volunteers.length === 0 && (
           <p>לא נמצאו מתנדבים בקבוצה זו.</p>
         )}
 
-        {!loading &&
-          volunteers.map((volunteer) => (
-            <div className="attendance-row" key={volunteer.id}>
-              <span>
-                {volunteer.name ||
-                  `${volunteer.firstName || ""} ${volunteer.lastName || ""}`.trim()}
-              </span>
+        {!loading && volunteers.length > 0 && (
+          <div className="attendance-list">
+            {volunteers.map((volunteer) => (
+              <div className="attendance-row" key={volunteer.id}>
+                <span>{volunteer.name || [volunteer.firstName, volunteer.lastName].filter(Boolean).join(' ').trim() || volunteer.email || 'מתנדב ללא שם'}</span>
 
-              <label>
-                <input
-                  type="checkbox"
-                  checked={volunteer.status}
-                  onChange={() => handleStatusChange(volunteer.id)}
-                />
-                הגיע/ה
-              </label>
-            </div>
-          ))}
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={volunteer.status}
+                    onChange={() => handleStatusChange(volunteer.id)}
+                  />
+                  הגיע/ה
+                </label>
+              </div>
+            ))}
+          </div>
+        )}
 
-        <button onClick={handleSaveAttendance} disabled={!selectedGroupId || volunteers.length === 0}>
-          שמירת נוכחות
-        </button>
+        <button onClick={handleSaveAttendance} disabled={(!selectedGroupId && !activeGroupName) || volunteers.length === 0}>שמירת נוכחות</button>
       </div>
     </div>
   );

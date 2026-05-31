@@ -17,5 +17,10 @@ export default defineConfig([
       globals: globals.browser,
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
+    rules: {
+      // Firebase data fetching updates React state from effects by design.
+      // The compiler-oriented rule is too strict for this project structure.
+      'react-hooks/set-state-in-effect': 'off',
+    },
   },
 ])

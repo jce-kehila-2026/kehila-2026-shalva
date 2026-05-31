@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+﻿import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { collection, getDocs } from 'firebase/firestore'
 
@@ -251,6 +250,21 @@ function getAttendanceCounts(attendanceItem) {
     return countAttendanceFromList(attendanceList)
   }
 
+  // Single-volunteer record (one document per volunteer), e.g.
+  // { status: true/false, volunteerId, date }. This is what the
+  // attendance screen actually writes, so count it as one person.
+  const singleStatusValue = getRecordStatus(attendanceItem)
+
+  if (singleStatusValue !== undefined && singleStatusValue !== null) {
+    const status = normalizeAttendanceStatus(singleStatusValue)
+
+    return {
+      present: status === 'present' ? 1 : 0,
+      absent: status === 'absent' ? 1 : 0,
+      unknown: status === 'unknown' ? 1 : 0,
+    }
+  }
+
   return {
     present: 0,
     absent: 0,
@@ -262,12 +276,30 @@ function getAttendanceCounts(attendanceItem) {
  * Gets a readable date from an attendance record.
  */
 function getAttendanceDate(attendanceItem) {
-  if (attendanceItem.date) {
-    return attendanceItem.date
+  const value = attendanceItem.date ?? attendanceItem.createdAt
+
+  if (!value) {
+    return 'ללא תאריך'
   }
 
-  if (attendanceItem.createdAt?.toDate) {
-    return attendanceItem.createdAt.toDate().toLocaleDateString('he-IL')
+  // Plain string date (e.g. "2026-05-31").
+  if (typeof value === 'string') {
+    return value
+  }
+
+  // Firestore Timestamp.
+  if (typeof value.toDate === 'function') {
+    return value.toDate().toLocaleDateString('he-IL')
+  }
+
+  // Native Date.
+  if (value instanceof Date) {
+    return value.toLocaleDateString('he-IL')
+  }
+
+  // Plain { seconds } object.
+  if (typeof value.seconds === 'number') {
+    return new Date(value.seconds * 1000).toLocaleDateString('he-IL')
   }
 
   return 'ללא תאריך'
@@ -314,6 +346,7 @@ function buildGroupRows(users, events, attendanceRecords) {
         attendanceMeetings: 0,
         present: 0,
         absent: 0,
+        meetingKeys: new Set(),
       })
     }
 
@@ -336,14 +369,53 @@ function buildGroupRows(users, events, attendanceRecords) {
     const group = ensureGroup(getAttendanceGroup(attendanceItem))
     const counts = getAttendanceCounts(attendanceItem)
 
-    group.attendanceMeetings += 1
+    group.meetingKeys.add(getAttendanceDate(attendanceItem))
     group.present += counts.present
     group.absent += counts.absent
   })
 
-  return Array.from(groupsMap.values()).sort((firstGroup, secondGroup) =>
-    firstGroup.name.localeCompare(secondGroup.name, 'he'),
-  )
+  return Array.from(groupsMap.values())
+    .map(({ meetingKeys, ...group }) => ({
+      ...group,
+      attendanceMeetings: meetingKeys.size,
+    }))
+    .sort((firstGroup, secondGroup) =>
+      firstGroup.name.localeCompare(secondGroup.name, 'he'),
+    )
+}
+
+/**
+ * Groups the per-volunteer attendance documents into one row per meeting
+ * (same group + same date), summing present / absent / unknown counts.
+ */
+function buildAttendanceRows(attendanceRecords) {
+  const meetings = new Map()
+
+  attendanceRecords.forEach((attendanceItem) => {
+    const date = getAttendanceDate(attendanceItem)
+    const group = getAttendanceGroup(attendanceItem)
+    const key = `${group}__${date}`
+
+    if (!meetings.has(key)) {
+      meetings.set(key, {
+        id: key,
+        date,
+        group,
+        present: 0,
+        absent: 0,
+        unknown: 0,
+      })
+    }
+
+    const meeting = meetings.get(key)
+    const counts = getAttendanceCounts(attendanceItem)
+
+    meeting.present += counts.present
+    meeting.absent += counts.absent
+    meeting.unknown += counts.unknown
+  })
+
+  return Array.from(meetings.values())
 }
 
 /**
@@ -382,7 +454,6 @@ function downloadCsv(rows) {
  * Shows attendance, group, and event reports with PDF and Excel export.
  */
 export default function Reports() {
-  const navigate = useNavigate()
   // Firebase data used by all reports.
   const [data, setData] = useState(EMPTY_DATA)
 
@@ -470,14 +541,10 @@ export default function Reports() {
   /**
    * Attendance rows are normalized for table rendering.
    */
-  const attendanceRows = useMemo(() => {
-    return data.attendance.map((attendanceItem) => ({
-      id: attendanceItem.id,
-      date: getAttendanceDate(attendanceItem),
-      group: getAttendanceGroup(attendanceItem),
-      ...getAttendanceCounts(attendanceItem),
-    }))
-  }, [data.attendance])
+  const attendanceRows = useMemo(
+    () => buildAttendanceRows(data.attendance),
+    [data.attendance],
+  )
 
   /**
    * Filters event report rows by the current search text.
@@ -756,10 +823,6 @@ export default function Reports() {
           </div>
 
           <div className="reports-actions">
-            <button type="button" onClick={() => navigate('/admin')} style={{ background: '#3498db', color: 'white' }}>
-              חזור ללוח בקרה ↩
-            </button>
-
             <button type="button" onClick={loadReportsData}>
               רענון נתונים
             </button>

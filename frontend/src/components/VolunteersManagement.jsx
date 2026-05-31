@@ -1,111 +1,131 @@
-import { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { addDoc, collection, deleteDoc, doc, getDocs, updateDoc } from 'firebase/firestore';
+
 import { db } from '../firebase';
 import './VolunteersManagement.css';
 
-const VolunteersManagement = () => {
-  const location = useLocation();
-  const navigate = useNavigate();
-  
-  // תופסים את הקבוצה שהועברה מהמסך הקודם (אם יש כזו)
-  const passedGroup = location.state?.group || null;
+const getVolunteerName = (volunteer) => (
+  volunteer?.name ||
+  [volunteer?.firstName, volunteer?.lastName].filter(Boolean).join(' ').trim() ||
+  volunteer?.email ||
+  'מתנדב ללא שם'
+);
+
+const VolunteersManagement = ({ initialGroup = null, onBack }) => {
+  const passedGroup = initialGroup?.id || initialGroup?.groupName ? initialGroup : null;
 
   const [volunteers, setVolunteers] = useState([]);
   const [groups, setGroups] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // State עבור החלונית (Modal) של הוספה/עריכה
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingVolunteer, setEditingVolunteer] = useState(null);
-  
-  // נתוני הטופס
   const [formData, setFormData] = useState({
     name: '',
-    groupId: passedGroup ? passedGroup.id : '' // ברירת מחדל: הקבוצה ממנה הגענו
+    groupId: passedGroup?.id || '',
   });
 
-  // שליפת נתונים מ-Firebase
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
-      const volSnap = await getDocs(collection(db, 'volunteers'));
-      const volData = volSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setVolunteers(volData);
+      const [volunteersSnap, groupsSnap] = await Promise.all([
+        getDocs(collection(db, 'volunteers')),
+        getDocs(collection(db, 'groups')),
+      ]);
 
-      const groupsSnap = await getDocs(collection(db, 'groups'));
-      const groupsData = groupsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setGroups(groupsData);
+      setVolunteers(volunteersSnap.docs.map((documentSnapshot) => ({ id: documentSnapshot.id, ...documentSnapshot.data() })));
+      setGroups(groupsSnap.docs.map((documentSnapshot) => ({ id: documentSnapshot.id, ...documentSnapshot.data() })));
     } catch (error) {
-      console.error("שגיאה בשליפת נתונים:", error);
+      console.error('שגיאה בשליפת נתונים:', error);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
-  // פונקציית עזר למציאת שם הקבוצה לפי ה-ID
-  // (הזזתי אותה למעלה כדי שנוכל להשתמש בה במיון)
-  const getGroupName = (groupId) => {
-    if (!groupId) return 'ללא קבוצה';
-    const group = groups.find(g => g.id === groupId);
-    return group ? group.groupName : 'קבוצה לא ידועה';
-  };
+  const getGroupName = useCallback((groupId, fallbackName = '') => {
+    if (!groupId) return fallbackName || 'ללא קבוצה';
+    const group = groups.find((item) => item.id === groupId);
+    return group ? (group.groupName || group.name || 'קבוצה ללא שם') : (fallbackName || 'קבוצה לא ידועה');
+  }, [groups]);
 
-  // סינון מתנדבים לפי חיפוש + מיון לפי שם הקבוצה באלפבית
-  const filteredAndSortedVolunteers = volunteers
-    .filter(vol => vol.name?.toLowerCase().includes(searchQuery.toLowerCase()))
-    .sort((a, b) => {
-      const groupNameA = getGroupName(a.groupId);
-      const groupNameB = getGroupName(b.groupId);
-      // שימוש ב-localeCompare כדי למיין נכון בעברית
-      return groupNameA.localeCompare(groupNameB, 'he'); 
-    });
+  const filteredAndSortedVolunteers = useMemo(() => {
+    const search = searchQuery.trim().toLowerCase();
 
+    return volunteers
+      .filter((volunteer) => {
+        const matchesGroup = !passedGroup || (
+          volunteer.groupId === passedGroup.id ||
+          volunteer.groupName === passedGroup.groupName
+        );
 
-  // פתיחת חלונית להוספת מתנדב חדש
+        const searchableText = [
+          volunteer.name,
+          volunteer.firstName,
+          volunteer.lastName,
+          volunteer.email,
+          volunteer.phone,
+        ].filter(Boolean).join(' ').toLowerCase();
+
+        return matchesGroup && (!search || searchableText.includes(search));
+      })
+      .sort((a, b) => getGroupName(a.groupId, a.groupName).localeCompare(getGroupName(b.groupId, b.groupName), 'he'));
+  }, [getGroupName, passedGroup, searchQuery, volunteers]);
+
   const handleOpenAdd = () => {
     setEditingVolunteer(null);
-    setFormData({ name: '', groupId: passedGroup ? passedGroup.id : '' });
+    setFormData({ name: '', groupId: passedGroup?.id || '' });
     setIsModalOpen(true);
   };
 
-  // פתיחת חלונית לעריכת מתנדב קיים
   const handleOpenEdit = (volunteer) => {
     setEditingVolunteer(volunteer);
-    setFormData({ name: volunteer.name, groupId: volunteer.groupId || '' });
+    setFormData({
+      name: getVolunteerName(volunteer),
+      groupId: volunteer.groupId || passedGroup?.id || '',
+    });
     setIsModalOpen(true);
   };
 
-  // שמירת מתנדב (הוספה או עדכון)
-  const handleSave = async (e) => {
-    e.preventDefault();
-    if (!formData.name.trim()) return;
+  const handleSave = async (event) => {
+    event.preventDefault();
+
+    const name = formData.name.trim();
+    if (!name) return;
+
+    const selectedGroup = groups.find((group) => group.id === formData.groupId);
+    const payload = {
+      name,
+      groupId: formData.groupId,
+      groupName: selectedGroup?.groupName || selectedGroup?.name || passedGroup?.groupName || '',
+    };
 
     try {
       if (editingVolunteer) {
-        // עדכון מתנדב קיים
-        const volRef = doc(db, 'volunteers', editingVolunteer.id);
-        await updateDoc(volRef, formData);
+        await updateDoc(doc(db, 'volunteers', editingVolunteer.id), payload);
       } else {
-        // יצירת מתנדב חדש
-        await addDoc(collection(db, 'volunteers'), formData);
+        await addDoc(collection(db, 'volunteers'), {
+          ...payload,
+          createdAt: new Date(),
+        });
       }
+
       setIsModalOpen(false);
-      fetchData(); // רענון הטבלה
+      await fetchData();
     } catch (error) {
-      console.error("שגיאה בשמירת מתנדב:", error);
+      console.error('שגיאה בשמירת מתנדב:', error);
+      alert('אירעה שגיאה בשמירת המתנדב');
     }
   };
 
-  // מחיקת מתנדב
   const handleDelete = async (volunteerId) => {
-    if (!window.confirm("האם אתה בטוח שברצונך למחוק מתנדב זה?")) return;
+    if (!window.confirm('האם אתה בטוח שברצונך למחוק מתנדב זה?')) return;
+
     try {
       await deleteDoc(doc(db, 'volunteers', volunteerId));
-      fetchData();
+      await fetchData();
     } catch (error) {
-      console.error("שגיאה במחיקת מתנדב:", error);
+      console.error('שגיאה במחיקת מתנדב:', error);
+      alert('אירעה שגיאה במחיקת המתנדב');
     }
   };
 
@@ -113,28 +133,24 @@ const VolunteersManagement = () => {
     <div className="admin-container">
       <header className="page-header">
         <div>
-          <h2 className="admin-title" style={{ borderBottom: 'none', marginBottom: '5px' }}>ניהול מתנדבים</h2>
+          <h2 className="admin-title no-border-title">ניהול מתנדבים</h2>
           {passedGroup && (
-            <p className="subtitle">מסונן עבור קבוצה: <strong>{passedGroup.groupName}</strong></p>
+            <p className="subtitle">מסונן עבור קבוצה: <strong>{passedGroup.groupName || getGroupName(passedGroup.id)}</strong></p>
           )}
         </div>
-        <button className="btn btn-outline" onClick={() => navigate(-1)}>
-          חזור לקבוצות
-        </button>
+        {typeof onBack === 'function' && (
+          <button className="btn btn-outline" onClick={onBack}>חזרה</button>
+        )}
       </header>
 
-      {/* אזור הפעולות עודכן להיות בטור במקום בשורה */}
-      <div className="action-bar" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '15px' }}>
-        <button className="btn btn-primary" onClick={handleOpenAdd}>
-          + הוסף מתנדב חדש
-        </button>
-        <input 
-          type="text" 
+      <div className="action-bar vertical-action-bar">
+        <button className="btn btn-primary" onClick={handleOpenAdd}>+ הוסף מתנדב חדש</button>
+        <input
+          type="text"
           className="styled-input"
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          onChange={(event) => setSearchQuery(event.target.value)}
           placeholder="🔍 חפש מתנדב לפי שם..."
-          style={{ width: '300px' }}
         />
       </div>
 
@@ -149,78 +165,59 @@ const VolunteersManagement = () => {
           </thead>
           <tbody>
             {filteredAndSortedVolunteers.length > 0 ? (
-              filteredAndSortedVolunteers.map((vol) => (
-                <tr key={vol.id}>
-                  <td><strong>{vol.name}</strong></td>
-                  <td>{getGroupName(vol.groupId)}</td>
+              filteredAndSortedVolunteers.map((volunteer) => (
+                <tr key={volunteer.id}>
+                  <td><strong>{getVolunteerName(volunteer)}</strong></td>
+                  <td>{getGroupName(volunteer.groupId, volunteer.groupName)}</td>
                   <td className="actions-cell">
-                    <button className="btn btn-primary" onClick={() => navigate(`/volunteer-details/${vol.id}`, { state: { volunteer: vol } })}>
-                      פרטים
-                    </button>
-                    <button className="btn btn-outline" onClick={() => handleOpenEdit(vol)}>
-                      ערוך / שייך
-                    </button>
-                    <button 
-                      className="btn btn-outline" 
-                      style={{ borderColor: '#ef4444', color: '#ef4444' }}
-                      onClick={() => handleDelete(vol.id)}
-                    >
-                      מחק
-                    </button>
+                    <button className="btn btn-outline" onClick={() => handleOpenEdit(volunteer)}>ערוך / שייך</button>
+                    <button className="btn btn-outline danger-outline" onClick={() => handleDelete(volunteer.id)}>מחק</button>
                   </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan="3" style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
-                  לא נמצאו מתנדבים.
-                </td>
+                <td colSpan="3" className="empty-table-cell">לא נמצאו מתנדבים.</td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
 
-      {/* חלונית הוספה / עריכה */}
       {isModalOpen && (
-        <div className="modal-overlay">
+        <div className="modal-overlay" role="dialog" aria-modal="true">
           <div className="modal-content">
-            <div className="modal-header">
-              {editingVolunteer ? 'עריכת מתנדב' : 'הוספת מתנדב חדש'}
-            </div>
+            <div className="modal-header">{editingVolunteer ? 'עריכת מתנדב' : 'הוספת מתנדב חדש'}</div>
             <form onSubmit={handleSave} className="volunteer-form">
               <div className="form-group">
                 <label>שם המתנדב:</label>
-                <input 
-                  type="text" 
-                  className="styled-input"
-                  style={{ width: '100%', boxSizing: 'border-box' }}
+                <input
+                  type="text"
+                  className="styled-input full-width-input"
                   value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  onChange={(event) => setFormData({ ...formData, name: event.target.value })}
                   required
                 />
               </div>
+
               <div className="form-group">
                 <label>שיוך לקבוצה:</label>
-                <select 
-                  className="styled-input"
-                  style={{ width: '100%', boxSizing: 'border-box' }}
+                <select
+                  className="styled-input full-width-input"
                   value={formData.groupId}
-                  onChange={(e) => setFormData({...formData, groupId: e.target.value})}
+                  onChange={(event) => setFormData({ ...formData, groupId: event.target.value })}
+                  disabled={Boolean(passedGroup)}
                 >
                   <option value="">-- ללא קבוצה --</option>
-                  {groups.map(g => (
-                    <option key={g.id} value={g.id}>{g.groupName}</option>
+                  {groups.map((group) => (
+                    <option key={group.id} value={group.id}>{group.groupName || group.name || 'קבוצה ללא שם'}</option>
                   ))}
                 </select>
               </div>
+
               <div className="modal-actions">
-                <button type="button" className="btn btn-outline" onClick={() => setIsModalOpen(false)}>
-                  ביטול
-                </button>
-                <button type="submit" className="btn btn-success">
-                  {editingVolunteer ? 'שמור שינויים' : 'הוסף מתנדב'}
-                </button>
+                <button type="button" className="btn btn-outline" onClick={() => setIsModalOpen(false)}>ביטול</button>
+                <button type="submit" className="btn btn-success">{editingVolunteer ? 'שמור שינויים' : 'הוסף מתנדב'}</button>
               </div>
             </form>
           </div>

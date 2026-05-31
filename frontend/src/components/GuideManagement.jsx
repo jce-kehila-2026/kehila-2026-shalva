@@ -3,7 +3,6 @@ import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser } from 'firebase/auth';
 import { collection, query, where, getDocs, doc, getDoc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase'; 
-import { useNavigate } from 'react-router-dom';
 
 // Secure configuration pointer pulling from your local .env.local file
 const firebaseConfig = {
@@ -16,7 +15,6 @@ const firebaseConfig = {
 };
 
 function GuideManagement() {
-  const navigate = useNavigate();
   // UI visibility state toggles
   const [showAddForm, setShowAddForm] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -210,12 +208,7 @@ function GuideManagement() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2>Guide Management Center</h2>
-        <button onClick={() => navigate('/admin')}>
-          חזור ללוח בקרה ↩
-        </button>
-      </div>
+      <h2>Guide Management Center</h2>
       
       {/* View Toggle Bar */}
       <div>

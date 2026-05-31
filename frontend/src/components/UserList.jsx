@@ -1,7 +1,15 @@
-import  { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
+
 import { db } from '../firebase';
 import './UserList.css';
+
+const getUserName = (user) => (
+  user.name ||
+  [user.firstName, user.lastName].filter(Boolean).join(' ').trim() ||
+  user.email ||
+  'משתמש ללא שם'
+);
 
 const UserList = ({ onOpenVolunteerDetails }) => {
   const [users, setUsers] = useState([]);
@@ -18,7 +26,7 @@ const UserList = ({ onOpenVolunteerDetails }) => {
     const fetchUsers = async () => {
       try {
         const querySnapshot = await getDocs(collection(db, 'users'));
-        const userList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const userList = querySnapshot.docs.map((documentSnapshot) => ({ id: documentSnapshot.id, ...documentSnapshot.data() }));
         setUsers(userList);
       } catch (err) {
         console.error('Error fetching users:', err);
@@ -42,11 +50,11 @@ const UserList = ({ onOpenVolunteerDetails }) => {
   if (error) {
     return (
       <div className="user-list-container">
-        <div className="empty-state" style={{ color: '#e74c3c' }}>
-          <strong>Error loading users:</strong><br />
+        <div className="empty-state error-state">
+          <strong>שגיאה בטעינת המשתמשים:</strong><br />
           {error}
           <br /><br />
-          <small>Check your browser console for more details. (Usually this is a Firebase Security Rules issue)</small>
+          <small>בדקו את הרשאות Firebase Security Rules ואת קונסול הדפדפן.</small>
         </div>
       </div>
     );
@@ -55,42 +63,36 @@ const UserList = ({ onOpenVolunteerDetails }) => {
   return (
     <div className="user-list-container">
       <div className="user-list-header">
-        <h3>User Directory</h3>
-        <span className="user-badge">
-          {users.length} Users
-        </span>
+        <h3>רשימת משתמשים / מתנדבים</h3>
+        <span className="user-badge">{users.length} רשומות</span>
       </div>
 
       {users.length === 0 ? (
-        <div className="empty-state">
-          No users found in the directory.
-        </div>
+        <div className="empty-state">לא נמצאו משתמשים.</div>
       ) : (
         <ul className="user-list">
-          {users.map((user) => (
-            <li key={user.id} className="user-item">
-              <div className="user-info">
-                <div className="user-avatar">
-                  {(user.name || user.email || 'U').charAt(0).toUpperCase()}
-                </div>
-                <div className="user-details">
-                  <div className="user-name">
-                    {user.firstName +" "+ user.lastName || 'Unnamed User'}
-                  </div>
-                  <div className="user-email">
-                    {user.id}
+          {users.map((user) => {
+            const userName = getUserName(user);
+
+            return (
+              <li key={user.id} className="user-item">
+                <div className="user-info">
+                  <div className="user-avatar">{userName.charAt(0).toUpperCase()}</div>
+                  <div className="user-details">
+                    <div className="user-name">{userName}</div>
+                    <div className="user-email">{user.email || user.id}</div>
                   </div>
                 </div>
-              </div>
-              <button
-                type="button"
-                className="user-details-button"
-                onClick={() => handleOpenDetails(user)}
-              >
-                פרטים
-              </button>
-            </li>
-          ))}
+                <button
+                  type="button"
+                  className="user-details-button"
+                  onClick={() => handleOpenDetails(user)}
+                >
+                  פרטים
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
