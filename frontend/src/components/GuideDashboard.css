@@ -1,0 +1,125 @@
+/* GuideDashboard.css */
+
+.guide-dashboard-container {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  max-width: 800px;
+  margin: 40px auto;
+  padding: 40px;
+  background-color: #f8fafc;
+  border-radius: 16px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+  min-height: 75vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.guide-header {
+  text-align: center;
+  margin-bottom: 40px;
+  border-bottom: 2px solid #e2e8f0;
+  padding-bottom: 20px;
+}
+
+.guide-header h1 {
+  color: #1e293b;
+  font-size: 32px;
+  margin-bottom: 10px;
+}
+
+.guide-header p {
+  color: #64748b;
+  font-size: 18px;
+  margin: 0;
+}
+
+/* אזור הפעולות המרכזי */
+.guide-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  flex-grow: 1;
+  align-items: center;
+  justify-content: center;
+}
+
+/* עיצוב אחיד לכפתורי הפעולה */
+.action-button {
+  width: 100%;
+  max-width: 400px;
+  padding: 20px;
+  font-size: 18px;
+  font-weight: 600;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border: 2px solid transparent;
+}
+
+.action-button:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
+}
+
+.action-button:active {
+  transform: translateY(0);
+}
+
+/* סגנונות ספציפיים לכפתורים */
+.action-button.primary {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.action-button.primary:hover {
+  background-color: #2563eb;
+}
+
+.action-button.secondary {
+  background-color: white;
+  color: #3b82f6;
+  border-color: #3b82f6;
+}
+
+.action-button.secondary:hover {
+  background-color: #eff6ff;
+}
+
+/* אזור התנתקות */
+.guide-footer {
+  margin-top: auto;
+  padding-top: 40px;
+  text-align: center;
+}
+
+.logout-button {
+  background-color: transparent;
+  color: #ef4444;
+  border: 1px solid #ef4444;
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.logout-button:hover {
+  background-color: #fef2f2;
+}
+
+/* התאמה למסכים קטנים (טלפונים) */
+@media (max-width: 600px) {
+  .guide-dashboard-container {
+    margin: 20px;
+    padding: 20px;
+  }
+  
+  .action-button {
+    font-size: 16px;
+    padding: 16px;
+  }
+}
