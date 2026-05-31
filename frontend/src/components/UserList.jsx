@@ -1,12 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import  { useEffect, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import './UserList.css';
 
-const UserList = () => {
+const UserList = ({ onOpenVolunteerDetails }) => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const handleOpenDetails = (user) => {
+    if (typeof onOpenVolunteerDetails === 'function') {
+      onOpenVolunteerDetails(user);
+    }
+  };
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -76,7 +82,13 @@ const UserList = () => {
                   </div>
                 </div>
               </div>
-              
+              <button
+                type="button"
+                className="user-details-button"
+                onClick={() => handleOpenDetails(user)}
+              >
+                פרטים
+              </button>
             </li>
           ))}
         </ul>
