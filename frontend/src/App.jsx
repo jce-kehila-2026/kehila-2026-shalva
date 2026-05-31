@@ -4,21 +4,20 @@ import { auth, db } from './firebase'; // Ensure these are exported correctly fr
 import { doc, getDoc } from 'firebase/firestore';
 import './App.css';
 
-// --- System Components ---
-// Ensure these file paths match where you saved your components
-import MainScreen from './components/MainScreen';
-import Login from './components/Login';
-import AdminDashboard from './components/AdminDashboard'; 
-// import Register from './components/Register'; // Uncomment when you create this component
-// import GuideDashboard from './components/GuideDashboard'; // Uncomment when ready
+import Login from './components/Login'
+import UserList from './components/UserList'
+import AdminDashboard from './components/AdminDashboard'
+import EventManagement from './components/EventManagement/EventManagement'
+import EventDetails from './components/EventDetails/EventDetails'
+import Reports from './components/Reports/Reports'
+import VolunteerDetails from './components/VolunteerDetails/VolunteerDetails'
 
 function App() {
-  // 1. Core System States
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  
-  // 2. Navigation State for Unauthenticated Users ('main', 'login', or 'register')
-  const [publicView, setPublicView] = useState('main'); 
+  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [activeScreen, setActiveScreen] = useState('users')
+  const [selectedEvent, setSelectedEvent] = useState(null)
+  const [selectedVolunteer, setSelectedVolunteer] = useState(null)
 
   useEffect(() => {
     // 3. Global Authentication Listener
@@ -67,7 +66,34 @@ function App() {
     }
   };
 
-  // 5. Role-Based Routing Engine (Only runs if a user is logged in)
+  const renderScreens = () => {
+    if (selectedEvent) {
+      return (
+        <EventDetails
+          event={selectedEvent} 
+          onBack={() => { setSelectedEvent(null); setActiveScreen('events'); }}
+        />
+      );
+    }
+    if (selectedVolunteer) {
+      return (
+        <VolunteerDetails
+          volunteer={selectedVolunteer}
+          onBack={() => { setSelectedVolunteer(null); setActiveScreen('users'); }}
+        />
+      );
+    }
+    switch (activeScreen) {
+      case 'events':
+        return <EventManagement onOpenEventDetails={(ev) => setSelectedEvent(ev)} />;
+      case 'reports':
+        return <Reports />;
+      case 'users':
+      default:
+        return <UserList onOpenVolunteerDetails={(v) => setSelectedVolunteer(v)} />;
+    }
+  }
+
   const renderRoleContent = () => {
     const role = user.role || 'viewer'; 
 
@@ -84,12 +110,17 @@ function App() {
         );
       case 'viewer':
       default:
-        // Generic fallback for accounts with no specific access
         return (
-          <div style={{ padding: '20px' }}>
-            <h3>Standard User Panel</h3>
-            <p>Your account is registered but requires admin assignment.</p>
-          </div>
+          <>
+            {!selectedEvent && !selectedVolunteer && (
+              <nav style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button className="counter" onClick={() => setActiveScreen('users')}>רשימת מתנדבים</button>
+                <button className="counter" onClick={() => setActiveScreen('events')}>ניהול אירועים</button>
+                <button className="counter" onClick={() => setActiveScreen('reports')}>דוחות</button>
+              </nav>
+            )}
+            {renderScreens()}
+          </>
         );
     }
   };

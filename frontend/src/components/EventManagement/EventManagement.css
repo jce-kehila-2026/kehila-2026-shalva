@@ -1,0 +1,413 @@
+﻿/* ==========================================================================
+   Event Management Screen
+   Styles for Screen 11: create, edit, delete, search, and list events.
+   ========================================================================== */
+
+/* Main page wrapper */
+.event-management-container {
+  direction: rtl;
+  width: 100%;
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 48px 20px;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  font-family: var(--heading, system-ui, sans-serif);
+  background:
+    radial-gradient(circle at top right, rgba(170, 59, 255, 0.12), transparent 32%),
+    radial-gradient(circle at bottom left, rgba(255, 107, 107, 0.1), transparent 28%);
+}
+
+/* Main card that contains the whole screen */
+.event-management-card {
+  width: 100%;
+  max-width: 1100px;
+  overflow: hidden;
+  background: var(--bg, #fff);
+  border: 1px solid var(--border, #eceaf3);
+  border-radius: 24px;
+  box-shadow: var(--shadow, 0 18px 45px rgba(15, 23, 42, 0.1));
+  text-align: right;
+}
+
+/* ==========================================================================
+   Header
+   ========================================================================== */
+
+/* Top section with the title and event counter */
+.event-management-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 32px;
+  background:
+    linear-gradient(135deg, rgba(170, 59, 255, 0.12), rgba(255, 107, 107, 0.08)),
+    var(--social-bg, #f8f7fc);
+  border-bottom: 1px solid var(--border, #eceaf3);
+}
+
+/* Small screen label above the title */
+.event-management-eyebrow {
+  width: fit-content;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(170, 59, 255, 0.1);
+  color: var(--accent, #8f28e8);
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+/* Main page title */
+.event-management-title {
+  margin: 0;
+  font-size: clamp(28px, 4vw, 40px);
+  line-height: 1.2;
+  color: var(--text-h, #171320);
+}
+
+/* Short description under the title */
+.event-management-subtitle {
+  margin-top: 10px;
+  color: var(--text, #6b6375);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+/* Counter box that shows how many events exist */
+.event-management-count {
+  min-width: 112px;
+  padding: 16px;
+  border-radius: 18px;
+  background: var(--bg, #fff);
+  border: 1px solid var(--border, #eceaf3);
+  text-align: center;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
+}
+
+.event-management-count span {
+  display: block;
+  color: var(--accent, #8f28e8);
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.event-management-count small {
+  display: block;
+  margin-top: 6px;
+  color: var(--text, #6b6375);
+  font-size: 14px;
+}
+
+/* Firebase error message */
+.event-management-error {
+  margin: 24px 32px 0;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  color: #dc2626;
+  font-weight: 700;
+}
+
+/* ==========================================================================
+   Event Form
+   ========================================================================== */
+
+/* Form area for adding and editing events */
+.event-management-form {
+  padding: 30px 32px;
+  border-bottom: 1px solid var(--border, #eceaf3);
+}
+
+.event-management-form h2,
+.event-management-list-section h2 {
+  margin: 0 0 18px;
+  color: var(--text-h, #171320);
+  font-size: 24px;
+}
+
+/* Two-column form layout on desktop */
+.event-management-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+/* Shared label style for form fields */
+.event-management-form label,
+.event-management-description-label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--text-h, #171320);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* Shared style for all form controls and search input */
+.event-management-form input,
+.event-management-form select,
+.event-management-form textarea,
+.event-management-search {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border, #eceaf3);
+  border-radius: 14px;
+  background: var(--bg, #fff);
+  color: var(--text-h, #171320);
+  padding: 12px 14px;
+  font: inherit;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Visible focus state for keyboard and mouse users */
+.event-management-form input:focus,
+.event-management-form select:focus,
+.event-management-form textarea:focus,
+.event-management-search:focus {
+  border-color: var(--accent-border, rgba(170, 59, 255, 0.5));
+  box-shadow: 0 0 0 4px rgba(170, 59, 255, 0.12);
+}
+
+/* Description field settings */
+.event-management-form textarea {
+  resize: vertical;
+  min-height: 110px;
+}
+
+.event-management-description-label {
+  margin-top: 18px;
+}
+
+/* Form action buttons wrapper */
+.event-management-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+/* Shared button style */
+.event-management-primary-btn,
+.event-management-secondary-btn,
+.event-management-row-actions button {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 10px 18px;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+/* Main submit button */
+.event-management-primary-btn {
+  background: var(--accent, #8f28e8);
+  color: #fff;
+  box-shadow: 0 10px 22px rgba(170, 59, 255, 0.25);
+}
+
+/* Disabled state while saving */
+.event-management-primary-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  box-shadow: none;
+}
+
+/* Secondary buttons and table action buttons */
+.event-management-secondary-btn,
+.event-management-row-actions button {
+  background: var(--accent-bg, rgba(170, 59, 255, 0.1));
+  color: var(--accent, #8f28e8);
+  border-color: var(--accent-border, rgba(170, 59, 255, 0.3));
+}
+
+/* Button hover effect */
+.event-management-primary-btn:not(:disabled):hover,
+.event-management-secondary-btn:hover,
+.event-management-row-actions button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+/* ==========================================================================
+   Event List
+   ========================================================================== */
+
+/* Event table section */
+.event-management-list-section {
+  padding: 30px 32px 34px;
+}
+
+/* Header row above the event table */
+.event-management-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+/* Search field width on desktop */
+.event-management-search {
+  max-width: 390px;
+}
+
+/* Loading and empty states */
+.event-management-loading,
+.event-management-empty {
+  padding: 28px;
+  color: var(--text, #6b6375);
+  text-align: center;
+}
+
+/* Horizontal scroll wrapper for smaller screens */
+.event-management-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border, #eceaf3);
+  border-radius: 18px;
+}
+
+/* Events table */
+.event-management-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 820px;
+  background: var(--bg, #fff);
+}
+
+.event-management-table th,
+.event-management-table td {
+  padding: 16px;
+  border-bottom: 1px solid var(--border, #eceaf3);
+  text-align: right;
+  vertical-align: middle;
+}
+
+.event-management-table th {
+  background: var(--social-bg, #faf9fd);
+  color: var(--text-h, #171320);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.event-management-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.event-management-table td {
+  color: var(--text, #6b6375);
+  font-size: 15px;
+}
+
+/* ==========================================================================
+   Status Badges
+   ========================================================================== */
+
+/* Base status badge */
+.event-management-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  background: var(--accent-bg, rgba(170, 59, 255, 0.1));
+  color: var(--accent, #8f28e8);
+  border: 1px solid var(--accent-border, rgba(170, 59, 255, 0.25));
+}
+
+/* Active event status */
+.event-management-status.status-active {
+  background: rgba(34, 197, 94, 0.12);
+  color: #15803d;
+  border-color: rgba(34, 197, 94, 0.28);
+}
+
+/* Planned event status */
+.event-management-status.status-planned {
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563eb;
+  border-color: rgba(37, 99, 235, 0.25);
+}
+
+/* Finished event status */
+.event-management-status.status-finished {
+  background: rgba(100, 116, 139, 0.12);
+  color: #475569;
+  border-color: rgba(100, 116, 139, 0.25);
+}
+
+/* Cancelled event status */
+.event-management-status.status-cancelled {
+  background: rgba(239, 68, 68, 0.12);
+  color: #dc2626;
+  border-color: rgba(239, 68, 68, 0.28);
+}
+
+/* ==========================================================================
+   Row Actions
+   ========================================================================== */
+
+/* Buttons inside each table row */
+.event-management-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.event-management-row-actions button {
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+/* Delete button style */
+.event-management-row-actions button.danger {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+/* ==========================================================================
+   Responsive Layout
+   ========================================================================== */
+
+/* Mobile and narrow screens */
+@media (max-width: 760px) {
+  .event-management-container {
+    padding: 24px 12px;
+  }
+
+  .event-management-header,
+  .event-management-list-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .event-management-form,
+  .event-management-list-section,
+  .event-management-header {
+    padding: 22px;
+  }
+
+  .event-management-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .event-management-count {
+    width: 100%;
+  }
+
+  .event-management-search {
+    max-width: none;
+  }
+}
