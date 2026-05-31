@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { useNavigate } from 'react-router-dom'; // הוספנו את מערכת הניווט
+import { collection, getDocs, addDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase'; 
 import './GroupManagement.css'; 
+import GroupDetails from './GroupDetails';
 
 const GroupManagement = () => {
+  const navigate = useNavigate(); // אתחול הניווט
+  const [selectedGroupId, setSelectedGroupId] = useState(null);
   const [groups, setGroups] = useState([]);
   const [volunteers, setVolunteers] = useState([]);
   const [newGroupName, setNewGroupName] = useState('');
   
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [currentGroup, setCurrentGroup] = useState(null);
-  const [newVolunteerName, setNewVolunteerName] = useState('');
+  // מחקנו את כל משתני ה-State שהיו קשורים למודל המתנדבים
 
   const fetchData = async () => {
     try {
@@ -53,55 +55,35 @@ const GroupManagement = () => {
     }
   };
 
-  // --- הפונקציה החדשה: מחיקת מדריך מהקבוצה (איפוס השדה) ---
   const handleRemoveGuide = async (groupId) => {
     if (!window.confirm("האם אתה בטוח שברצונך למחוק את המדריך מקבוצה זו?")) return;
     
     try {
       const groupRef = doc(db, 'groups', groupId);
-      // מעדכנים את השדה guideId חזרה למחרוזת ריקה
       await updateDoc(groupRef, { guideId: '' });
-      fetchData(); // מרעננים את הנתונים במסך
+      fetchData(); 
     } catch (error) {
       console.error("שגיאה במחיקת מדריך:", error);
     }
   };
 
-  const openVolunteersModal = (group) => {
-    setCurrentGroup(group);
-    setIsModalOpen(true);
-  };
-
-  const handleAddVolunteer = async () => {
-    if (newVolunteerName.trim() === '') return;
-    try {
-      await addDoc(collection(db, 'volunteers'), {
-        name: newVolunteerName,
-        groupId: currentGroup.id 
-      });
-      setNewVolunteerName(''); 
-      fetchData(); 
-    } catch (error) {
-      console.error("שגיאה בהוספת מתנדב:", error);
-    }
-  };
-
-  const handleRemoveVolunteer = async (volunteerId) => {
-    try {
-      await deleteDoc(doc(db, 'volunteers', volunteerId));
-      fetchData();
-    } catch (error) {
-      console.error("שגיאה בהסרת מתנדב:", error);
-    }
+  // הפונקציה הזו עכשיו מנווטת למסך החדש ומעבירה לו את הקבוצה!
+  const handleManageVolunteers = (group) => {
+    navigate('/volunteers-management', { state: { group: group } });
   };
 
   const handleViewDetails = (groupId) => {
-    alert(`הכנה למעבר למסך 7!\nה-ID של הקבוצה שנבחרה הוא:\n${groupId}`);
+    setSelectedGroupId(groupId);
   };
 
-  const currentGroupVolunteers = currentGroup 
-    ? volunteers.filter(v => v.groupId === currentGroup.id) 
-    : [];
+  if (selectedGroupId) {
+    return (
+      <GroupDetails 
+        groupId={selectedGroupId} 
+        onBack={() => setSelectedGroupId(null)} 
+      />
+    );
+  }
 
   return (
     <div className="admin-container">
@@ -141,7 +123,6 @@ const GroupManagement = () => {
                   <td>{groupVolunteersCount}</td>
                   <td className="actions-cell">
                     
-                    {/* כפתור שיוך / מחיקת מדריך דינמי בהתאם למצב השדה */}
                     {group.guideId ? (
                       <button 
                         className="btn btn-outline" 
@@ -156,7 +137,7 @@ const GroupManagement = () => {
                       </button>
                     )}
 
-                    <button className="btn btn-success" onClick={() => openVolunteersModal(group)}>
+                    <button className="btn btn-success" onClick={() => handleManageVolunteers(group)}>
                       ניהול מתנדבים
                     </button>
                     <button className="btn btn-primary" onClick={() => handleViewDetails(group.id)}>
@@ -169,49 +150,6 @@ const GroupManagement = () => {
           </tbody>
         </table>
       </div>
-
-      {isModalOpen && currentGroup && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <div className="modal-header">
-              ניהול מתנדבים - {currentGroup.groupName}
-            </div>
-            
-            <div className="action-bar" style={{ padding: 0, boxShadow: 'none' }}>
-              <input 
-                type="text" 
-                className="styled-input"
-                style={{ flex: 1 }}
-                value={newVolunteerName}
-                onChange={(e) => setNewVolunteerName(e.target.value)}
-                placeholder="הכנס שם מתנדב..."
-              />
-              <button className="btn btn-primary" onClick={handleAddVolunteer}>
-                הוסף מתנדב
-              </button>
-            </div>
-
-            <div className="volunteers-list">
-              {currentGroupVolunteers.length > 0 ? (
-                currentGroupVolunteers.map((vol) => (
-                  <div key={vol.id} className="volunteer-item">
-                    <span>{vol.name}</span>
-                    <button className="btn-danger-text" onClick={() => handleRemoveVolunteer(vol.id)}>
-                      הסר ✖
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <div className="empty-state">אין מתנדבים בקבוצה זו.</div>
-              )}
-            </div>
-
-            <button className="modal-close-btn" onClick={() => setIsModalOpen(false)}>
-              סגור חלונית
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
