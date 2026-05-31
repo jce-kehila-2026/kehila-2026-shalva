@@ -1,0 +1,433 @@
+﻿/* ==========================================================================
+   Reports Screen
+   Styles for Screen 13: attendance, group, event reports, and export actions.
+   ========================================================================== */
+
+/* Main page wrapper */
+.reports-container {
+  direction: rtl;
+  width: 100%;
+  min-height: 100vh;
+  padding: 48px 20px;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  font-family: var(--heading, system-ui, sans-serif);
+  background:
+    radial-gradient(circle at top right, rgba(170, 59, 255, 0.12), transparent 32%),
+    radial-gradient(circle at bottom left, rgba(255, 107, 107, 0.1), transparent 28%);
+}
+
+/* Main card that contains the full reports screen */
+.reports-card {
+  width: 100%;
+  max-width: 1120px;
+  overflow: hidden;
+  background: var(--bg, #fff);
+  border: 1px solid var(--border, #eceaf3);
+  border-radius: 24px;
+  box-shadow: var(--shadow, 0 18px 45px rgba(15, 23, 42, 0.1));
+  text-align: right;
+}
+
+/* ==========================================================================
+   Header
+   ========================================================================== */
+
+/* Top header with title, description, and export actions */
+.reports-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 32px;
+  background:
+    linear-gradient(135deg, rgba(170, 59, 255, 0.12), rgba(255, 107, 107, 0.08)),
+    var(--social-bg, #f8f7fc);
+  border-bottom: 1px solid var(--border, #eceaf3);
+}
+
+/* Small screen label above the title */
+.reports-eyebrow {
+  width: fit-content;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(170, 59, 255, 0.1);
+  color: var(--accent, #8f28e8);
+  font-size: 13px;
+  font-weight: 800;
+  margin-bottom: 10px;
+}
+
+/* Main page title */
+.reports-title {
+  margin: 0;
+  color: var(--text-h, #171320);
+  font-size: clamp(30px, 4vw, 42px);
+  line-height: 1.2;
+}
+
+/* Short description under the title */
+.reports-subtitle {
+  margin: 10px 0 0;
+  color: var(--text, #6b6375);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+/* Action buttons: refresh, PDF export, and Excel export */
+.reports-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 10px;
+  min-width: 280px;
+}
+
+/* Shared style for header action buttons and report tabs */
+.reports-actions button,
+.reports-tabs button {
+  border: 1px solid var(--accent-border, rgba(170, 59, 255, 0.25));
+  border-radius: 999px;
+  padding: 10px 16px;
+  background: var(--accent-bg, rgba(170, 59, 255, 0.1));
+  color: var(--accent, #8f28e8);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+/* Button hover effect */
+.reports-actions button:hover,
+.reports-tabs button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+/* Main export buttons */
+.reports-actions button:nth-child(2),
+.reports-actions button:nth-child(3) {
+  background: var(--accent, #8f28e8);
+  color: #fff;
+  box-shadow: 0 10px 22px rgba(170, 59, 255, 0.22);
+}
+
+/* ==========================================================================
+   Error State
+   ========================================================================== */
+
+/* Firebase loading errors */
+.reports-error {
+  margin: 24px 32px 0;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  color: #dc2626;
+  font-weight: 700;
+}
+
+.reports-error ul {
+  margin: 10px 20px 0 0;
+}
+
+/* ==========================================================================
+   Summary Cards
+   ========================================================================== */
+
+/* Four summary cards: volunteers, groups, events, and attendance rate */
+.reports-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  padding: 30px 32px 18px;
+}
+
+/* Single summary card */
+.reports-summary-card {
+  margin: 0;
+  padding: 22px 18px;
+  border: 1px solid var(--border, #eceaf3);
+  border-radius: 20px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(250, 247, 255, 0.94)),
+    var(--bg, #fff);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  text-align: center;
+}
+
+/* Main number in each summary card */
+.reports-summary-card span {
+  display: block;
+  color: var(--accent, #8f28e8);
+  font-size: 34px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+/* Label under the summary number */
+.reports-summary-card p {
+  margin: 8px 0 0;
+  color: var(--text, #6b6375);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* ==========================================================================
+   Event Status Summary
+   ========================================================================== */
+
+/* Section that summarizes event counts by status */
+.reports-status-section {
+  margin: 0 32px 22px;
+  padding: 24px;
+  border: 1px solid var(--border, #eceaf3);
+  border-radius: 20px;
+  background: var(--social-bg, #faf9fd);
+}
+
+/* Section titles */
+.reports-status-section h2,
+.reports-panel h2 {
+  margin: 0 0 18px;
+  color: var(--text-h, #171320);
+  font-size: 24px;
+}
+
+/* Grid for event status counters */
+.reports-status-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+/* Single status counter card */
+.reports-status-item {
+  padding: 18px;
+  border-radius: 16px;
+  background: var(--bg, #fff);
+  border: 1px solid var(--border, #eceaf3);
+  text-align: center;
+}
+
+/* Status count number */
+.reports-status-item strong {
+  display: block;
+  color: var(--accent, #8f28e8);
+  font-size: 28px;
+  line-height: 1;
+}
+
+/* Status label */
+.reports-status-item span {
+  display: block;
+  margin-top: 8px;
+  color: var(--text, #6b6375);
+  font-weight: 800;
+}
+
+/* ==========================================================================
+   Report Panel
+   ========================================================================== */
+
+/* Main panel that contains tabs, search, and report table */
+.reports-panel {
+  padding: 0 32px 34px;
+}
+
+/* Header row above the active report table */
+.reports-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+/* Report tab button wrapper */
+.reports-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* Active report tab */
+.reports-tabs button.active {
+  background: var(--accent, #8f28e8);
+  color: #fff;
+  box-shadow: 0 10px 22px rgba(170, 59, 255, 0.22);
+}
+
+/* Search input for the current report table */
+.reports-search {
+  width: min(100%, 340px);
+  box-sizing: border-box;
+  border: 1px solid var(--border, #eceaf3);
+  border-radius: 14px;
+  background: var(--bg, #fff);
+  color: var(--text-h, #171320);
+  padding: 12px 14px;
+  font: inherit;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Visible focus state for search input */
+.reports-search:focus {
+  border-color: var(--accent-border, rgba(170, 59, 255, 0.5));
+  box-shadow: 0 0 0 4px rgba(170, 59, 255, 0.12);
+}
+
+/* Loading and empty states inside reports */
+.reports-loading,
+.reports-empty {
+  padding: 28px;
+  color: var(--text, #6b6375);
+  text-align: center;
+}
+
+/* ==========================================================================
+   Report Tables
+   ========================================================================== */
+
+/* Table wrapper with horizontal scroll support */
+.reports-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border, #eceaf3);
+  border-radius: 18px;
+  background: var(--bg, #fff);
+}
+
+/* Base table style */
+.reports-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+}
+
+/* Shared table cell spacing */
+.reports-table th,
+.reports-table td {
+  padding: 16px;
+  border-bottom: 1px solid var(--border, #eceaf3);
+  text-align: right;
+  vertical-align: middle;
+}
+
+/* Table header cells */
+.reports-table th {
+  background: var(--social-bg, #faf9fd);
+  color: var(--text-h, #171320);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+/* Table body cells */
+.reports-table td {
+  color: var(--text, #6b6375);
+  font-size: 15px;
+}
+
+/* Remove the bottom border from the last row */
+.reports-table tr:last-child td {
+  border-bottom: 0;
+}
+
+/* ==========================================================================
+   Responsive Layout
+   ========================================================================== */
+
+/* Tablet layout */
+@media (max-width: 900px) {
+  .reports-header,
+  .reports-panel-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .reports-summary-grid,
+  .reports-status-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .reports-actions,
+  .reports-tabs {
+    justify-content: stretch;
+  }
+
+  .reports-actions button,
+  .reports-tabs button {
+    flex: 1;
+  }
+
+  .reports-search {
+    width: 100%;
+  }
+}
+
+/* Mobile layout */
+@media (max-width: 600px) {
+  .reports-container {
+    padding: 24px 12px;
+  }
+
+  .reports-header,
+  .reports-panel,
+  .reports-summary-grid {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .reports-summary-grid,
+  .reports-status-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .reports-status-section {
+    margin-left: 20px;
+    margin-right: 20px;
+  }
+}
+
+/* ==========================================================================
+   Print Layout
+   ========================================================================== */
+
+/* Print-friendly style for PDF export */
+@media print {
+  body {
+    background: #fff !important;
+  }
+
+  .reports-container {
+    padding: 0;
+    background: #fff;
+  }
+
+  .reports-card {
+    box-shadow: none;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .reports-actions,
+  .reports-tabs,
+  .reports-search {
+    display: none !important;
+  }
+
+  .reports-header {
+    background: #fff;
+  }
+
+  .reports-table-wrap {
+    overflow: visible;
+  }
+
+  .reports-table {
+    min-width: 0;
+  }
+}
