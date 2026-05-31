@@ -4,6 +4,9 @@ import { auth, db } from './firebase'; // Ensure these are exported correctly fr
 import { doc, getDoc } from 'firebase/firestore';
 import './App.css';
 
+// 👇 1. ADDED THE MISSING MAIN SCREEN IMPORT HERE
+import MainScreen from './components/MainScreen'; 
+
 import Login from './components/Login'
 import UserList from './components/UserList'
 import AdminDashboard from './components/AdminDashboard'
@@ -18,6 +21,9 @@ function App() {
   const [activeScreen, setActiveScreen] = useState('users')
   const [selectedEvent, setSelectedEvent] = useState(null)
   const [selectedVolunteer, setSelectedVolunteer] = useState(null)
+
+  // 👇 2. ADDED THE MISSING PUBLIC VIEW STATE HERE
+  const [publicView, setPublicView] = useState('main')
 
   useEffect(() => {
     // 3. Global Authentication Listener
@@ -141,7 +147,7 @@ function App() {
   return (
     <div style={{ width: '100%', padding: '20px', boxSizing: 'border-box' }}>
       
-      {/*  SCENARIO A: SOMEONE IS LOGGED IN */}
+      {/* SCENARIO A: SOMEONE IS LOGGED IN */}
       {user ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '1200px', margin: '0 auto' }}>
           
@@ -173,7 +179,7 @@ function App() {
         </div>
       ) : (
         
-      /*  SCENARIO B: NO ONE IS LOGGED IN (Public Navigation) */
+      /* SCENARIO B: NO ONE IS LOGGED IN (Public Navigation) */
         <div>
           {/* Main Landing Page (Tabs and Groups) */}
           {publicView === 'main' && (
