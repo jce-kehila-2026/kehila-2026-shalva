@@ -99,6 +99,7 @@ function App() {
         return <UserList onOpenVolunteerDetails={(v) => setSelectedVolunteer(v)} />;
     }
   }
+  
 
   const renderRoleContent = () => {
     const role = user.role || 'viewer'; 
@@ -135,7 +136,8 @@ function App() {
 
   // Show a loading screen while Firebase checks the user's tokens
   if (loading) {
-    
+
+
     return (
       <div id="center" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
         <div className="counter" style={{ fontSize: '1.2rem', color: '#555' }}>
