@@ -1,18 +1,24 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom'; // הוספנו את מערכת הניווט
+import { useNavigate } from 'react-router-dom';
 import { collection, getDocs, addDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase'; 
 import './GroupManagement.css'; 
 import GroupDetails from './GroupDetails';
 
 const GroupManagement = () => {
-  const navigate = useNavigate(); // אתחול הניווט
+  const navigate = useNavigate();
   const [selectedGroupId, setSelectedGroupId] = useState(null);
+  
   const [groups, setGroups] = useState([]);
   const [volunteers, setVolunteers] = useState([]);
+  const [guides, setGuides] = useState([]); // הוספנו סטייט למדריכים
+  
   const [newGroupName, setNewGroupName] = useState('');
   
-  // מחקנו את כל משתני ה-State שהיו קשורים למודל המתנדבים
+  // סטייטים לחלונית שיוך המדריך
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [groupToAssign, setGroupToAssign] = useState(null);
+  const [selectedGuideId, setSelectedGuideId] = useState('');
 
   const fetchData = async () => {
     try {
@@ -23,6 +29,11 @@ const GroupManagement = () => {
       const volunteersSnap = await getDocs(collection(db, 'volunteers'));
       const volunteersData = volunteersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setVolunteers(volunteersData);
+
+      // שליפת רשימת המדריכים מהמסד
+      const guidesSnap = await getDocs(collection(db, 'guides'));
+      const guidesData = guidesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setGuides(guidesData);
     } catch (error) {
       console.error("שגיאה בשליפת הנתונים:", error);
     }
@@ -43,12 +54,20 @@ const GroupManagement = () => {
     }
   };
 
-  const handleAssignGuide = async (groupId) => {
-    const newGuideId = prompt("הכנס את מזהה המדריך (UID) שברצונך לשייך לקבוצה:");
-    if (!newGuideId) return;
+  // פתיחת חלונית השיוך במקום Prompt
+  const openAssignModal = (group) => {
+    setGroupToAssign(group);
+    setSelectedGuideId(''); // איפוס הבחירה הקודמת
+    setIsAssignModalOpen(true);
+  };
+
+  // שמירת השיוך שבחרנו ברשימה
+  const handleSaveGuideAssignment = async () => {
+    if (!selectedGuideId) return;
     try {
-      const groupRef = doc(db, 'groups', groupId);
-      await updateDoc(groupRef, { guideId: newGuideId });
+      const groupRef = doc(db, 'groups', groupToAssign.id);
+      await updateDoc(groupRef, { guideId: selectedGuideId });
+      setIsAssignModalOpen(false);
       fetchData(); 
     } catch (error) {
       console.error("שגיאה בשיוך מדריך:", error);
@@ -57,7 +76,6 @@ const GroupManagement = () => {
 
   const handleRemoveGuide = async (groupId) => {
     if (!window.confirm("האם אתה בטוח שברצונך למחוק את המדריך מקבוצה זו?")) return;
-    
     try {
       const groupRef = doc(db, 'groups', groupId);
       await updateDoc(groupRef, { guideId: '' });
@@ -67,13 +85,21 @@ const GroupManagement = () => {
     }
   };
 
-  // הפונקציה הזו עכשיו מנווטת למסך החדש ומעבירה לו את הקבוצה!
-  const handleManageVolunteers = (group) => {
-    navigate('/volunteers-management', { state: { group: group } });
+  const handleManageVolunteers = () => {
+    navigate('/volunteers-management');
   };
 
   const handleViewDetails = (groupId) => {
     setSelectedGroupId(groupId);
+  };
+
+  // פונקציית עזר להצגת שם המדריך בטבלה
+  const getGuideDisplayName = (guideId) => {
+    if (!guideId) return null;
+    const guide = guides.find(g => g.id === guideId);
+    if (!guide) return 'מדריך לא ידוע';
+    // ננסה להציג שם, או אימייל אם אין שם
+    return guide.name || guide.firstName || guide.email || 'מדריך ללא שם';
   };
 
   if (selectedGroupId) {
@@ -100,6 +126,9 @@ const GroupManagement = () => {
         <button className="btn btn-primary" onClick={handleCreateGroup}>
           צור קבוצה
         </button>
+        <button className="btn btn-success" onClick={handleManageVolunteers}>
+          ניהול מתנדבים
+        </button>
       </div>
 
       <div className="table-container">
@@ -107,7 +136,7 @@ const GroupManagement = () => {
           <thead>
             <tr>
               <th>שם הקבוצה</th>
-              <th>מזהה מדריך (UID)</th>
+              <th>מדריך משויך</th>
               <th>כמות מתנדבים</th>
               <th>פעולות</th>
             </tr>
@@ -119,7 +148,7 @@ const GroupManagement = () => {
               return (
                 <tr key={group.id}>
                   <td><strong>{group.groupName}</strong></td>
-                  <td>{group.guideId || <span style={{color: '#94a3b8'}}>טרם שויך</span>}</td>
+                  <td>{getGuideDisplayName(group.guideId) || <span style={{color: '#94a3b8'}}>טרם שויך</span>}</td>
                   <td>{groupVolunteersCount}</td>
                   <td className="actions-cell">
                     
@@ -132,14 +161,11 @@ const GroupManagement = () => {
                         מחק מדריך
                       </button>
                     ) : (
-                      <button className="btn btn-outline" onClick={() => handleAssignGuide(group.id)}>
+                      <button className="btn btn-outline" onClick={() => openAssignModal(group)}>
                         שייך מדריך
                       </button>
                     )}
 
-                    <button className="btn btn-success" onClick={() => handleManageVolunteers(group)}>
-                      ניהול מתנדבים
-                    </button>
                     <button className="btn btn-primary" onClick={() => handleViewDetails(group.id)}>
                       פרטי קבוצה
                     </button>
@@ -150,6 +176,48 @@ const GroupManagement = () => {
           </tbody>
         </table>
       </div>
+
+      {/* חלונית Modal לשיוך מדריך */}
+      {isAssignModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <div className="modal-header">
+              שיוך מדריך לקבוצת: {groupToAssign?.groupName}
+            </div>
+            
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>בחר מדריך מהרשימה:</label>
+              <select 
+                className="styled-input" 
+                style={{ width: '100%' }}
+                value={selectedGuideId}
+                onChange={(e) => setSelectedGuideId(e.target.value)}
+              >
+                <option value="">-- בחר מדריך --</option>
+                {guides.map(guide => (
+                  <option key={guide.id} value={guide.id}>
+                    {guide.name || guide.firstName || guide.email || guide.id}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button className="btn btn-outline" onClick={() => setIsAssignModalOpen(false)}>
+                ביטול
+              </button>
+              <button 
+                className="btn btn-success" 
+                onClick={handleSaveGuideAssignment}
+                disabled={!selectedGuideId}
+              >
+                שמור שיוך
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
