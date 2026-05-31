@@ -2,17 +2,16 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase'; 
 import { signOut } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import './GuideDashboard.css';  
 
 const GuideDashboard = () => {
   const navigate = useNavigate();
   const [guideData, setGuideData] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchGuideData = async () => {
-      // 1. אימות משתמש מול Firebase Auth
       const user = auth.currentUser;
       
       if (!user) {
@@ -21,19 +20,38 @@ const GuideDashboard = () => {
       }
 
       try {
-        // 2. משיכת נתוני העומק ממסד הנתונים
-        const guideRef = doc(db, 'guides', user.uid);
-        const guideSnap = await getDoc(guideRef);
-
-        if (guideSnap.exists()) {
-          setGuideData({ id: guideSnap.id, ...guideSnap.data() });
-        } else {
-          console.error("שגיאה: משתמש מחובר אך לא קיים עבורו מסמך בטבלת guides");
+        // 1. Fetch personal details from users
+        const userRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userRef);
+        let firstName = 'מדריך';
+        
+        if (userSnap.exists()) {
+          firstName = userSnap.data().firstName || firstName;
         }
+
+        // 2. Query groups to find which one is assigned to this guide
+        const groupsRef = collection(db, 'groups');
+        const q = query(groupsRef, where('guideId', '==', user.uid));
+        const groupsSnap = await getDocs(q);
+        
+        let groupId = null;
+        let groupName = 'טרם שויך';
+
+        if (!groupsSnap.empty) {
+          const groupDoc = groupsSnap.docs[0];
+          groupId = groupDoc.id;
+          groupName = groupDoc.data().groupName;
+        }
+
+        setGuideData({
+          id: user.uid,
+          firstName,
+          groupId,
+          groupName
+        });
       } catch (error) {
-        console.error("שגיאה בשליפת נתוני המדריך:", error);
+        console.error("שגיאה בשליפת נתוני המדריך והקבוצה:", error);
       } finally {
-        // 3. סיום מצב הטעינה
         setLoading(false);
       }
     };
@@ -43,9 +61,8 @@ const GuideDashboard = () => {
 
   const handleLogout = async () => {
     try {
-      // ניתוק מאובטח
       await signOut(auth);
-      navigate('/login'); 
+      navigate('/'); 
     } catch (error) {
       console.error("שגיאה בתהליך ההתנתקות:", error);
     }
@@ -64,27 +81,49 @@ const GuideDashboard = () => {
       <header className="guide-header">
         <h1>לוח בקרה - מדריך</h1>
         <p>ברוך הבא {guideData?.firstName || 'מדריך'}, בחר את הפעולה הרצויה:</p>
+        {guideData?.groupId ? (
+          <p style={{ color: '#0f766e', fontWeight: 'bold' }}>משויך לקבוצה: {guideData.groupName}</p>
+        ) : (
+          <p style={{ color: '#b91c1c', fontWeight: 'bold' }}>טרם שויכת לקבוצה במערכת</p>
+        )}
       </header>
 
       <main className="guide-actions">
         <button 
           className="action-button secondary" 
-          // 4. העברת ה-ID של הקבוצה למסך הבא דרך הראוטר
-          onClick={() => navigate('/group-details', { state: { groupId: guideData?.groupId } })}
+          onClick={() => {
+            if (guideData?.groupId) {
+              navigate(`/group-details/${guideData.groupId}`);
+            } else {
+              alert('טרם שויכת לקבוצה');
+            }
+          }}
         >
           👤 הקבוצה שלי (My Group)
         </button>
 
         <button 
           className="action-button primary" 
-          onClick={() => navigate('/attendance', { state: { groupId: guideData?.groupId } })}
+          onClick={() => {
+            if (guideData?.groupId) {
+              navigate('/attendance', { state: { groupId: guideData.groupId } });
+            } else {
+              alert('טרם שויכת לקבוצה');
+            }
+          }}
         >
           📝 סימון נוכחות (Attendance)
         </button>
 
         <button 
           className="action-button secondary" 
-          onClick={() => navigate('/volunteers', { state: { groupId: guideData?.groupId } })}
+          onClick={() => {
+            if (guideData?.groupId) {
+              navigate(`/group-details/${guideData.groupId}`);
+            } else {
+              alert('טרם שויכת לקבוצה');
+            }
+          }}
         >
           👥 רשימת מתנדבים (Volunteers List)
         </button>

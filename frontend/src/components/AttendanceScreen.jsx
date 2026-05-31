@@ -1,35 +1,60 @@
 import React, { useEffect, useState } from "react";
 import { db } from "../firebase";
 import { collection, addDoc, getDocs, query, where } from "firebase/firestore";
+import { useLocation, useNavigate } from "react-router-dom";
 import "./AttendanceScreen.css";
 
 function AttendanceScreen() {
-  const groups = [
-    "תותים", "דובדבן", "אתרוג", "ניצן", "רימונים", "תאנים",
-    "גפן", "רותם", "אלמוג", "הדרים", "אגוז", "ארז",
-    "דולב", "שקדיה", "אלה", "אלונים", "אורנים",
-    "דקל", "עמית", "נעם", "איתן", "לביא",
-  ];
+  const location = useLocation();
+  const navigate = useNavigate();
+  const passedGroupId = location.state?.groupId;
 
-  const [selectedGroup, setSelectedGroup] = useState("");
+  const [dbGroups, setDbGroups] = useState([]);
+  const [selectedGroupId, setSelectedGroupId] = useState(passedGroupId || "");
+  const [selectedGroup, setSelectedGroup] = useState(""); // group name
   const [volunteers, setVolunteers] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  // Fetch groups dynamically from database
   useEffect(() => {
-    if (selectedGroup) {
-      fetchVolunteersByGroup(selectedGroup);
+    const fetchGroups = async () => {
+      try {
+        const snapshot = await getDocs(collection(db, "groups"));
+        const groupsData = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setDbGroups(groupsData);
+
+        if (passedGroupId) {
+          const matched = groupsData.find((g) => g.id === passedGroupId);
+          if (matched) {
+            setSelectedGroup(matched.groupName);
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching groups:", err);
+      }
+    };
+    fetchGroups();
+  }, [passedGroupId]);
+
+  // Load volunteers when group selection changes
+  useEffect(() => {
+    if (selectedGroupId) {
+      fetchVolunteersByGroup(selectedGroupId);
     } else {
       setVolunteers([]);
     }
-  }, [selectedGroup]);
+  }, [selectedGroupId]);
 
-  const fetchVolunteersByGroup = async (groupName) => {
+  const fetchVolunteersByGroup = async (gId) => {
     setLoading(true);
 
     try {
       const q = query(
         collection(db, "volunteers"),
-        where("groupName", "==", groupName)
+        where("groupId", "==", gId)
       );
 
       const snapshot = await getDocs(q);
@@ -60,7 +85,7 @@ function AttendanceScreen() {
   };
 
   const handleSaveAttendance = async () => {
-    if (!selectedGroup) {
+    if (!selectedGroupId || !selectedGroup) {
       alert("יש לבחור קבוצה");
       return;
     }
@@ -69,6 +94,7 @@ function AttendanceScreen() {
       for (const volunteer of volunteers) {
         await addDoc(collection(db, "attendance"), {
           group: selectedGroup,
+          groupId: selectedGroupId,
           date: new Date(),
           status: volunteer.status,
           volunteerId: volunteer.id,
@@ -79,6 +105,7 @@ function AttendanceScreen() {
       }
 
       alert("הנוכחות נשמרה בהצלחה!");
+      navigate(-1);
     } catch (error) {
       console.error("Error saving attendance:", error);
       alert("אירעה שגיאה בשמירת הנוכחות");
@@ -88,21 +115,35 @@ function AttendanceScreen() {
   return (
     <div className="attendance-page" dir="rtl">
       <div className="attendance-card">
-        <h1>סימון נוכחות</h1>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+          <h1>סימון נוכחות</h1>
+          <button className="btn btn-outline" onClick={() => navigate(-1)}>
+            ביטול / חזור
+          </button>
+        </div>
         <p>בחרו קבוצה וסמנו נוכחות למתנדבים.</p>
 
-        <select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)}>
+        <select 
+          value={selectedGroupId} 
+          onChange={(e) => {
+            const gId = e.target.value;
+            setSelectedGroupId(gId);
+            const matched = dbGroups.find((g) => g.id === gId);
+            setSelectedGroup(matched ? matched.groupName : "");
+          }}
+          disabled={!!passedGroupId}
+        >
           <option value="">בחר קבוצה</option>
-          {groups.map((group) => (
-            <option key={group} value={group}>
-              {group}
+          {dbGroups.map((group) => (
+            <option key={group.id} value={group.id}>
+              {group.groupName}
             </option>
           ))}
         </select>
 
         {loading && <p>טוען מתנדבים...</p>}
 
-        {!loading && selectedGroup && volunteers.length === 0 && (
+        {!loading && selectedGroupId && volunteers.length === 0 && (
           <p>לא נמצאו מתנדבים בקבוצה זו.</p>
         )}
 
@@ -125,7 +166,7 @@ function AttendanceScreen() {
             </div>
           ))}
 
-        <button onClick={handleSaveAttendance} disabled={!selectedGroup || volunteers.length === 0}>
+        <button onClick={handleSaveAttendance} disabled={!selectedGroupId || volunteers.length === 0}>
           שמירת נוכחות
         </button>
       </div>

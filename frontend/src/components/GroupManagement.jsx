@@ -86,11 +86,11 @@ const GroupManagement = () => {
   };
 
   const handleManageVolunteers = () => {
-    navigate('/volunteers-management');
+    navigate('/admin/volunteers');
   };
 
   const handleViewDetails = (groupId) => {
-    setSelectedGroupId(groupId);
+    navigate(`/group-details/${groupId}`);
   };
 
   // פונקציית עזר להצגת שם המדריך בטבלה
@@ -102,18 +102,14 @@ const GroupManagement = () => {
     return guide.name || guide.firstName || guide.email || 'מדריך ללא שם';
   };
 
-  if (selectedGroupId) {
-    return (
-      <GroupDetails 
-        groupId={selectedGroupId} 
-        onBack={() => setSelectedGroupId(null)} 
-      />
-    );
-  }
-
   return (
     <div className="admin-container">
-      <h2 className="admin-title">ניהול קבוצות (Admin)</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2 className="admin-title">ניהול קבוצות (Admin)</h2>
+        <button className="btn btn-outline" onClick={() => navigate('/admin')}>
+          חזור ללוח בקרה ↩
+        </button>
+      </div>
 
       <div className="action-bar">
         <input 

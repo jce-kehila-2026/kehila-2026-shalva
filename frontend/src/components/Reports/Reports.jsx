@@ -1,4 +1,5 @@
-﻿import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { collection, getDocs } from 'firebase/firestore'
 
@@ -381,6 +382,7 @@ function downloadCsv(rows) {
  * Shows attendance, group, and event reports with PDF and Excel export.
  */
 export default function Reports() {
+  const navigate = useNavigate()
   // Firebase data used by all reports.
   const [data, setData] = useState(EMPTY_DATA)
 
@@ -754,6 +756,10 @@ export default function Reports() {
           </div>
 
           <div className="reports-actions">
+            <button type="button" onClick={() => navigate('/admin')} style={{ background: '#3498db', color: 'white' }}>
+              חזור ללוח בקרה ↩
+            </button>
+
             <button type="button" onClick={loadReportsData}>
               רענון נתונים
             </button>

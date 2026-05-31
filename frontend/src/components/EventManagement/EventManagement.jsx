@@ -1,4 +1,5 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import {
   addDoc,
@@ -145,6 +146,7 @@ function getSubmitButtonText({ saving, isEditing }) {
  * Allows the admin to add, edit, delete, search, and open event details.
  */
 export default function EventManagement({ onOpenEventDetails }) {
+  const navigate = useNavigate()
   // Events loaded from Firestore.
   const [events, setEvents] = useState([])
 
@@ -336,18 +338,13 @@ export default function EventManagement({ onOpenEventDetails }) {
    * Sends the selected event to Screen 12.
    */
   const handleOpenDetails = (eventItem) => {
-    if (typeof onOpenEventDetails === 'function') {
-      onOpenEventDetails(eventItem)
-      return
-    }
-
-    window.alert('מסך פרטי אירוע יחובר בשלב הבא.')
+    navigate(`/event-details/${eventItem.id}`, { state: { event: eventItem } })
   }
 
   return (
     <main className="event-management-container" dir="rtl">
       <section className="event-management-card">
-        <header className="event-management-header">
+        <header className="event-management-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <div className="event-management-eyebrow">
               מסך 11
@@ -362,10 +359,13 @@ export default function EventManagement({ onOpenEventDetails }) {
             </p>
           </div>
 
-          <div className="event-management-count">
-            <span>{events.length}</span>
-            <small>אירועים</small>
-          </div>
+          <button 
+            type="button" 
+            onClick={() => navigate('/admin')}
+            style={{ padding: '8px 16px', background: '#3498db', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+          >
+            חזור ללוח בקרה ↩
+          </button>
         </header>
 
         {error && (

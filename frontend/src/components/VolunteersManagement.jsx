@@ -154,6 +154,9 @@ const VolunteersManagement = () => {
                   <td><strong>{vol.name}</strong></td>
                   <td>{getGroupName(vol.groupId)}</td>
                   <td className="actions-cell">
+                    <button className="btn btn-primary" onClick={() => navigate(`/volunteer-details/${vol.id}`, { state: { volunteer: vol } })}>
+                      פרטים
+                    </button>
                     <button className="btn btn-outline" onClick={() => handleOpenEdit(vol)}>
                       ערוך / שייך
                     </button>
