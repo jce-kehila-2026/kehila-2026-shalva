@@ -25,6 +25,11 @@ function GuideManagement() {
   const [isEditing, setIsEditing] = useState(false);
   const [editingGuideId, setEditingGuideId] = useState(null);
 
+  // --- NEW ASSIGNMENT STATES ---
+  const [availableGroups, setAvailableGroups] = useState([]);
+  const [assigningGuide, setAssigningGuide] = useState(null);
+  const [selectedGroupId, setSelectedGroupId] = useState('');
+
   // Local state tracking the user input strings for registration
   const [newGuide, setNewGuide] = useState({
     firstName: '',
@@ -118,11 +123,66 @@ function GuideManagement() {
     }
   };
 
+  // --- NEW TWO-WAY ASSIGNMENT LOGIC ---
+  const handleSaveAssignment = async () => {
+    if (!selectedGroupId) {
+      alert("Please select a group from the dropdown.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Find the group object the user selected to get its name
+      const targetGroup = availableGroups.find(g => g.id === selectedGroupId);
+
+      // STEP 1: Security sweep - clear this guide from any previous group they might have led
+      const oldGroupQuery = query(collection(db, 'groups'), where('guideId', '==', assigningGuide.id));
+      const oldGroupSnap = await getDocs(oldGroupQuery);
+      
+      for (const groupDoc of oldGroupSnap.docs) {
+        await updateDoc(doc(db, 'groups', groupDoc.id), { 
+          guideId: "", 
+          guideName: "" 
+        });
+      }
+
+      // STEP 2: Update the NEW group with the Guide's ID and Name
+      await updateDoc(doc(db, 'groups', selectedGroupId), {
+        guideId: assigningGuide.id,
+        guideName: `${assigningGuide.firstName} ${assigningGuide.lastName}`
+      });
+
+      // STEP 3: Update the Guide's metadata tracker with the Group Name
+      await updateDoc(doc(db, 'guides', assigningGuide.id), {
+        groupName: targetGroup.groupName
+      });
+
+      alert(`Successfully assigned ${assigningGuide.firstName} to group ${targetGroup.groupName}!`);
+      
+      // Cleanup UI states and fetch fresh data
+      setAssigningGuide(null);
+      setSelectedGroupId('');
+      await fetchAllGuidesData(); 
+
+    } catch (error) {
+      console.error("Error assigning group:", error);
+      alert(`Assignment failed: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Reusable standalone function to query Firestore and merge data from both collections
   const fetchAllGuidesData = async () => {
     try {
       setTableLoading(true);
       
+      // Fetch Available Groups for the Dropdown Menu
+      const groupsSnap = await getDocs(collection(db, 'groups'));
+      const groupsData = groupsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setAvailableGroups(groupsData);
+
+      // Fetch Guides List
       const usersRef = collection(db, 'users');
       const q = query(usersRef, where('role', '==', 'guide'));
       const querySnapshot = await getDocs(q);
@@ -153,7 +213,7 @@ function GuideManagement() {
 
       setGuidesList(combinedGuides);
     } catch (error) {
-      console.error("Error aggregating guide collections:", error);
+      console.error("Error aggregating data collections:", error);
     } finally {
       setTableLoading(false);
     }
@@ -210,30 +270,33 @@ function GuideManagement() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h2>Guide Management Center</h2>
-        <button onClick={() => navigate('/admin')}>
+        <button onClick={() => navigate('/admin')} style={{ padding: '8px 16px', backgroundColor: '#95a5a6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
           חזור ללוח בקרה ↩
         </button>
       </div>
       
       {/* View Toggle Bar */}
-      <div>
-        <button onClick={() => {
-          if (showAddForm) {
-            setIsEditing(false);
-            setEditingGuideId(null);
-            setNewGuide({ firstName: '', lastName: '', email: '', password: '' });
-          }
-          setShowAddForm(!showAddForm);
-        }}>
+      <div style={{ marginBottom: '20px' }}>
+        <button 
+          style={{ padding: '10px 20px', backgroundColor: '#3498db', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+          onClick={() => {
+            if (showAddForm) {
+              setIsEditing(false);
+              setEditingGuideId(null);
+              setNewGuide({ firstName: '', lastName: '', email: '', password: '' });
+            }
+            setShowAddForm(!showAddForm);
+          }}
+        >
           {showAddForm ? 'Cancel Registration' : 'Add New Guide'}
         </button>
       </div>
 
       {/* Conditional Registry Intake Form */}
       {showAddForm && (
-        <form onSubmit={handleSubmitForm}>
+        <form onSubmit={handleSubmitForm} style={{ marginBottom: '30px' }}>
           <h3>{isEditing ? 'Modify Account Profile' : 'Register New Account Profile'}</h3>
           
           <div>
@@ -286,12 +349,40 @@ function GuideManagement() {
               <tr key={guide.id}>
                 <td>{guide.firstName} {guide.lastName}</td>
                 <td>{guide.email}</td>
-                <td>{guide.groupName}</td>
+                
+                {/* Visual indicator for unassigned guides */}
                 <td>
-                  <button onClick={() => console.log('Assign group for:', guide.id)}>Assign Group</button>
-                  <button onClick={() => startEditing(guide)}>Edit</button>
-                  {/* Updated to explicitly forward the email parameter along for Auth destruction */}
-                  <button onClick={() => handleRemoveGuide(guide.id, `${guide.firstName} ${guide.lastName}`, guide.email)}>Remove</button>
+                  <span style={{ color: guide.groupName === 'Unassigned' ? '#e74c3c' : 'inherit', fontWeight: guide.groupName === 'Unassigned' ? 'bold' : 'normal' }}>
+                    {guide.groupName}
+                  </span>
+                </td>
+                
+                <td>
+                  {/* INLINE ASSIGNMENT UI TOGGLE */}
+                  {assigningGuide?.id === guide.id ? (
+                    <div style={{ display: 'flex', gap: '5px' }}>
+                      <select 
+                        value={selectedGroupId} 
+                        onChange={(e) => setSelectedGroupId(e.target.value)}
+                        style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc' }}
+                      >
+                        <option value="">-- Choose a Group --</option>
+                        {availableGroups.map(group => (
+                          <option key={group.id} value={group.id}>
+                            {group.groupName}
+                          </option>
+                        ))}
+                      </select>
+                      <button style={{ backgroundColor: '#2ecc71', color: 'white', padding: '6px 12px', border: 'none', borderRadius: '4px', cursor: 'pointer' }} onClick={handleSaveAssignment} disabled={loading}>Save</button>
+                      <button style={{ backgroundColor: '#95a5a6', color: 'white', padding: '6px 12px', border: 'none', borderRadius: '4px', cursor: 'pointer' }} onClick={() => setAssigningGuide(null)}>Cancel</button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', gap: '5px' }}>
+                      <button onClick={() => setAssigningGuide(guide)}>Assign Group</button>
+                      <button onClick={() => startEditing(guide)}>Edit</button>
+                      <button style={{ backgroundColor: '#e74c3c', color: 'white', border: 'none' }} onClick={() => handleRemoveGuide(guide.id, `${guide.firstName} ${guide.lastName}`, guide.email)}>Remove</button>
+                    </div>
+                  )}
                 </td>
               </tr>
             ))
