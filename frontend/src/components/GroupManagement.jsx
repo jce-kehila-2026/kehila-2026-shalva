@@ -13,7 +13,6 @@ const GroupManagement = () => {
   
   const [newGroupName, setNewGroupName] = useState('');
   
-  // הסטייט החדש - שומר איזה מזהה קבוצה כרגע פתוח לשיוך מדריך
   const [assigningGroupId, setAssigningGroupId] = useState(null);
   const [selectedGuideId, setSelectedGuideId] = useState('');
 
@@ -27,7 +26,6 @@ const GroupManagement = () => {
       const volunteersData = volunteersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setVolunteers(volunteersData);
 
-      // שליפת מדריכים מקולקשן users
       const guidesQuery = query(collection(db, 'users'), where('role', '==', 'guide'));
       const guidesSnap = await getDocs(guidesQuery);
       const guidesData = guidesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -45,13 +43,12 @@ const GroupManagement = () => {
   const handleCreateGroup = async () => {
     if (newGroupName.trim() === '') return; 
     try {
-      // יצירת הקבוצה עם כל השדות התקניים שמופיעים במסד הנתונים
       await addDoc(collection(db, 'groups'), { 
         groupName: newGroupName, 
         guideId: '',
-        guideName: '',         // תואם לשדה שחבר שלך מצפה לראות
-        time: '',              // שדה זמן ריק כברירת מחדל
-        createdAt: new Date()  // שמירת תאריך ושעת היצירה המדויקים
+        guideName: '',         
+        time: '',              
+        createdAt: new Date()  
       });
       
       setNewGroupName(''); 
@@ -61,63 +58,61 @@ const GroupManagement = () => {
     }
   };
 
-  // פתיחת שורת השיוך מתחת לקבוצה
-  const handleOpenAssignInline = (groupId) => {
+  const handleOpenAssignInline = (groupId, currentGuideId) => {
     if (assigningGroupId === groupId) {
       setAssigningGroupId(null);
     } else {
       setAssigningGroupId(groupId);
-      setSelectedGuideId(''); // איפוס בחירה קודמת
+      setSelectedGuideId(currentGuideId || ''); 
     }
   };
 
-  // שמירת השיוך שבחרנו והסתנכרנות מול קולקשן המדריכים
   const handleSaveGuideAssignment = async (groupId) => {
     if (!selectedGuideId) return;
     try {
-      // 1. עדכון הקבוצה (הלוגיקה שלך)
+      const targetGroup = groups.find(g => g.id === groupId);
+      const oldGuideId = targetGroup?.guideId;
+
+      if (oldGuideId && oldGuideId !== selectedGuideId) {
+        const oldGuideRef = doc(db, 'guides', oldGuideId);
+        await updateDoc(oldGuideRef, { groupName: 'Unassigned' });
+      }
+
       const groupRef = doc(db, 'groups', groupId);
       await updateDoc(groupRef, { guideId: selectedGuideId });
 
-      // 2. עדכון המדריך בקולקשן המדריכים (כדי שהמסך של חבר שלך יתעדכן)
-      const targetGroup = groups.find(g => g.id === groupId);
       if (targetGroup) {
-        const guideRef = doc(db, 'guides', selectedGuideId);
-        await updateDoc(guideRef, { groupName: targetGroup.groupName });
+        const newGuideRef = doc(db, 'guides', selectedGuideId);
+        await updateDoc(newGuideRef, { groupName: targetGroup.groupName });
       }
 
-      setAssigningGroupId(null); // סגירת השורה
+      setAssigningGroupId(null); 
       fetchData(); 
     } catch (error) {
       console.error("שגיאה בשיוך מדריך:", error);
     }
   };
 
-  // מחיקת מדריך מהקבוצה והסתנכרנות חזרה לסטטוס Unassigned
   const handleRemoveGuide = async (groupId) => {
     if (!window.confirm("האם אתה בטוח שברצונך למחוק את המדריך מקבוצה זו?")) return;
     try {
-      // שומרים את ה-ID של המדריך הנוכחי לפני שמנקים אותו מהקבוצה
       const targetGroup = groups.find(g => g.id === groupId);
       const oldGuideId = targetGroup?.guideId;
 
-      // 1. מנקים את המדריך מהקבוצה
       const groupRef = doc(db, 'groups', groupId);
       await updateDoc(groupRef, { guideId: '' });
 
-      // 2. מחזירים את המדריך לסטטוס "Unassigned" בקולקשן guides עבור המסך השני
       if (oldGuideId) {
         const guideRef = doc(db, 'guides', oldGuideId);
         await updateDoc(guideRef, { groupName: 'Unassigned' });
       }
 
+      setAssigningGroupId(null);
       fetchData(); 
     } catch (error) {
       console.error("שגיאה במחיקת מדריך:", error);
     }
   };
-
-  
 
   const handleViewDetails = (groupId) => {
     navigate(`/group-details/${groupId}`);
@@ -155,7 +150,6 @@ const GroupManagement = () => {
         <button className="btn btn-primary" onClick={handleCreateGroup}>
           צור קבוצה
         </button>
-        
       </div>
 
       <div className="table-container">
@@ -175,42 +169,41 @@ const GroupManagement = () => {
 
               return (
                 <React.Fragment key={group.id}>
-                  {/* השורה הרגילה של הקבוצה */}
                   <tr>
                     <td><strong>{group.groupName}</strong></td>
                     <td>{getGuideDisplayName(group.guideId) || <span style={{color: '#94a3b8'}}>טרם שויך</span>}</td>
                     <td>{groupVolunteersCount}</td>
                     <td className="actions-cell">
                       
-                      {group.guideId ? (
-                        <button 
-                          className="btn btn-outline" 
-                          style={{ borderColor: '#ef4444', color: '#ef4444' }} 
-                          onClick={() => handleRemoveGuide(group.id)}
-                        >
-                          מחק מדריך
-                        </button>
-                      ) : (
-                        <button 
-                          className="btn btn-outline" 
-                          onClick={() => handleOpenAssignInline(group.id)}
-                        >
-                          {isAssigning ? 'סגור שיוך' : 'שייך מדריך'}
-                        </button>
-                      )}
-
                       <button className="btn btn-primary" onClick={() => handleViewDetails(group.id)}>
                         פרטי קבוצה
+                      </button>
+
+                      {/* כפתור הפעולה הדינמי - הטקסט והצבע משתנים לפי המצב */}
+                      <button 
+                        className="btn btn-outline" 
+                        style={
+                          isAssigning 
+                            ? { borderColor: '#ef4444', color: '#ef4444' } // אדום במצב סגירה
+                            : group.guideId 
+                              ? {} // אפור ברירת מחדל במצב "עריכה"
+                              : { borderColor: '#10b981', color: '#10b981' } // ירוק כשהקבוצה ריקה ממדריך
+                        }
+                        onClick={() => handleOpenAssignInline(group.id, group.guideId)}
+                      >
+                        {isAssigning ? 'סגור שיוך' : group.guideId ? 'עריכה' : 'שייך מדריך'}
                       </button>
                     </td>
                   </tr>
 
-                  {/* השורה שקופצת מתחת ברגע שלוחצים "שייך מדריך" */}
                   {isAssigning && (
                     <tr className="assign-inline-row">
                       <td colSpan="4">
                         <div className="assign-inline-container">
-                          <span>בחר מדריך עבור <strong>{group.groupName}</strong>:</span>
+                          <span>
+                            {group.guideId ? `עריכת מדריך עבור ` : `בחר מדריך עבור `} 
+                            <strong>{group.groupName}</strong>:
+                          </span>
                           <select 
                             className="styled-input" 
                             style={{ width: '250px' }}
@@ -234,10 +227,19 @@ const GroupManagement = () => {
                             <button 
                               className="btn btn-success" 
                               onClick={() => handleSaveGuideAssignment(group.id)}
-                              disabled={!selectedGuideId}
+                              disabled={!selectedGuideId || selectedGuideId === group.guideId}
                             >
                               שמור שיוך
                             </button>
+                            {group.guideId && (
+                              <button 
+                                className="btn btn-outline" 
+                                style={{ borderColor: '#ef4444', color: '#ef4444' }} 
+                                onClick={() => handleRemoveGuide(group.id)}
+                              >
+                                הסר מדריך מהקבוצה
+                              </button>
+                            )}
                             <button 
                               className="btn btn-outline" 
                               onClick={() => setAssigningGroupId(null)}
