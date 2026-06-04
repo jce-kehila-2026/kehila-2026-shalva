@@ -114,19 +114,6 @@ const GuideDashboard = () => {
         >
           📝 סימון נוכחות (Attendance)
         </button>
-
-        <button 
-          className="action-button secondary" 
-          onClick={() => {
-            if (guideData?.groupId) {
-              navigate(`/group-details/${guideData.groupId}`);
-            } else {
-              alert('טרם שויכת לקבוצה');
-            }
-          }}
-        >
-          👥 רשימת מתנדבים (Volunteers List)
-        </button>
       </main>
 
       <footer className="guide-footer">
