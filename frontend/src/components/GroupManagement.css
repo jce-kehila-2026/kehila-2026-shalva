@@ -107,3 +107,25 @@
   display: flex;
   gap: 10px;
 }
+/* --- עיצוב לשורת שיוך מדריך נפתחת (Inline Row) --- */
+.assign-inline-row td {
+  background-color: #f0f9ff; /* צבע רקע תכלת עדין */
+  border-bottom: 2px solid #bae6fd;
+  padding: 15px 20px;
+}
+
+.assign-inline-row:hover {
+  background-color: #f0f9ff !important; /* מבטל את אפקט ה-Hover הרגיל של הטבלה */
+}
+
+.assign-inline-container {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  justify-content: flex-start;
+}
+
+.assign-inline-container span {
+  color: #0369a1;
+  font-size: 15px;
+}
