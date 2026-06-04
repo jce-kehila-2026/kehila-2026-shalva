@@ -15,7 +15,7 @@
   font-size: 16px;
 }
 
-/* Modal Form Styles */
+/* Form Styles */
 .volunteer-form {
   display: flex;
   flex-direction: column;
@@ -32,15 +32,6 @@
 .form-group label {
   font-weight: 600;
   color: #334155;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 15px;
-  margin-top: 10px;
-  padding-top: 20px;
-  border-top: 1px solid #e2e8f0;
 }
 
 /* Reusing general container and table classes from GroupManagement */
