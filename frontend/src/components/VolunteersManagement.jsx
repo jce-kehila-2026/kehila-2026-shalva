@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -8,24 +8,30 @@ const VolunteersManagement = () => {
   const location = useLocation();
   const navigate = useNavigate();
   
-  // תופסים את הקבוצה שהועברה מהמסך הקודם (אם יש כזו)
   const passedGroup = location.state?.group || null;
 
   const [volunteers, setVolunteers] = useState([]);
   const [groups, setGroups] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   
-  // State עבור החלונית (Modal) של הוספה/עריכה
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingVolunteer, setEditingVolunteer] = useState(null);
+  const [isAdding, setIsAdding] = useState(false);
+  const [editingVolunteerId, setEditingVolunteerId] = useState(null);
   
-  // נתוני הטופס
-  const [formData, setFormData] = useState({
-    name: '',
-    groupId: passedGroup ? passedGroup.id : '' // ברירת מחדל: הקבוצה ממנה הגענו
-  });
+  const initialFormData = {
+    firstName: '',
+    lastName: '',
+    phone: '',
+    email: '',
+    address: '',
+    age: '',
+    school: '',
+    experience: '',
+    idNumber: '',
+    groupId: passedGroup ? passedGroup.id : ''
+  };
+  
+  const [formData, setFormData] = useState(initialFormData);
 
-  // שליפת נתונים מ-Firebase
   const fetchData = async () => {
     try {
       const volSnap = await getDocs(collection(db, 'volunteers'));
@@ -44,61 +50,86 @@ const VolunteersManagement = () => {
     fetchData();
   }, []);
 
-  // פונקציית עזר למציאת שם הקבוצה לפי ה-ID
-  // (הזזתי אותה למעלה כדי שנוכל להשתמש בה במיון)
   const getGroupName = (groupId) => {
     if (!groupId) return 'ללא קבוצה';
     const group = groups.find(g => g.id === groupId);
     return group ? group.groupName : 'קבוצה לא ידועה';
   };
 
-  // סינון מתנדבים לפי חיפוש + מיון לפי שם הקבוצה באלפבית
   const filteredAndSortedVolunteers = volunteers
-    .filter(vol => vol.name?.toLowerCase().includes(searchQuery.toLowerCase()))
+    .filter(vol => {
+      const fullName = `${vol.firstName || ''} ${vol.lastName || ''}`.toLowerCase();
+      return fullName.includes(searchQuery.toLowerCase());
+    })
     .sort((a, b) => {
       const groupNameA = getGroupName(a.groupId);
       const groupNameB = getGroupName(b.groupId);
-      // שימוש ב-localeCompare כדי למיין נכון בעברית
       return groupNameA.localeCompare(groupNameB, 'he'); 
     });
 
 
-  // פתיחת חלונית להוספת מתנדב חדש
   const handleOpenAdd = () => {
-    setEditingVolunteer(null);
-    setFormData({ name: '', groupId: passedGroup ? passedGroup.id : '' });
-    setIsModalOpen(true);
+    setEditingVolunteerId(null);
+    setFormData(initialFormData);
+    setIsAdding(!isAdding); 
   };
 
-  // פתיחת חלונית לעריכת מתנדב קיים
   const handleOpenEdit = (volunteer) => {
-    setEditingVolunteer(volunteer);
-    setFormData({ name: volunteer.name, groupId: volunteer.groupId || '' });
-    setIsModalOpen(true);
+    setIsAdding(false);
+    
+    if (editingVolunteerId === volunteer.id) {
+      setEditingVolunteerId(null);
+      return;
+    }
+
+    setEditingVolunteerId(volunteer.id);
+    setFormData({
+      firstName: volunteer.firstName || '',
+      lastName: volunteer.lastName || '',
+      phone: volunteer.phone || '',
+      email: volunteer.email || '',
+      address: volunteer.address || '',
+      age: volunteer.age || '',
+      school: volunteer.school || '',
+      experience: volunteer.experience || '',
+      idNumber: volunteer.idNumber || '',
+      groupId: volunteer.groupId || ''
+    });
   };
 
-  // שמירת מתנדב (הוספה או עדכון)
+  const handleCloseForm = () => {
+    setIsAdding(false);
+    setEditingVolunteerId(null);
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!formData.name.trim()) return;
+    if (!formData.firstName.trim() || !formData.lastName.trim()) {
+      alert("חובה להזין שם פרטי ושם משפחה");
+      return;
+    }
 
     try {
-      if (editingVolunteer) {
-        // עדכון מתנדב קיים
-        const volRef = doc(db, 'volunteers', editingVolunteer.id);
-        await updateDoc(volRef, formData);
+      // --- התיקון שלנו: מוצאים את שם הקבוצה ושומרים אותו במסד הנתונים ---
+      const selectedGroup = groups.find(g => g.id === formData.groupId);
+      const dataToSave = {
+        ...formData,
+        groupName: selectedGroup ? selectedGroup.groupName : ''
+      };
+
+      if (editingVolunteerId) {
+        const volRef = doc(db, 'volunteers', editingVolunteerId);
+        await updateDoc(volRef, dataToSave);
       } else {
-        // יצירת מתנדב חדש
-        await addDoc(collection(db, 'volunteers'), formData);
+        await addDoc(collection(db, 'volunteers'), dataToSave);
       }
-      setIsModalOpen(false);
-      fetchData(); // רענון הטבלה
+      handleCloseForm();
+      fetchData(); 
     } catch (error) {
       console.error("שגיאה בשמירת מתנדב:", error);
     }
   };
 
-  // מחיקת מתנדב
   const handleDelete = async (volunteerId) => {
     if (!window.confirm("האם אתה בטוח שברצונך למחוק מתנדב זה?")) return;
     try {
@@ -108,6 +139,89 @@ const VolunteersManagement = () => {
       console.error("שגיאה במחיקת מתנדב:", error);
     }
   };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const renderForm = (isEditMode) => (
+    <div style={{ backgroundColor: '#f0f9ff', padding: '20px', borderRadius: '8px', border: '1px solid #bae6fd', width: '100%', boxSizing: 'border-box' }}>
+      <h3 style={{ marginTop: 0, marginBottom: '20px', color: '#0369a1' }}>
+        {isEditMode ? 'עריכת מתנדב' : 'הוספת מתנדב חדש'}
+      </h3>
+      <form onSubmit={handleSave} className="volunteer-form">
+        
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
+          <div className="form-group">
+            <label style={{ display: 'block', marginBottom: '5px' }}>שם פרטי: *</label>
+            <input type="text" className="styled-input" style={{ width: '100%', boxSizing: 'border-box' }} name="firstName" value={formData.firstName} onChange={handleInputChange} required />
+          </div>
+          <div className="form-group">
+            <label style={{ display: 'block', marginBottom: '5px' }}>שם משפחה: *</label>
+            <input type="text" className="styled-input" style={{ width: '100%', boxSizing: 'border-box' }} name="lastName" value={formData.lastName} onChange={handleInputChange} required />
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
+          <div className="form-group">
+            <label style={{ display: 'block', marginBottom: '5px' }}>תעודת זהות:</label>
+            <input type="text" className="styled-input" style={{ width: '100%', boxSizing: 'border-box' }} name="idNumber" value={formData.idNumber} onChange={handleInputChange} />
+          </div>
+          <div className="form-group">
+            <label style={{ display: 'block', marginBottom: '5px' }}>גיל:</label>
+            <input type="text" className="styled-input" style={{ width: '100%', boxSizing: 'border-box' }} name="age" value={formData.age} onChange={handleInputChange} />
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
+          <div className="form-group">
+            <label style={{ display: 'block', marginBottom: '5px' }}>טלפון:</label>
+            <input type="tel" className="styled-input" style={{ width: '100%', boxSizing: 'border-box' }} name="phone" value={formData.phone} onChange={handleInputChange} dir="ltr" />
+          </div>
+          <div className="form-group">
+            <label style={{ display: 'block', marginBottom: '5px' }}>אימייל:</label>
+            <input type="email" className="styled-input" style={{ width: '100%', boxSizing: 'border-box' }} name="email" value={formData.email} onChange={handleInputChange} dir="ltr" />
+          </div>
+        </div>
+
+        <div className="form-group" style={{ marginBottom: '15px' }}>
+          <label style={{ display: 'block', marginBottom: '5px' }}>כתובת:</label>
+          <input type="text" className="styled-input" style={{ width: '100%', boxSizing: 'border-box' }} name="address" value={formData.address} onChange={handleInputChange} />
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
+          <div className="form-group">
+            <label style={{ display: 'block', marginBottom: '5px' }}>בית ספר:</label>
+            <input type="text" className="styled-input" style={{ width: '100%', boxSizing: 'border-box' }} name="school" value={formData.school} onChange={handleInputChange} />
+          </div>
+          <div className="form-group">
+            <label style={{ display: 'block', marginBottom: '5px' }}>ניסיון:</label>
+            <input type="text" className="styled-input" style={{ width: '100%', boxSizing: 'border-box' }} name="experience" value={formData.experience} onChange={handleInputChange} />
+          </div>
+        </div>
+
+        <div className="form-group" style={{ marginBottom: '20px' }}>
+          <label style={{ display: 'block', marginBottom: '5px' }}>שיוך לקבוצה:</label>
+          <select className="styled-input" style={{ width: '100%', boxSizing: 'border-box' }} name="groupId" value={formData.groupId} onChange={handleInputChange}>
+            <option value="">-- ללא קבוצה --</option>
+            {groups.map(g => (
+              <option key={g.id} value={g.id}>{g.groupName}</option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button type="submit" className="btn btn-success">
+            {isEditMode ? 'שמור שינויים' : 'הוסף מתנדב'}
+          </button>
+          <button type="button" className="btn btn-outline" onClick={handleCloseForm}>
+            ביטול
+          </button>
+        </div>
+      </form>
+    </div>
+  );
 
   return (
     <div className="admin-container">
@@ -123,19 +237,26 @@ const VolunteersManagement = () => {
         </button>
       </header>
 
-      {/* אזור הפעולות עודכן להיות בטור במקום בשורה */}
       <div className="action-bar" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '15px' }}>
-        <button className="btn btn-primary" onClick={handleOpenAdd}>
-          + הוסף מתנדב חדש
-        </button>
-        <input 
-          type="text" 
-          className="styled-input"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="🔍 חפש מתנדב לפי שם..."
-          style={{ width: '300px' }}
-        />
+        <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+          <button className="btn btn-primary" onClick={handleOpenAdd}>
+            {isAdding ? 'סגור טופס' : '+ הוסף מתנדב חדש'}
+          </button>
+          <input 
+            type="text" 
+            className="styled-input"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="🔍 חפש מתנדב לפי שם..."
+            style={{ width: '300px' }}
+          />
+        </div>
+
+        {isAdding && (
+          <div style={{ width: '100%', marginTop: '10px' }}>
+            {renderForm(false)}
+          </div>
+        )}
       </div>
 
       <div className="table-container">
@@ -150,25 +271,42 @@ const VolunteersManagement = () => {
           <tbody>
             {filteredAndSortedVolunteers.length > 0 ? (
               filteredAndSortedVolunteers.map((vol) => (
-                <tr key={vol.id}>
-                  <td><strong>{vol.name}</strong></td>
-                  <td>{getGroupName(vol.groupId)}</td>
-                  <td className="actions-cell">
-                    <button className="btn btn-primary" onClick={() => navigate(`/volunteer-details/${vol.id}`, { state: { volunteer: vol } })}>
-                      פרטים
-                    </button>
-                    <button className="btn btn-outline" onClick={() => handleOpenEdit(vol)}>
-                      ערוך / שייך
-                    </button>
-                    <button 
-                      className="btn btn-outline" 
-                      style={{ borderColor: '#ef4444', color: '#ef4444' }}
-                      onClick={() => handleDelete(vol.id)}
-                    >
-                      מחק
-                    </button>
-                  </td>
-                </tr>
+                <React.Fragment key={vol.id}>
+                  <tr>
+                    <td><strong>{`${vol.firstName || ''} ${vol.lastName || ''}`}</strong></td>
+                    <td>{getGroupName(vol.groupId)}</td>
+                    <td className="actions-cell">
+                      <button className="btn btn-primary" onClick={() => {
+                        // --- התיקון השני: מוודאים ששם הקבוצה עובר איתנו למסך הפרטים ---
+                        const volForDetails = {
+                          ...vol,
+                          groupName: getGroupName(vol.groupId)
+                        };
+                        navigate(`/volunteer-details/${vol.id}`, { state: { volunteer: volForDetails } });
+                      }}>
+                        פרטים
+                      </button>
+                      <button className="btn btn-outline" onClick={() => handleOpenEdit(vol)}>
+                        {editingVolunteerId === vol.id ? 'סגור עריכה' : 'ערוך / שייך'}
+                      </button>
+                      <button 
+                        className="btn btn-outline" 
+                        style={{ borderColor: '#ef4444', color: '#ef4444' }}
+                        onClick={() => handleDelete(vol.id)}
+                      >
+                        מחק
+                      </button>
+                    </td>
+                  </tr>
+
+                  {editingVolunteerId === vol.id && (
+                    <tr>
+                      <td colSpan="3" style={{ padding: '0 20px 20px 20px', backgroundColor: '#f8fafc' }}>
+                        {renderForm(true)}
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
               ))
             ) : (
               <tr>
@@ -180,52 +318,6 @@ const VolunteersManagement = () => {
           </tbody>
         </table>
       </div>
-
-      {/* חלונית הוספה / עריכה */}
-      {isModalOpen && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <div className="modal-header">
-              {editingVolunteer ? 'עריכת מתנדב' : 'הוספת מתנדב חדש'}
-            </div>
-            <form onSubmit={handleSave} className="volunteer-form">
-              <div className="form-group">
-                <label>שם המתנדב:</label>
-                <input 
-                  type="text" 
-                  className="styled-input"
-                  style={{ width: '100%', boxSizing: 'border-box' }}
-                  value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>שיוך לקבוצה:</label>
-                <select 
-                  className="styled-input"
-                  style={{ width: '100%', boxSizing: 'border-box' }}
-                  value={formData.groupId}
-                  onChange={(e) => setFormData({...formData, groupId: e.target.value})}
-                >
-                  <option value="">-- ללא קבוצה --</option>
-                  {groups.map(g => (
-                    <option key={g.id} value={g.id}>{g.groupName}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="modal-actions">
-                <button type="button" className="btn btn-outline" onClick={() => setIsModalOpen(false)}>
-                  ביטול
-                </button>
-                <button type="submit" className="btn btn-success">
-                  {editingVolunteer ? 'שמור שינויים' : 'הוסף מתנדב'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
