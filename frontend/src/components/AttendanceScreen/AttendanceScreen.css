@@ -1,0 +1,147 @@
+/* Full-page wrapper that centers the card. */
+.attendance-page {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: clamp(20px, 4vw, 48px) 20px;
+}
+
+/* The single card that holds the whole screen. */
+.attendance-card {
+  width: 100%;
+  max-width: 700px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: clamp(22px, 4vw, 32px);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+}
+
+/* Main title. */
+.attendance-card h1 {
+  color: var(--text);
+  font-size: clamp(24px, 4vw, 32px);
+  margin-bottom: 8px;
+}
+
+/* Description under the title. */
+.attendance-card p {
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
+
+/* Secondary heading. */
+.attendance-card h2 {
+  margin-bottom: 18px;
+}
+
+/* Vertical list of volunteer rows. */
+.attendance-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* A single volunteer row (name + present checkbox). */
+.attendance-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--surface-2);
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+/* The checkbox + label inside a row. */
+.attendance-row label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* The main (save) button. */
+.attendance-card button {
+  width: 100%;
+  margin-top: 22px;
+  padding: 14px;
+  background: var(--brand-600);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+/* Save button hover. */
+.attendance-card button:hover {
+  background: var(--brand-700);
+}
+
+/* Header row: title block + back button. */
+.attendance-header-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+/* The group dropdown. */
+.attendance-card select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 16px;
+  margin-bottom: 18px;
+}
+
+/* The back button (overrides the full-width main button style). */
+.attendance-card .attendance-back-button {
+  width: auto;
+  margin-top: 0;
+  padding: 10px 16px;
+  background: var(--surface);
+  color: var(--brand-700);
+  border: 1px solid var(--border-strong);
+}
+
+/* Back button hover. */
+.attendance-card .attendance-back-button:hover {
+  background: var(--brand-50);
+}
+
+/* The read-only locked-group box (shown to guides). */
+.locked-group-box {
+  background: var(--brand-50);
+  border: 1px solid var(--brand-200);
+  color: var(--brand-700);
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 18px;
+  font-weight: 600;
+}
+
+/* Dim the save button while it's disabled. */
+.attendance-card button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Phone: stack the header and make the back button full width. */
+@media (max-width: 480px) {
+  .attendance-header-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .attendance-card .attendance-back-button {
+    width: 100%;
+  }
+
+  .attendance-row {
+    gap: 10px;
+  }
+}

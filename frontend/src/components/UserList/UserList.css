@@ -1,0 +1,205 @@
+/* The card that wraps the whole list. */
+.user-list-container {
+  width: 100%;
+  max-width: 820px;
+  margin: 8px auto 40px;
+  padding: clamp(18px, 3vw, 28px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+}
+
+/* Header row: title + count badge. */
+.user-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 18px;
+}
+
+/* Header title. */
+.user-list-header h3 {
+  margin: 0;
+  font-size: clamp(20px, 2.4vw, 24px);
+  color: var(--text);
+}
+
+/* The "N records" count badge. */
+.user-badge {
+  flex-shrink: 0;
+  background: var(--brand-50);
+  color: var(--brand-700);
+  padding: 6px 16px;
+  border-radius: var(--radius-pill);
+  font-size: 14px;
+  font-weight: 700;
+  border: 1px solid var(--brand-200);
+}
+
+/* Vertical list of user rows. */
+.user-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* A single user row. */
+.user-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+/* Lift a row on hover. */
+.user-item:hover {
+  transform: translateY(-2px);
+  background: var(--surface);
+  border-color: var(--brand-200);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Avatar + name/email group. */
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* Circular avatar with the name's first letter. */
+.user-avatar {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--brand-600), var(--info));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 20px;
+  box-shadow: 0 4px 10px rgba(79, 70, 229, 0.28);
+}
+
+/* Name + email column. */
+.user-details {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+/* The user's name. */
+.user-name {
+  font-weight: 700;
+  color: var(--text);
+  font-size: 16px;
+}
+
+/* The user's email. */
+.user-email {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  word-break: break-word;
+}
+
+/* Optional role pill. */
+.user-role {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--success-bg);
+  color: var(--success);
+  font-weight: 700;
+}
+
+/* Centered container for the loading spinner. */
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
+}
+
+/* The loading spinner. */
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--brand-100);
+  border-top-color: var(--brand-600);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Spinner rotation. */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Centered empty-state message. */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+}
+
+/* Error variant of the empty state. */
+.empty-state.error-state {
+  color: var(--danger);
+}
+
+/* The "details" button on each row. */
+.user-details-button {
+  flex-shrink: 0;
+  background: var(--brand-50);
+  color: var(--brand-700);
+  border: 1px solid var(--brand-200);
+  padding: 8px 18px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+}
+
+/* Details button hover. */
+.user-details-button:hover {
+  background: var(--brand-600);
+  color: #fff;
+  border-color: var(--brand-600);
+}
+
+/* Small phones: tighter rows and avatar. */
+@media (max-width: 420px) {
+  .user-item {
+    padding: 12px 14px;
+  }
+
+  .user-info {
+    gap: 10px;
+  }
+
+  .user-avatar {
+    width: 42px;
+    height: 42px;
+    font-size: 18px;
+  }
+
+  .user-details-button {
+    padding: 8px 14px;
+  }
+}

@@ -1,9 +1,7 @@
-/* =====================================================================
-   Kehila Hub — Global Design System
-   One source of truth for colors, typography, spacing and base elements.
-   Built RTL-first using logical properties so it works in Hebrew & English.
-   ===================================================================== */
+/* Global design system: colours, typography, spacing and base elements.
+   RTL-first, using logical properties so it works in Hebrew & English. */
 
+/* Design tokens + base document settings. */
 :root {
   /* Brand (indigo) */
   --brand-50: #eef2ff;
@@ -58,6 +56,7 @@
   --space-8: 32px;
   --space-10: 40px;
 
+  /* Font + base document defaults. */
   --font: 'Heebo', system-ui, 'Segoe UI', Roboto, Arial, sans-serif;
 
   color-scheme: light;
@@ -70,18 +69,21 @@
   text-rendering: optimizeLegibility;
 }
 
+/* Use border-box sizing everywhere. */
 *,
 *::before,
 *::after {
   box-sizing: border-box;
 }
 
+/* Reset page margins. */
 html,
 body {
   margin: 0;
   padding: 0;
 }
 
+/* The page background (soft brand glows over a light base). */
 body {
   min-height: 100vh;
   color: var(--text);
@@ -92,12 +94,14 @@ body {
   background-attachment: fixed;
 }
 
+/* The React mount point fills the viewport. */
 #root {
   width: 100%;
   min-height: 100vh;
 }
 
-/* ---------- Typography ---------- */
+
+/* Shared heading defaults. */
 h1,
 h2,
 h3,
@@ -108,24 +112,29 @@ h4 {
   line-height: 1.2;
 }
 
+/* Page title. */
 h1 {
   font-size: clamp(28px, 4vw, 40px);
   letter-spacing: -0.02em;
 }
 
+/* Section title. */
 h2 {
   font-size: clamp(20px, 2.6vw, 26px);
   letter-spacing: -0.01em;
 }
 
+/* Sub-section title. */
 h3 {
   font-size: 19px;
 }
 
+/* Paragraph spacing. */
 p {
   margin: 0 0 0.6em;
 }
 
+/* Links. */
 a {
   color: var(--brand-600);
   text-decoration: none;
@@ -136,7 +145,8 @@ a:hover {
   text-decoration: underline;
 }
 
-/* ---------- Buttons (sensible defaults; classes override) ---------- */
+
+/* Sensible default button look (classes override per use). */
 button {
   font: inherit;
   font-weight: 600;
@@ -155,21 +165,26 @@ button {
     border-color 0.2s ease, opacity 0.2s ease;
 }
 
+/* Hover only lifts the button — it deliberately does NOT darken globally, since
+   some buttons use a light background with dark text (a global dark hover would
+   hide their text). Such buttons define their own darkening hover. */
 button:hover {
-  background: var(--brand-700);
   transform: translateY(-1px);
   box-shadow: var(--shadow);
 }
 
+/* Press effect. */
 button:active {
   transform: translateY(0);
 }
 
+/* Keyboard focus ring. */
 button:focus-visible {
   outline: 3px solid var(--brand-200);
   outline-offset: 1px;
 }
 
+/* Disabled button. */
 button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
@@ -177,7 +192,7 @@ button:disabled {
   box-shadow: none;
 }
 
-/* Button variants (opt-in via class) */
+/* Ghost button variant. */
 .btn-ghost {
   background: var(--surface);
   color: var(--text);
@@ -187,6 +202,7 @@ button:disabled {
   background: var(--surface-2);
 }
 
+/* Danger button variant. */
 .btn-danger {
   background: var(--danger);
 }
@@ -194,6 +210,7 @@ button:disabled {
   background: #b91c1c;
 }
 
+/* Success button variant. */
 .btn-success {
   background: var(--success);
 }
@@ -201,7 +218,8 @@ button:disabled {
   background: #15803d;
 }
 
-/* ---------- Form controls ---------- */
+
+/* Default form controls. */
 input,
 select,
 textarea {
@@ -215,11 +233,13 @@ textarea {
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
+/* Placeholder colour. */
 input::placeholder,
 textarea::placeholder {
   color: var(--text-soft);
 }
 
+/* Control focus ring. */
 input:focus,
 select:focus,
 textarea:focus {
@@ -228,6 +248,7 @@ textarea:focus {
   box-shadow: 0 0 0 4px var(--brand-50);
 }
 
+/* Form labels. */
 label {
   display: inline-block;
   margin-bottom: 6px;
@@ -235,19 +256,22 @@ label {
   color: var(--text);
 }
 
-/* ---------- Tables ---------- */
+
+/* Base table. */
 table {
   width: 100%;
   border-collapse: collapse;
   font-size: 15px;
 }
 
+/* Shared cell padding. */
 th,
 td {
   padding: 12px 14px;
   text-align: start;
 }
 
+/* Header cells. */
 thead th {
   background: var(--surface-2);
   color: var(--text-muted);
@@ -258,19 +282,23 @@ thead th {
   white-space: nowrap;
 }
 
+/* Row dividers. */
 tbody tr {
   border-bottom: 1px solid var(--border);
 }
 
+/* No divider under the last row. */
 tbody tr:last-child {
   border-bottom: 0;
 }
 
+/* Row hover. */
 tbody tr:hover {
   background: var(--brand-50);
 }
 
-/* ---------- Reusable utilities ---------- */
+
+/* Reusable card. */
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -279,6 +307,7 @@ tbody tr:hover {
   padding: var(--space-6);
 }
 
+/* Reusable badge. */
 .badge {
   display: inline-flex;
   align-items: center;
@@ -291,6 +320,7 @@ tbody tr:hover {
   color: var(--brand-700);
 }
 
+/* Badge colour variants. */
 .badge-success {
   background: var(--success-bg);
   color: var(--success);
@@ -304,10 +334,31 @@ tbody tr:hover {
   color: var(--warning);
 }
 
+/* Muted helper text. */
 .muted {
   color: var(--text-muted);
 }
 
+/* Text selection colour. */
 ::selection {
   background: var(--brand-200);
+}
+
+
+/* Legacy theme bridge: older screens use a different token set
+   (--accent, --text-h, --social-bg, --heading, --bg as white). Map those names
+   onto the real design system, scoped to the legacy containers so the global
+   --bg / --text keep their page-level meaning everywhere else. */
+.reports-container,
+.event-management-container,
+.event-details-container,
+.volunteer-details-container {
+  --bg: var(--surface);          /* these files use var(--bg) for cards */
+  --social-bg: var(--surface-2);
+  --text-h: #0f172a;             /* headings stay dark */
+  --text: var(--text-muted);     /* these files use var(--text) for muted body */
+  --accent: var(--brand-600);
+  --accent-bg: var(--brand-50);
+  --accent-border: var(--brand-200);
+  --heading: var(--font);
 }

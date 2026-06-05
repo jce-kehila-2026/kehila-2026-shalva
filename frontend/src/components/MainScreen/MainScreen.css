@@ -1,0 +1,165 @@
+/* Outer page wrapper (centered, right-aligned). */
+.main-container {
+  width: min(1120px, 100%);
+  margin: 0 auto;
+  padding: 32px 20px 56px;
+  box-sizing: border-box;
+  text-align: right;
+}
+
+/* Hero header card: title + login button. */
+.main-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  padding: 28px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, #f8fafc, #eef2ff);
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 16px 42px rgba(15, 23, 42, 0.08);
+}
+
+/* The big gradient title. */
+.main-header h1 {
+  margin: 0 0 8px;
+  font-size: clamp(36px, 6vw, 64px);
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--brand-700), var(--info));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: var(--brand-700); /* fallback for non-clip browsers */
+}
+
+/* Subtitle under the title. */
+.main-header p {
+  color: var(--text-muted);
+}
+
+/* Group of header buttons. */
+.header-buttons {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Shared pill shape for the header / tab buttons. */
+.btn-login,
+.btn-register,
+.btn-birthdays,
+.tab-btn {
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* Birthdays toggle: festive outline button (fills when active). */
+.btn-birthdays {
+  background: var(--surface);
+  color: var(--brand-700);
+  border: 1px solid var(--brand-200) !important;
+}
+
+.btn-birthdays:hover {
+  background: var(--brand-50);
+}
+
+.btn-birthdays.active {
+  background: var(--brand-600);
+  color: #fff;
+  border-color: var(--brand-600) !important;
+}
+
+/* Login button (outline). */
+.btn-login {
+  background: var(--surface);
+  color: var(--brand-700);
+  border: 1px solid var(--brand-200) !important;
+}
+
+.btn-login:hover {
+  background: var(--brand-50);
+}
+
+/* Register button (solid). */
+.btn-register {
+  background: var(--brand-600);
+  color: white;
+}
+
+.btn-register:hover {
+  background: var(--brand-700);
+}
+
+/* The "active groups" panel. */
+.groups-section {
+  margin-top: 32px;
+  padding: 28px;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+/* Panel heading. */
+.groups-section h2 {
+  margin-top: 0;
+}
+
+/* Row of group tab buttons. */
+.tabs-header {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+
+/* A single tab button. */
+.tab-btn {
+  background: var(--surface-2);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.tab-btn:hover {
+  background: var(--brand-50);
+  color: var(--brand-700);
+}
+
+/* The selected tab. */
+.tab-btn.active {
+  background: var(--brand-600);
+  color: white;
+  border-color: var(--brand-600);
+}
+
+/* The selected group's details card. */
+.tab-content {
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+  padding: 22px;
+  border: 1px solid var(--border);
+}
+
+/* Card heading. */
+.tab-content h3 {
+  margin-top: 0;
+  color: var(--text);
+}
+
+/* Stacked group detail lines. */
+.tab-details {
+  display: grid;
+  gap: 10px;
+}
+
+/* Phone: stack the hero header vertically. */
+@media (max-width: 720px) {
+  .main-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

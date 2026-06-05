@@ -1,0 +1,176 @@
+/* Responsive grid of registration cards. */
+.reg-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+}
+
+/* A single registration card. */
+.reg-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+/* Lift the card on hover. */
+.reg-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--brand-200);
+  box-shadow: var(--shadow);
+}
+
+/* Card header: avatar + title + status. */
+.reg-card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Round avatar with the name's first letter. */
+.reg-card-avatar {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--brand-600), var(--info));
+  color: #fff;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+/* Name + date column; grows to push the status to the end. */
+.reg-card-title {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin-inline-end: auto;
+}
+
+/* Registrant name (truncated if long). */
+.reg-card-title h3 {
+  margin: 0;
+  font-size: 17px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* "Registered at" date line. */
+.reg-card-date {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+/* Status pill. */
+.reg-card-status {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* The detail fields list; grows to fill the card height. */
+.reg-card-fields {
+  margin: 0;
+  padding: 8px 16px 14px;
+  display: grid;
+  gap: 2px;
+  flex: 1 1 auto;
+}
+
+/* Card footer with the contact + delete actions. */
+.reg-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+/* A footer action button. */
+.reg-foot-btn {
+  flex: 1 1 auto;
+  text-align: center;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+/* Footer button hover. */
+.reg-foot-btn:hover {
+  background: var(--brand-50);
+  border-color: var(--brand-200);
+}
+
+/* Delete button (danger styling). */
+.reg-foot-delete {
+  color: var(--danger);
+  border-color: var(--danger-bg);
+}
+
+.reg-foot-delete:hover {
+  background: var(--danger-bg);
+  border-color: var(--danger);
+}
+
+/* One label/value detail row. */
+.reg-field {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px dashed var(--border);
+}
+
+/* Drop the divider under the last field. */
+.reg-field:last-child {
+  border-bottom: 0;
+}
+
+/* Field label. */
+.reg-field dt {
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* Field value. */
+.reg-field dd {
+  margin: 0;
+  text-align: start;
+  color: var(--text);
+  word-break: break-word;
+}
+
+/* Phone: single-column card grid. */
+@media (max-width: 600px) {
+  .reg-list {
+    grid-template-columns: 1fr;
+  }
+}

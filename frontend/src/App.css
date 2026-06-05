@@ -1,13 +1,12 @@
-/* =====================================================================
-   App shell, header, navigation, dashboards & shared layout
-   ===================================================================== */
-
+/* The full-height app shell wrapper. */
 .app-shell {
   min-height: 100vh;
   width: 100%;
   box-sizing: border-box;
+  direction: rtl;
 }
 
+/* Centered content column for both the signed-in and public layouts. */
 .authenticated-layout,
 .public-layout {
   width: min(1200px, 100%);
@@ -16,13 +15,16 @@
   box-sizing: border-box;
 }
 
-/* ---------- Authenticated header ---------- */
+
+/* The shared header shown to signed-in users. */
 .authenticated-header {
   display: flex;
+  direction: rtl;
   justify-content: space-between;
   align-items: center;
-  gap: 16px;
-  padding: 20px clamp(18px, 3vw, 28px);
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 12px clamp(14px, 3vw, 22px);
   margin-bottom: 24px;
   background:
     linear-gradient(135deg, rgba(99, 102, 241, 0.10), rgba(14, 165, 233, 0.06)),
@@ -32,38 +34,77 @@
   box-shadow: var(--shadow);
 }
 
-.authenticated-header h2 {
-  margin: 0 0 4px;
-  color: var(--text);
+/* Greeting + role column. */
+.auth-user {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
 }
 
-.authenticated-header p {
+/* The "שלום, …" greeting (truncated if long). */
+.auth-greeting {
   margin: 0;
-  color: var(--text-muted);
+  font-size: clamp(17px, 2.2vw, 21px);
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
-.authenticated-header strong {
-  display: inline-block;
-  padding: 2px 10px;
+/* The role badge. */
+.auth-role-badge {
+  padding: 2px 12px;
   border-radius: var(--radius-pill);
   background: var(--brand-50);
   color: var(--brand-700);
-  text-transform: capitalize;
+  font-size: 12.5px;
+  font-weight: 700;
 }
 
-.logout-button {
-  background: var(--surface);
-  color: var(--danger);
-  border: 1px solid var(--danger-bg);
+/* Group of small header action buttons. */
+.auth-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
   flex-shrink: 0;
 }
 
-.logout-button:hover {
+/* A header action button (back to menu / logout). */
+.auth-btn {
+  padding: 7px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--brand-700);
+  border: 1px solid var(--brand-200);
+  box-shadow: none;
+}
+
+/* Action button hover. */
+.auth-btn:hover {
+  background: var(--brand-50);
+  transform: none;
+  box-shadow: none;
+}
+
+/* Danger variant (logout). */
+.auth-btn-danger {
+  color: var(--danger);
+  border-color: var(--danger-bg);
+}
+
+.auth-btn-danger:hover {
   background: var(--danger-bg);
   color: var(--danger);
 }
 
-/* ---------- Tab navigation (viewer + generic) ---------- */
+
+/* The viewer tab navigation pill bar. */
 .app-tabs {
   display: flex;
   gap: 8px;
@@ -78,6 +119,7 @@
   max-width: 100%;
 }
 
+/* A tab button. */
 .app-tabs button {
   background: transparent;
   color: var(--text-muted);
@@ -87,19 +129,22 @@
   box-shadow: none;
 }
 
+/* Tab hover. */
 .app-tabs button:hover {
   background: var(--surface-2);
   color: var(--text);
   transform: none;
 }
 
+/* The selected tab. */
 .app-tabs button.active {
   background: var(--brand-600);
   color: #fff;
   box-shadow: var(--shadow-sm);
 }
 
-/* ---------- Loading state ---------- */
+
+/* Full-screen centered loading container. */
 #center {
   display: flex;
   flex-direction: column;
@@ -110,6 +155,7 @@
   padding: 24px;
 }
 
+/* The pill that holds the loading message. */
 .counter,
 .loading-message {
   display: inline-flex;
@@ -124,6 +170,7 @@
   font-weight: 600;
 }
 
+/* Spinner dot before the loading message. */
 .loading-message::before {
   content: '';
   width: 16px;
@@ -134,13 +181,15 @@
   animation: kh-spin 0.7s linear infinite;
 }
 
+/* Spinner rotation. */
 @keyframes kh-spin {
   to {
     transform: rotate(360deg);
   }
 }
 
-/* ---------- Public (logged-out) cards ---------- */
+
+/* The public (logged-out) card. */
 .public-card {
   max-width: 460px;
   margin: 40px auto;
@@ -151,10 +200,12 @@
   box-shadow: var(--shadow-lg);
 }
 
+/* Wider variant (e.g. the registration form). */
 .public-card-wide {
   max-width: 760px;
 }
 
+/* Text-style "back" link button. */
 .link-button {
   display: inline-flex;
   align-items: center;
@@ -168,6 +219,7 @@
   box-shadow: none;
 }
 
+/* Link button hover. */
 .link-button:hover {
   background: transparent;
   color: var(--brand-700);
@@ -176,7 +228,8 @@
   text-decoration: underline;
 }
 
-/* ---------- Admin dashboard ---------- */
+
+/* The admin menu landing card. */
 .admin-dashboard {
   max-width: 960px;
   margin: 8px auto;
@@ -188,11 +241,13 @@
   text-align: center;
 }
 
+/* Admin menu heading. */
 .admin-dashboard h3 {
   font-size: clamp(22px, 3vw, 28px);
   margin-bottom: 6px;
 }
 
+/* Grid of admin menu tiles. */
 .admin-menu-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -200,6 +255,7 @@
   margin-top: 28px;
 }
 
+/* A single admin menu tile. */
 .admin-menu-button {
   min-height: 104px;
   display: flex;
@@ -215,6 +271,7 @@
   box-shadow: var(--shadow-sm);
 }
 
+/* Lift a tile on hover. */
 .admin-menu-button:hover {
   transform: translateY(-3px);
   background: linear-gradient(160deg, var(--brand-50), #fff);
@@ -222,7 +279,8 @@
   box-shadow: var(--shadow);
 }
 
-/* ---------- Generic dashboard bar ---------- */
+
+/* Generic dashboard bar (title + actions on one row). */
 .dashboard-bar {
   display: flex;
   align-items: center;
@@ -231,22 +289,42 @@
   flex-wrap: wrap;
 }
 
+/* Borderless inline dashboard title. */
 .dashboard-title {
   margin: 0;
   padding: 0;
   border: 0;
 }
 
-/* ---------- Responsive ---------- */
+
+/* Phone: keep the header compact and stretch the tabs full width. */
 @media (max-width: 720px) {
   .authenticated-header {
-    flex-direction: column;
-    align-items: stretch;
-    text-align: start;
+    gap: 8px;
+    padding: 10px 12px;
   }
 
-  .logout-button {
-    width: 100%;
+  .auth-greeting {
+    font-size: 15px;
+  }
+
+  .auth-role-badge {
+    font-size: 11px;
+    padding: 1px 8px;
+  }
+
+  .auth-actions {
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .auth-user {
+    min-width: 0;
+  }
+
+  .auth-btn {
+    padding: 5px 10px;
+    font-size: 12px;
   }
 
   .app-tabs {
@@ -257,5 +335,16 @@
 
   .app-tabs button {
     flex: 1 1 auto;
+  }
+}
+
+/* Print: hide the app chrome so the exported PDF is only the report content. */
+@media print {
+  .authenticated-header {
+    display: none !important;
+  }
+
+  .authenticated-layout {
+    padding: 0;
   }
 }

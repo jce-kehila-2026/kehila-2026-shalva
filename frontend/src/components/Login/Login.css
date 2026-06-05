@@ -1,0 +1,54 @@
+/* The login form (rendered inside the public card). */
+.login-form {
+  text-align: right;
+}
+
+/* Form title. */
+.login-form h2 {
+  margin: 0 0 4px;
+  color: var(--text);
+}
+
+/* Subtitle under the title. */
+.login-subtitle {
+  margin: 0 0 24px;
+  color: var(--text-muted);
+}
+
+/* Stacked form layout. */
+.login-form form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* One labelled field (label above its input). */
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Field label. */
+.login-field label {
+  margin: 0;
+}
+
+/* Error message banner. */
+.login-error {
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--danger-bg);
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  color: var(--danger);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+/* The submit button. */
+.login-submit {
+  margin-top: 4px;
+  width: 100%;
+  padding: 13px;
+  font-size: 16px;
+}

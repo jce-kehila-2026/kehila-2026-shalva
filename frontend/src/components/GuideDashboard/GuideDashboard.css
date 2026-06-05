@@ -1,0 +1,146 @@
+/* The dashboard card that holds the whole screen. */
+.guide-dashboard-container {
+  font-family: var(--font);
+  max-width: 820px;
+  margin: 8px auto 40px;
+  padding: clamp(24px, 4vw, 40px);
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  min-height: 70vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Centered greeting header. */
+.guide-header {
+  text-align: center;
+  margin-bottom: 40px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 20px;
+}
+
+/* Header title. */
+.guide-header h1 {
+  color: var(--text);
+  font-size: clamp(26px, 4vw, 32px);
+  margin-bottom: 10px;
+}
+
+/* Header paragraphs. */
+.guide-header p {
+  color: var(--text-muted);
+  font-size: 18px;
+  margin: 0;
+}
+
+/* The centered column of action buttons. */
+.guide-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  flex-grow: 1;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Shared style for the action buttons. */
+.action-button {
+  width: 100%;
+  max-width: 400px;
+  padding: 20px;
+  font-size: 18px;
+  font-weight: 600;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border: 2px solid transparent;
+}
+
+/* Lift a button on hover. */
+.action-button:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
+}
+
+/* Press effect. */
+.action-button:active {
+  transform: translateY(0);
+}
+
+/* Primary action button. */
+.action-button.primary {
+  background-color: var(--brand-600);
+  color: #fff;
+}
+
+.action-button.primary:hover {
+  background-color: var(--brand-700);
+}
+
+/* Secondary action button. */
+.action-button.secondary {
+  background-color: var(--surface);
+  color: var(--brand-700);
+  border-color: var(--brand-200);
+}
+
+.action-button.secondary:hover {
+  background-color: var(--brand-50);
+}
+
+/* Logout footer area. */
+.guide-footer {
+  margin-top: auto;
+  padding-top: 40px;
+  text-align: center;
+}
+
+/* The logout button. */
+.logout-button {
+  background-color: transparent;
+  color: #ef4444;
+  border: 1px solid #ef4444;
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.logout-button:hover {
+  background-color: #fef2f2;
+}
+
+/* Phone: tighter card and buttons. */
+@media (max-width: 600px) {
+  .guide-dashboard-container {
+    margin: 20px;
+    padding: 20px;
+  }
+
+  .action-button {
+    font-size: 16px;
+    padding: 16px;
+  }
+}
+
+/* Centered loading / empty-state text. */
+.guide-loading,
+.guide-empty-state {
+  text-align: center;
+  color: #475569;
+  font-size: 18px;
+}
+
+/* The "assigned group" label under the greeting. */
+.guide-group-label {
+  margin-top: 12px !important;
+  font-size: 16px !important;
+}

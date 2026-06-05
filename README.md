@@ -40,6 +40,7 @@ VITE_FIREBASE_MESSAGING_SENDER_ID=
 VITE_FIREBASE_APP_ID=
 ```
 
+
 ## מבנה מסכים אחרי האיחוד
 
 - דף ציבורי: קבוצות פעילות, כניסה והרשמה להתנדבות.

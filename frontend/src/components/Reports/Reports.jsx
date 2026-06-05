@@ -1,20 +1,29 @@
-﻿import { useCallback, useEffect, useMemo, useState } from 'react'
+// React hooks for state, effects, memoization and stable callbacks.
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
+// Firestore helpers for reading collections.
 import { collection, getDocs } from 'firebase/firestore'
 
+// Our Firestore database instance.
 import { db } from '../../firebase'
+
+// Styles for this screen.
 import './Reports.css'
+
+// Shared event status helper (so reports match the other screens).
+import { computeEventStatus } from '../../utils/eventStatus'
+
 
 // Firestore collection names used by the reports screen.
 const COLLECTION_NAMES = {
-  USERS: 'users',
+  VOLUNTEERS: 'volunteers',
   EVENTS: 'events',
   ATTENDANCE: 'attendance',
 }
 
 // Empty state used before Firebase data is loaded.
 const EMPTY_DATA = {
-  users: [],
+  volunteers: [],
   events: [],
   attendance: [],
 }
@@ -26,6 +35,13 @@ const REPORT_TYPES = {
   EVENTS: 'events',
 }
 
+// Hebrew labels for each report type (also used as the print heading on page 2).
+const REPORT_LABELS = {
+  [REPORT_TYPES.ATTENDANCE]: 'דוח נוכחות',
+  [REPORT_TYPES.GROUPS]: 'דוח קבוצות',
+  [REPORT_TYPES.EVENTS]: 'דוח אירועים',
+}
+
 // Event statuses used for the event status summary section.
 const EVENT_STATUSES = [
   'מתוכנן',
@@ -34,14 +50,14 @@ const EVENT_STATUSES = [
   'בוטל',
 ]
 
+// Fallback text for empty values, and the BOM that makes Excel read Hebrew CSV.
 const DEFAULT_TEXT = 'לא צוין'
-const CSV_BOM = '\ufeff'
+const CSV_BOM = '﻿'
 
-/**
- * Returns safe text for UI and CSV output.
- * Prevents empty, null, or undefined values from appearing as blank cells.
- */
+
+// Safe text for UI and CSV: turns empty / null / undefined into a fallback.
 function safeText(value, fallback = DEFAULT_TEXT) {
+  // Treat blank-ish values as missing.
   if (value === null || value === undefined || value === '') {
     return fallback
   }
@@ -49,9 +65,8 @@ function safeText(value, fallback = DEFAULT_TEXT) {
   return String(value)
 }
 
-/**
- * Converts a Firestore document snapshot into a plain object with its id.
- */
+
+// Turn a Firestore document snapshot into a plain object that keeps its id.
 function normalizeDocument(documentSnapshot) {
   return {
     id: documentSnapshot.id,
@@ -59,19 +74,20 @@ function normalizeDocument(documentSnapshot) {
   }
 }
 
-/**
- * Reads one Firestore collection and returns both records and error state.
- * This keeps Firebase errors from breaking the whole reports screen.
- */
+
+// Read one collection, returning both its records and any error (never throws).
 async function readCollection(collectionName) {
   try {
+    // Fetch all documents in the collection.
     const snapshot = await getDocs(collection(db, collectionName))
 
+    // Success: normalized records, no error.
     return {
       records: snapshot.docs.map(normalizeDocument),
       error: null,
     }
   } catch (error) {
+    // Failure: log it and return an empty list plus a readable error.
     console.error(`Error loading ${collectionName}:`, error)
 
     return {
@@ -81,34 +97,33 @@ async function readCollection(collectionName) {
   }
 }
 
-/**
- * Loads all data needed for the reports screen.
- * The screen uses users, events, and attendance together.
- */
+
+// Load every collection the reports screen needs (volunteers, events, attendance).
 async function loadReportsCollections() {
-  const [usersResult, eventsResult, attendanceResult] = await Promise.all([
-    readCollection(COLLECTION_NAMES.USERS),
+  // Read all three collections in parallel.
+  const [volunteersResult, eventsResult, attendanceResult] = await Promise.all([
+    readCollection(COLLECTION_NAMES.VOLUNTEERS),
     readCollection(COLLECTION_NAMES.EVENTS),
     readCollection(COLLECTION_NAMES.ATTENDANCE),
   ])
 
+  // Bundle the data and collect any errors that occurred.
   return {
     data: {
-      users: usersResult.records,
+      volunteers: volunteersResult.records,
       events: eventsResult.records,
       attendance: attendanceResult.records,
     },
     errors: [
-      usersResult.error,
+      volunteersResult.error,
       eventsResult.error,
       attendanceResult.error,
     ].filter(Boolean),
   }
 }
 
-/**
- * Finds the best available group name for a volunteer.
- */
+
+// Best available group name for a volunteer, across the possible field names.
 function getVolunteerGroup(user) {
   return (
     user.group ||
@@ -119,9 +134,8 @@ function getVolunteerGroup(user) {
   )
 }
 
-/**
- * Finds the best available group name for an event.
- */
+
+// Best available group name for an event.
 function getEventGroup(event) {
   return (
     event.assignedGroup ||
@@ -131,9 +145,8 @@ function getEventGroup(event) {
   )
 }
 
-/**
- * Finds the best available group name for an attendance record.
- */
+
+// Best available group name for an attendance record.
 function getAttendanceGroup(attendanceItem) {
   return (
     attendanceItem.assignedGroup ||
@@ -143,11 +156,10 @@ function getAttendanceGroup(attendanceItem) {
   )
 }
 
-/**
- * Normalizes different attendance values into one known status.
- * This supports several possible data shapes from other screens.
- */
+
+// Normalize the many possible attendance values into 'present' / 'absent' / 'unknown'.
 function normalizeAttendanceStatus(value) {
+  // Booleans map directly.
   if (value === true) {
     return 'present'
   }
@@ -156,22 +168,25 @@ function normalizeAttendanceStatus(value) {
     return 'absent'
   }
 
+  // Otherwise compare a lower-cased text form.
   const text = String(value || '').trim().toLowerCase()
 
+  // Words that mean "present".
   if (['present', 'yes', 'true', '1', 'נוכח', 'כן'].includes(text)) {
     return 'present'
   }
 
+  // Words that mean "absent".
   if (['absent', 'no', 'false', '0', 'נעדר', 'לא'].includes(text)) {
     return 'absent'
   }
 
+  // Anything else is unknown.
   return 'unknown'
 }
 
-/**
- * Gets the status field from one attendance item.
- */
+
+// Read the status field from an attendance item, trying several field names.
 function getRecordStatus(record) {
   return (
     record.status ??
@@ -182,14 +197,15 @@ function getRecordStatus(record) {
   )
 }
 
-/**
- * Counts present, absent, and unknown values inside a nested attendance list.
- */
+
+// Count present / absent / unknown across a nested list of attendance records.
 function countAttendanceFromList(list) {
   return list.reduce(
     (summary, record) => {
+      // Normalize this record's status.
       const status = normalizeAttendanceStatus(getRecordStatus(record))
 
+      // Add 1 to the matching tally.
       return {
         present: summary.present + (status === 'present' ? 1 : 0),
         absent: summary.absent + (status === 'absent' ? 1 : 0),
@@ -204,10 +220,11 @@ function countAttendanceFromList(list) {
   )
 }
 
-/**
- * Extracts attendance totals from multiple possible Firestore structures.
- */
+
+// Extract present/absent/unknown totals from the many shapes an attendance doc
+// can take (explicit counts, present/absent arrays, a nested list, or a single record).
 function getAttendanceCounts(attendanceItem) {
+  // Shape 1: explicit numeric counts.
   const presentCount = Number(
     attendanceItem.presentCount ?? attendanceItem.presentTotal,
   )
@@ -216,6 +233,7 @@ function getAttendanceCounts(attendanceItem) {
     attendanceItem.absentCount ?? attendanceItem.absentTotal,
   )
 
+  // If either count is a real number, use them.
   if (Number.isFinite(presentCount) || Number.isFinite(absentCount)) {
     return {
       present: Number.isFinite(presentCount) ? presentCount : 0,
@@ -224,6 +242,7 @@ function getAttendanceCounts(attendanceItem) {
     }
   }
 
+  // Shape 2: separate present / absent arrays — count their lengths.
   if (
     Array.isArray(attendanceItem.present) ||
     Array.isArray(attendanceItem.absent)
@@ -239,6 +258,7 @@ function getAttendanceCounts(attendanceItem) {
     }
   }
 
+  // Shape 3: a nested list of records under one of these field names.
   const attendanceList =
     attendanceItem.records ||
     attendanceItem.volunteers ||
@@ -250,7 +270,7 @@ function getAttendanceCounts(attendanceItem) {
     return countAttendanceFromList(attendanceList)
   }
 
-  // Single-volunteer record (one document per volunteer), e.g.
+  // Shape 4: single-volunteer record (one document per volunteer), e.g.
   // { status: true/false, volunteerId, date }. This is what the
   // attendance screen actually writes, so count it as one person.
   const singleStatusValue = getRecordStatus(attendanceItem)
@@ -265,6 +285,7 @@ function getAttendanceCounts(attendanceItem) {
     }
   }
 
+  // Nothing usable: all zeros.
   return {
     present: 0,
     absent: 0,
@@ -272,12 +293,13 @@ function getAttendanceCounts(attendanceItem) {
   }
 }
 
-/**
- * Gets a readable date from an attendance record.
- */
+
+// Readable date string from an attendance record, handling several date shapes.
 function getAttendanceDate(attendanceItem) {
+  // Prefer an explicit date, fall back to createdAt.
   const value = attendanceItem.date ?? attendanceItem.createdAt
 
+  // No date at all.
   if (!value) {
     return 'ללא תאריך'
   }
@@ -302,17 +324,19 @@ function getAttendanceDate(attendanceItem) {
     return new Date(value.seconds * 1000).toLocaleDateString('he-IL')
   }
 
+  // Unrecognized shape.
   return 'ללא תאריך'
 }
 
-/**
- * Calculates total attendance statistics for the summary cards.
- */
+
+// Total attendance stats (meetings + present/absent/unknown) for the summary cards.
 function calculateAttendanceStats(attendanceRecords) {
   return attendanceRecords.reduce(
     (summary, attendanceItem) => {
+      // Counts for this record.
       const counts = getAttendanceCounts(attendanceItem)
 
+      // Add this record into the running totals.
       return {
         meetings: summary.meetings + 1,
         present: summary.present + counts.present,
@@ -329,12 +353,13 @@ function calculateAttendanceStats(attendanceRecords) {
   )
 }
 
-/**
- * Builds one combined group report from volunteers, events, and attendance.
- */
+
+// Build one combined per-group report from volunteers, events and attendance.
 function buildGroupRows(users, events, attendanceRecords) {
+  // Group name -> accumulated stats.
   const groupsMap = new Map()
 
+  // Get (or create) the stats object for a group name.
   const ensureGroup = (groupName) => {
     const normalizedGroupName = groupName || 'ללא שיוך'
 
@@ -353,18 +378,21 @@ function buildGroupRows(users, events, attendanceRecords) {
     return groupsMap.get(normalizedGroupName)
   }
 
+  // Count volunteers per group.
   users.forEach((user) => {
     const group = ensureGroup(getVolunteerGroup(user))
 
     group.volunteers += 1
   })
 
+  // Count events per group.
   events.forEach((event) => {
     const group = ensureGroup(getEventGroup(event))
 
     group.events += 1
   })
 
+  // Add attendance numbers and track distinct meeting dates per group.
   attendanceRecords.forEach((attendanceItem) => {
     const group = ensureGroup(getAttendanceGroup(attendanceItem))
     const counts = getAttendanceCounts(attendanceItem)
@@ -374,6 +402,7 @@ function buildGroupRows(users, events, attendanceRecords) {
     group.absent += counts.absent
   })
 
+  // Turn the map into a sorted array; meetings = number of distinct dates.
   return Array.from(groupsMap.values())
     .map(({ meetingKeys, ...group }) => ({
       ...group,
@@ -384,18 +413,20 @@ function buildGroupRows(users, events, attendanceRecords) {
     )
 }
 
-/**
- * Groups the per-volunteer attendance documents into one row per meeting
- * (same group + same date), summing present / absent / unknown counts.
- */
+
+// Collapse per-volunteer attendance docs into one row per meeting (group + date),
+// summing the present / absent / unknown counts.
 function buildAttendanceRows(attendanceRecords) {
+  // "group__date" -> meeting row.
   const meetings = new Map()
 
   attendanceRecords.forEach((attendanceItem) => {
+    // Identify the meeting this record belongs to.
     const date = getAttendanceDate(attendanceItem)
     const group = getAttendanceGroup(attendanceItem)
     const key = `${group}__${date}`
 
+    // Start a fresh row the first time we see this meeting.
     if (!meetings.has(key)) {
       meetings.set(key, {
         id: key,
@@ -407,6 +438,7 @@ function buildAttendanceRows(attendanceRecords) {
       })
     }
 
+    // Add this record's counts into the meeting row.
     const meeting = meetings.get(key)
     const counts = getAttendanceCounts(attendanceItem)
 
@@ -418,27 +450,26 @@ function buildAttendanceRows(attendanceRecords) {
   return Array.from(meetings.values())
 }
 
-/**
- * Escapes a single CSV cell.
- * Quotes are doubled according to CSV rules.
- */
+
+// Escape one CSV cell (wrap in quotes and double any inner quotes).
 function formatCsvCell(cell) {
   return `"${String(cell ?? '').replace(/"/g, '""')}"`
 }
 
-/**
- * Downloads the given rows as a CSV file.
- * The BOM helps Excel open Hebrew text correctly.
- */
+
+// Download the given rows as a CSV file (BOM included so Excel reads Hebrew).
 function downloadCsv(rows) {
+  // Join cells with commas and rows with CRLF.
   const csvContent = rows
     .map((row) => row.map(formatCsvCell).join(','))
     .join('\r\n')
 
+  // Build a CSV blob with the BOM prefix.
   const blob = new Blob([CSV_BOM, csvContent], {
     type: 'text/csv;charset=utf-8;',
   })
 
+  // Create a temporary link and click it to trigger the download.
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
 
@@ -446,13 +477,12 @@ function downloadCsv(rows) {
   link.download = `reports-${new Date().toISOString().slice(0, 10)}.csv`
   link.click()
 
+  // Release the object URL.
   URL.revokeObjectURL(url)
 }
 
-/**
- * Screen 13 — Reports.
- * Shows attendance, group, and event reports with PDF and Excel export.
- */
+
+// Reports screen: attendance, group and event reports with PDF / Excel export.
 export default function Reports() {
   // Firebase data used by all reports.
   const [data, setData] = useState(EMPTY_DATA)
@@ -463,30 +493,31 @@ export default function Reports() {
   const [activeReport, setActiveReport] = useState(REPORT_TYPES.EVENTS)
   const [searchTerm, setSearchTerm] = useState('')
 
-  /**
-   * Reloads reports data manually when the user clicks refresh.
-   */
+  // Reload reports data manually when the user clicks refresh.
   const loadReportsData = useCallback(async () => {
+    // Reset to the loading state.
     setLoading(true)
     setErrors([])
 
+    // Fetch everything again.
     const reportsState = await loadReportsCollections()
 
+    // Store the fresh data and any errors.
     setData(reportsState.data)
     setErrors(reportsState.errors)
     setLoading(false)
   }, [])
 
-  /**
-   * Loads report data once when the screen opens.
-   * The isMounted flag prevents state updates after the component unmounts.
-   */
+  // Load report data once when the screen opens.
   useEffect(() => {
+    // Guards against state updates after the component unmounts.
     let isMounted = true
 
+    // Initial fetch.
     async function loadInitialReportsData() {
       const reportsState = await loadReportsCollections()
 
+      // Bail out if we unmounted while waiting.
       if (!isMounted) {
         return
       }
@@ -498,64 +529,63 @@ export default function Reports() {
 
     loadInitialReportsData()
 
+    // Cleanup: mark as unmounted.
     return () => {
       isMounted = false
     }
   }, [])
 
+  // Totals for the attendance summary cards.
   const attendanceStats = useMemo(
     () => calculateAttendanceStats(data.attendance),
     [data.attendance],
   )
 
+  // Grand total of all attendance records.
   const attendanceTotal =
     attendanceStats.present +
     attendanceStats.absent +
     attendanceStats.unknown
 
+  // Present percentage (0 when there's nothing to divide by).
   const attendanceRate =
     attendanceTotal > 0
       ? Math.round((attendanceStats.present / attendanceTotal) * 100)
       : 0
 
-  /**
-   * Counts how many events exist for each status.
-   */
+  // How many events exist for each status.
   const eventStatusCounts = useMemo(() => {
     return EVENT_STATUSES.reduce((summary, status) => {
       return {
         ...summary,
-        [status]: data.events.filter((event) => event.status === status).length,
+        [status]: data.events.filter((event) => computeEventStatus(event) === status).length,
       }
     }, {})
   }, [data.events])
 
-  /**
-   * Group report rows are calculated from all report data.
-   */
+  // Group report rows, derived from all the data.
   const groupRows = useMemo(
-    () => buildGroupRows(data.users, data.events, data.attendance),
-    [data.users, data.events, data.attendance],
+    () => buildGroupRows(data.volunteers, data.events, data.attendance),
+    [data.volunteers, data.events, data.attendance],
   )
 
-  /**
-   * Attendance rows are normalized for table rendering.
-   */
+  // Attendance rows, collapsed to one row per meeting.
   const attendanceRows = useMemo(
     () => buildAttendanceRows(data.attendance),
     [data.attendance],
   )
 
-  /**
-   * Filters event report rows by the current search text.
-   */
+  // Event rows filtered by the search box.
   const filteredEvents = useMemo(() => {
+    // Normalize the search text.
     const search = searchTerm.trim().toLowerCase()
 
+    // No search: show everything.
     if (!search) {
       return data.events
     }
 
+    // Match the search against the event's combined text.
     return data.events.filter((event) => {
       const text = [
         event.name,
@@ -571,9 +601,7 @@ export default function Reports() {
     })
   }, [data.events, searchTerm])
 
-  /**
-   * Filters group report rows by group name.
-   */
+  // Group rows filtered by group name.
   const filteredGroups = useMemo(() => {
     const search = searchTerm.trim().toLowerCase()
 
@@ -586,9 +614,7 @@ export default function Reports() {
     )
   }, [groupRows, searchTerm])
 
-  /**
-   * Filters attendance report rows by date or group name.
-   */
+  // Attendance rows filtered by date or group name.
   const filteredAttendance = useMemo(() => {
     const search = searchTerm.trim().toLowerCase()
 
@@ -608,19 +634,14 @@ export default function Reports() {
     })
   }, [attendanceRows, searchTerm])
 
-  /**
-   * Opens the browser print dialog.
-   * The CSS file contains print-specific styles.
-   */
+  // Open the browser print dialog (print styles live in the CSS file).
   const handleExportPdf = () => {
     window.print()
   }
 
-  /**
-   * Exports all report types into one CSV file.
-   * The UI labels say Excel because CSV opens directly in Excel.
-   */
+  // Export all report types into one CSV file ("Excel" because CSV opens in Excel).
   const handleExportExcel = () => {
+    // Header row, then one block of rows per report type.
     const rows = [
       [
         'סוג דוח',
@@ -633,17 +654,19 @@ export default function Reports() {
         'הערות',
       ],
 
+      // Event rows.
       ...data.events.map((event) => [
         'דוח אירועים',
         safeText(event.name),
         safeText(event.date),
         safeText(event.location),
-        safeText(event.status),
+        safeText(computeEventStatus(event)),
         '',
         '',
         `קבוצה: ${getEventGroup(event)}`,
       ]),
 
+      // Group rows.
       ...groupRows.map((group) => [
         'דוח קבוצות',
         group.name,
@@ -655,6 +678,7 @@ export default function Reports() {
         `מתנדבים: ${group.volunteers}, אירועים: ${group.events}, מפגשי נוכחות: ${group.attendanceMeetings}`,
       ]),
 
+      // Attendance rows.
       ...attendanceRows.map((attendanceItem) => [
         'דוח נוכחות',
         attendanceItem.group,
@@ -670,12 +694,12 @@ export default function Reports() {
     downloadCsv(rows)
   }
 
-  /**
-   * Renders the event report table.
-   */
+  // Render the events report table.
   const renderEventsReport = () => (
     <div className="reports-table-wrap">
       <table className="reports-table">
+
+        {/* Column headers. */}
         <thead>
           <tr>
             <th>שם אירוע</th>
@@ -687,14 +711,15 @@ export default function Reports() {
         </thead>
 
         <tbody>
+          {/* A row per event, or an empty-state row. */}
           {filteredEvents.length > 0 ? (
             filteredEvents.map((event) => (
               <tr key={event.id}>
-                <td>{safeText(event.name)}</td>
-                <td>{safeText(event.date)}</td>
-                <td>{safeText(event.location)}</td>
-                <td>{getEventGroup(event)}</td>
-                <td>{safeText(event.status)}</td>
+                <td data-label="שם אירוע">{safeText(event.name)}</td>
+                <td data-label="תאריך">{safeText(event.date)}</td>
+                <td data-label="מיקום">{safeText(event.location)}</td>
+                <td data-label="קבוצה">{getEventGroup(event)}</td>
+                <td data-label="סטטוס">{safeText(computeEventStatus(event))}</td>
               </tr>
             ))
           ) : (
@@ -709,12 +734,12 @@ export default function Reports() {
     </div>
   )
 
-  /**
-   * Renders the group report table.
-   */
+  // Render the groups report table.
   const renderGroupsReport = () => (
     <div className="reports-table-wrap">
       <table className="reports-table">
+
+        {/* Column headers. */}
         <thead>
           <tr>
             <th>קבוצה</th>
@@ -727,15 +752,16 @@ export default function Reports() {
         </thead>
 
         <tbody>
+          {/* A row per group, or an empty-state row. */}
           {filteredGroups.length > 0 ? (
             filteredGroups.map((group) => (
               <tr key={group.name}>
-                <td>{group.name}</td>
-                <td>{group.volunteers}</td>
-                <td>{group.events}</td>
-                <td>{group.attendanceMeetings}</td>
-                <td>{group.present}</td>
-                <td>{group.absent}</td>
+                <td data-label="קבוצה">{group.name}</td>
+                <td data-label="מתנדבים">{group.volunteers}</td>
+                <td data-label="אירועים">{group.events}</td>
+                <td data-label="מפגשי נוכחות">{group.attendanceMeetings}</td>
+                <td data-label="נוכחים">{group.present}</td>
+                <td data-label="נעדרים">{group.absent}</td>
               </tr>
             ))
           ) : (
@@ -750,12 +776,12 @@ export default function Reports() {
     </div>
   )
 
-  /**
-   * Renders the attendance report table.
-   */
+  // Render the attendance report table.
   const renderAttendanceReport = () => (
     <div className="reports-table-wrap">
       <table className="reports-table">
+
+        {/* Column headers. */}
         <thead>
           <tr>
             <th>תאריך</th>
@@ -767,14 +793,15 @@ export default function Reports() {
         </thead>
 
         <tbody>
+          {/* A row per meeting, or an empty-state row. */}
           {filteredAttendance.length > 0 ? (
             filteredAttendance.map((attendanceItem) => (
               <tr key={attendanceItem.id}>
-                <td>{attendanceItem.date}</td>
-                <td>{attendanceItem.group}</td>
-                <td>{attendanceItem.present}</td>
-                <td>{attendanceItem.absent}</td>
-                <td>{attendanceItem.unknown}</td>
+                <td data-label="תאריך">{attendanceItem.date}</td>
+                <td data-label="קבוצה">{attendanceItem.group}</td>
+                <td data-label="נוכחים">{attendanceItem.present}</td>
+                <td data-label="נעדרים">{attendanceItem.absent}</td>
+                <td data-label="לא ידוע">{attendanceItem.unknown}</td>
               </tr>
             ))
           ) : (
@@ -789,9 +816,7 @@ export default function Reports() {
     </div>
   )
 
-  /**
-   * Chooses which report table to display according to the active tab.
-   */
+  // Pick which report table to show based on the active tab.
   const renderActiveReport = () => {
     if (activeReport === REPORT_TYPES.ATTENDANCE) {
       return renderAttendanceReport()
@@ -807,10 +832,12 @@ export default function Reports() {
   return (
     <main className="reports-container" dir="rtl">
       <section className="reports-card">
+
+        {/* Header: title, description and the export actions. */}
         <header className="reports-header">
           <div>
             <div className="reports-eyebrow">
-              מסך 13
+              סקירה כללית
             </div>
 
             <h1 className="reports-title">
@@ -822,21 +849,23 @@ export default function Reports() {
             </p>
           </div>
 
+          {/* Refresh / export buttons. */}
           <div className="reports-actions">
             <button type="button" onClick={loadReportsData}>
               רענון נתונים
             </button>
 
             <button type="button" onClick={handleExportPdf}>
-              Export PDF
+              ייצוא PDF
             </button>
 
             <button type="button" onClick={handleExportExcel}>
-              Export Excel
+              ייצוא Excel
             </button>
           </div>
         </header>
 
+        {/* Error banner listing any collections that failed to load. */}
         {errors.length > 0 && (
           <div className="reports-error">
             חלק מהנתונים לא נטענו:
@@ -851,9 +880,10 @@ export default function Reports() {
           </div>
         )}
 
+        {/* Four headline summary cards. */}
         <div className="reports-summary-grid">
           <article className="reports-summary-card">
-            <span>{data.users.length}</span>
+            <span>{data.volunteers.length}</span>
             <p>מתנדבים</p>
           </article>
 
@@ -873,6 +903,7 @@ export default function Reports() {
           </article>
         </div>
 
+        {/* Event counts broken down by status. */}
         <section className="reports-status-section">
           <h2>סיכום אירועים לפי סטטוס</h2>
 
@@ -886,7 +917,13 @@ export default function Reports() {
           </div>
         </section>
 
+        {/* The main report panel: tabs, search and the active table. */}
         <section className="reports-panel">
+
+          {/* Heading shown only on the printed page. */}
+          <h2 className="reports-print-title">{REPORT_LABELS[activeReport]}</h2>
+
+          {/* Tab buttons + search box. */}
           <div className="reports-panel-header">
             <div className="reports-tabs">
               <button
@@ -894,7 +931,7 @@ export default function Reports() {
                 className={activeReport === REPORT_TYPES.EVENTS ? 'active' : ''}
                 onClick={() => setActiveReport(REPORT_TYPES.EVENTS)}
               >
-                Event Reports
+                דוח אירועים
               </button>
 
               <button
@@ -902,7 +939,7 @@ export default function Reports() {
                 className={activeReport === REPORT_TYPES.GROUPS ? 'active' : ''}
                 onClick={() => setActiveReport(REPORT_TYPES.GROUPS)}
               >
-                Group Reports
+                דוח קבוצות
               </button>
 
               <button
@@ -910,7 +947,7 @@ export default function Reports() {
                 className={activeReport === REPORT_TYPES.ATTENDANCE ? 'active' : ''}
                 onClick={() => setActiveReport(REPORT_TYPES.ATTENDANCE)}
               >
-                Attendance Reports
+                דוח נוכחות
               </button>
             </div>
 
@@ -923,6 +960,7 @@ export default function Reports() {
             />
           </div>
 
+          {/* Loading message while fetching, otherwise the active report. */}
           {loading ? (
             <div className="reports-loading">
               טוען דוחות מ־Firebase...

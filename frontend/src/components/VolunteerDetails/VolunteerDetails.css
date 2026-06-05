@@ -1,9 +1,4 @@
-﻿/* ==========================================================================
-   Volunteer Details Screen
-   Styles for Screen 14: personal info, group assignment, and attendance history.
-   ========================================================================== */
-
-/* Main page wrapper */
+/* Full-page wrapper that centers the card on a soft decorative background. */
 .volunteer-details-container {
   direction: rtl;
   width: 100%;
@@ -15,11 +10,11 @@
   align-items: flex-start;
   font-family: var(--heading, system-ui, sans-serif);
   background:
-    radial-gradient(circle at top right, rgba(170, 59, 255, 0.12), transparent 32%),
-    radial-gradient(circle at bottom left, rgba(255, 107, 107, 0.1), transparent 28%);
+    radial-gradient(circle at top right, rgba(79, 70, 229, 0.12), transparent 32%),
+    radial-gradient(circle at bottom left, rgba(14, 165, 233, 0.1), transparent 28%);
 }
 
-/* Main card that contains the full volunteer details screen */
+/* The single card that holds the whole screen. */
 .volunteer-details-card {
   width: 100%;
   max-width: 1080px;
@@ -31,11 +26,8 @@
   text-align: right;
 }
 
-/* ==========================================================================
-   Header
-   ========================================================================== */
 
-/* Top header with profile summary and back button */
+/* Header: profile summary on one side, back button on the other. */
 .volunteer-details-header {
   display: flex;
   justify-content: space-between;
@@ -43,45 +35,45 @@
   gap: 18px;
   padding: 32px;
   background:
-    linear-gradient(135deg, rgba(170, 59, 255, 0.12), rgba(255, 107, 107, 0.08)),
+    linear-gradient(135deg, rgba(79, 70, 229, 0.12), rgba(14, 165, 233, 0.08)),
     var(--social-bg, #f8f7fc);
   border-bottom: 1px solid var(--border, #eceaf3);
 }
 
-/* Profile row with avatar and volunteer name */
+/* Avatar + name/eyebrow row. */
 .volunteer-details-profile {
   display: flex;
   align-items: center;
   gap: 18px;
 }
 
-/* Circular avatar with the volunteer initial */
+/* Circular avatar showing the volunteer's initial. */
 .volunteer-details-avatar {
   width: 76px;
   height: 76px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, var(--accent, #8f28e8), #ff5f8f);
+  background: linear-gradient(135deg, var(--accent, #8f28e8), #0ea5e9);
   color: #fff;
   font-size: 32px;
   font-weight: 900;
-  box-shadow: 0 14px 28px rgba(170, 59, 255, 0.25);
+  box-shadow: 0 14px 28px rgba(79, 70, 229, 0.25);
 }
 
-/* Small screen label above the volunteer name */
+/* Small pill label above the name. */
 .volunteer-details-eyebrow {
   width: fit-content;
   padding: 6px 12px;
   border-radius: 999px;
-  background: rgba(170, 59, 255, 0.1);
+  background: rgba(79, 70, 229, 0.1);
   color: var(--accent, #8f28e8);
   font-size: 13px;
   font-weight: 800;
   margin-bottom: 10px;
 }
 
-/* Volunteer name title */
+/* The volunteer's name title. */
 .volunteer-details-title {
   margin: 0;
   color: var(--text-h, #171320);
@@ -89,7 +81,7 @@
   line-height: 1.2;
 }
 
-/* Short description under the title */
+/* Short description under the title. */
 .volunteer-details-subtitle {
   margin: 10px 0 0;
   color: var(--text, #6b6375);
@@ -97,7 +89,7 @@
   line-height: 1.6;
 }
 
-/* Back buttons used in normal and empty states */
+/* Back button (shared by the normal and empty states). */
 .volunteer-details-back-btn,
 .volunteer-details-empty button {
   border: 1px solid transparent;
@@ -108,22 +100,19 @@
   font: inherit;
   font-weight: 900;
   cursor: pointer;
-  box-shadow: 0 10px 22px rgba(170, 59, 255, 0.22);
+  box-shadow: 0 10px 22px rgba(79, 70, 229, 0.22);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-/* Back button hover effect */
+/* Lift the back button on hover. */
 .volunteer-details-back-btn:hover,
 .volunteer-details-empty button:hover {
   transform: translateY(-1px);
-  box-shadow: 0 14px 28px rgba(170, 59, 255, 0.28);
+  box-shadow: 0 14px 28px rgba(79, 70, 229, 0.28);
 }
 
-/* ==========================================================================
-   Summary Cards
-   ========================================================================== */
 
-/* Attendance summary cards grid */
+/* Grid of the attendance summary cards. */
 .volunteer-details-summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -131,7 +120,7 @@
   padding: 30px 32px 18px;
 }
 
-/* Single summary card */
+/* A single summary card. */
 .volunteer-details-summary-card {
   margin: 0;
   padding: 22px 18px;
@@ -144,7 +133,7 @@
   text-align: center;
 }
 
-/* Main number inside summary card */
+/* The big number in a summary card. */
 .volunteer-details-summary-card span {
   display: block;
   color: var(--accent, #8f28e8);
@@ -153,7 +142,7 @@
   line-height: 1;
 }
 
-/* Label under the summary number */
+/* The label under the number. */
 .volunteer-details-summary-card p {
   margin: 8px 0 0;
   color: var(--text, #6b6375);
@@ -161,11 +150,8 @@
   font-weight: 800;
 }
 
-/* ==========================================================================
-   Content Sections
-   ========================================================================== */
 
-/* Shared section card style */
+/* Shared card style for the content sections. */
 .volunteer-details-section {
   margin: 0 32px 24px;
   padding: 26px;
@@ -174,21 +160,21 @@
   background: var(--bg, #fff);
 }
 
-/* Section titles */
+/* Section titles. */
 .volunteer-details-section h2 {
   margin: 0 0 18px;
   color: var(--text-h, #171320);
   font-size: 24px;
 }
 
-/* Personal information grid */
+/* Grid of personal-info items. */
 .volunteer-details-info-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
 }
 
-/* Single personal information item */
+/* A single personal-info item. */
 .volunteer-details-info-item {
   padding: 16px;
   border: 1px solid var(--border, #eceaf3);
@@ -196,7 +182,7 @@
   background: var(--social-bg, #faf9fd);
 }
 
-/* Small labels inside info and group cards */
+/* Small labels inside info and group cards. */
 .volunteer-details-info-item span,
 .volunteer-details-group-card span {
   display: block;
@@ -206,7 +192,7 @@
   font-weight: 800;
 }
 
-/* Main values inside info and group cards */
+/* Main values inside info and group cards. */
 .volunteer-details-info-item strong,
 .volunteer-details-group-card strong {
   display: block;
@@ -216,36 +202,30 @@
   word-break: break-word;
 }
 
-/* ==========================================================================
-   Group Section
-   ========================================================================== */
 
-/* Highlighted section for the volunteer group */
+/* Highlighted tint for the group section. */
 .volunteer-details-group-section {
   background:
-    linear-gradient(135deg, rgba(170, 59, 255, 0.06), rgba(255, 107, 107, 0.05)),
+    linear-gradient(135deg, rgba(79, 70, 229, 0.06), rgba(14, 165, 233, 0.05)),
     var(--bg, #fff);
 }
 
-/* Group assignment card */
+/* The group assignment card. */
 .volunteer-details-group-card {
   padding: 22px;
-  border: 1px solid var(--accent-border, rgba(170, 59, 255, 0.25));
+  border: 1px solid var(--accent-border, rgba(79, 70, 229, 0.25));
   border-radius: 18px;
-  background: rgba(170, 59, 255, 0.08);
+  background: rgba(79, 70, 229, 0.08);
 }
 
-/* Group name emphasis */
+/* Emphasize the group name. */
 .volunteer-details-group-card strong {
   color: var(--accent, #8f28e8);
   font-size: 22px;
 }
 
-/* ==========================================================================
-   Attendance History
-   ========================================================================== */
 
-/* Firebase error message */
+/* Firebase error banner. */
 .volunteer-details-error {
   margin-bottom: 18px;
   padding: 14px 16px;
@@ -256,7 +236,7 @@
   font-weight: 800;
 }
 
-/* Loading and empty table states */
+/* Loading / empty table messages. */
 .volunteer-details-loading,
 .volunteer-details-empty-row {
   padding: 28px;
@@ -264,7 +244,7 @@
   text-align: center;
 }
 
-/* Horizontal scroll wrapper for the attendance table */
+/* Scroll wrapper around the attendance table. */
 .volunteer-details-table-wrap {
   width: 100%;
   overflow-x: auto;
@@ -273,14 +253,14 @@
   background: var(--bg, #fff);
 }
 
-/* Attendance history table */
+/* The attendance history table. */
 .volunteer-details-table {
   width: 100%;
   min-width: 720px;
   border-collapse: collapse;
 }
 
-/* Shared table cell spacing */
+/* Shared padding/borders for header and body cells. */
 .volunteer-details-table th,
 .volunteer-details-table td {
   padding: 16px;
@@ -289,7 +269,7 @@
   vertical-align: middle;
 }
 
-/* Table header cells */
+/* Header cells. */
 .volunteer-details-table th {
   background: var(--social-bg, #faf9fd);
   color: var(--text-h, #171320);
@@ -297,22 +277,19 @@
   font-weight: 900;
 }
 
-/* Table body cells */
+/* Body cells. */
 .volunteer-details-table td {
   color: var(--text, #6b6375);
   font-size: 15px;
 }
 
-/* Remove the bottom border from the last row */
+/* Drop the border under the last row. */
 .volunteer-details-table tr:last-child td {
   border-bottom: 0;
 }
 
-/* ==========================================================================
-   Attendance Status Badges
-   ========================================================================== */
 
-/* Base attendance status badge */
+/* Base attendance status badge. */
 .volunteer-details-status {
   display: inline-flex;
   align-items: center;
@@ -324,55 +301,49 @@
   white-space: nowrap;
 }
 
-/* Present status badge */
+/* "Present" badge — green. */
 .volunteer-details-status.status-present {
   background: rgba(34, 197, 94, 0.12);
   color: #15803d;
   border: 1px solid rgba(34, 197, 94, 0.28);
 }
 
-/* Absent status badge */
+/* "Absent" badge — red. */
 .volunteer-details-status.status-absent {
   background: rgba(239, 68, 68, 0.12);
   color: #dc2626;
   border: 1px solid rgba(239, 68, 68, 0.28);
 }
 
-/* Unknown status badge */
+/* "Unknown" badge — gray-blue. */
 .volunteer-details-status.status-unknown {
   background: rgba(100, 116, 139, 0.12);
   color: #475569;
   border: 1px solid rgba(100, 116, 139, 0.25);
 }
 
-/* ==========================================================================
-   Empty State
-   ========================================================================== */
 
-/* Empty state shown when no volunteer was selected */
+/* Empty state shown when no volunteer was selected. */
 .volunteer-details-empty {
   padding: 48px 32px;
   text-align: center;
 }
 
-/* Empty state title */
+/* Empty-state title. */
 .volunteer-details-empty h1 {
   margin: 0;
   color: var(--text-h, #171320);
   font-size: 32px;
 }
 
-/* Empty state text */
+/* Empty-state text. */
 .volunteer-details-empty p {
   margin: 12px 0 22px;
   color: var(--text, #6b6375);
 }
 
-/* ==========================================================================
-   Responsive Layout
-   ========================================================================== */
 
-/* Tablet layout */
+/* Tablet: stack the header and use two-column grids. */
 @media (max-width: 900px) {
   .volunteer-details-header {
     flex-direction: column;
@@ -389,7 +360,7 @@
   }
 }
 
-/* Mobile layout */
+/* Mobile: tighter padding, single-column grids, stacked profile. */
 @media (max-width: 600px) {
   .volunteer-details-container {
     padding: 24px 12px;

@@ -1,5 +1,7 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+// React hooks for state, effects and memoization.
+import { useEffect, useMemo, useState } from 'react'
 
+// Firestore helpers for reading, writing, deleting and live-subscribing.
 import {
   addDoc,
   collection,
@@ -11,9 +13,21 @@ import {
   updateDoc,
 } from 'firebase/firestore'
 
+// Our Firestore database instance.
 import { db } from '../../firebase'
-import { GROUP_NAMES } from '../groupOptions'
+
+// Default group names (fallback when the live groups list is empty).
+import { GROUP_NAMES } from '../../utils/groupOptions'
+
+// Date picker used for the event date field.
+import BirthDatePicker from '../shared/BirthDatePicker/BirthDatePicker'
+
+// Styles for this screen.
 import './EventManagement.css'
+
+// Shared event status helper (so all screens show the same status).
+import { computeEventStatus } from '../../utils/eventStatus'
+
 
 // Firestore collection used for storing and reading events.
 const EVENTS_COLLECTION_NAME = 'events'
@@ -42,10 +56,8 @@ const EMPTY_FORM = {
   contactEmail: '',
 }
 
-/**
- * Maps an event status to a CSS class.
- * This keeps the status colors controlled by the CSS file.
- */
+
+// Map an event status to a CSS class (status colours live in the CSS file).
 function statusClass(status) {
   switch (status) {
     case 'פעיל':
@@ -65,10 +77,8 @@ function statusClass(status) {
   }
 }
 
-/**
- * Converts a Firestore event object into form fields.
- * Used when the admin clicks the edit button.
- */
+
+// Turn a Firestore event into form fields (used when editing).
 function createFormFromEvent(event) {
   return {
     name: event.name || '',
@@ -83,10 +93,8 @@ function createFormFromEvent(event) {
   }
 }
 
-/**
- * Converts form fields into the event structure saved in Firestore.
- * Text fields are trimmed before saving.
- */
+
+// Turn form fields into the event structure saved in Firestore (text trimmed).
 function createEventFromForm(form) {
   return {
     name: form.name.trim(),
@@ -103,10 +111,8 @@ function createEventFromForm(form) {
   }
 }
 
-/**
- * Normalizes a Firestore document into a safe event object.
- * Fallback values prevent the UI from breaking when optional fields are missing.
- */
+
+// Normalize a Firestore document into a safe event object (with fallbacks).
 function normalizeEvent(documentSnapshot) {
   const data = documentSnapshot.data()
 
@@ -122,9 +128,8 @@ function normalizeEvent(documentSnapshot) {
   }
 }
 
-/**
- * Returns the correct submit button label according to the current form mode.
- */
+
+// The submit-button label for the current form mode (saving / edit / add).
 function getSubmitButtonText({ saving, isEditing }) {
   if (saving) {
     return 'שומר...'
@@ -137,11 +142,10 @@ function getSubmitButtonText({ saving, isEditing }) {
   return 'הוספת אירוע'
 }
 
-/**
- * Screen 11 — Event Management.
- * Allows the admin to add, edit, delete, search, and open event details.
- */
-export default function EventManagement({ onOpenEventDetails }) {
+
+// Event management: add, edit, delete, search and open event details.
+// `readOnly` hides all editing (used for viewers, who can only browse).
+export default function EventManagement({ onOpenEventDetails, readOnly = false }) {
   // Events loaded from Firestore.
   const [events, setEvents] = useState([])
 
@@ -162,18 +166,20 @@ export default function EventManagement({ onOpenEventDetails }) {
   // Group names loaded from Firestore so the dropdown stays up to date.
   const [groupOptions, setGroupOptions] = useState([])
 
+  // Bumped after a successful add so the date picker visually resets.
+  const [formResetKey, setFormResetKey] = useState(0)
+
+  // True when we're editing an existing event rather than adding a new one.
   const isEditing = editingEventId !== null
 
-  /**
-   * Subscribes to the events collection in real time.
-   * The table updates automatically whenever Firestore data changes.
-   */
+  // Subscribe to the events collection in real time (auto-updates the table).
   useEffect(() => {
     const eventsCollection = collection(db, EVENTS_COLLECTION_NAME)
 
     const unsubscribe = onSnapshot(
       eventsCollection,
       (snapshot) => {
+        // Normalize every document into a safe event object.
         const eventList = snapshot.docs.map(normalizeEvent)
 
         // Sort events by date while keeping undated events at the bottom.
@@ -189,11 +195,13 @@ export default function EventManagement({ onOpenEventDetails }) {
           return firstEvent.date.localeCompare(secondEvent.date)
         })
 
+        // Store the events and clear loading / error states.
         setEvents(eventList)
         setLoading(false)
         setError(null)
       },
       (firebaseError) => {
+        // Surface a load error.
         console.error('Error loading events:', firebaseError)
 
         setError(firebaseError.message)
@@ -205,17 +213,16 @@ export default function EventManagement({ onOpenEventDetails }) {
     return () => unsubscribe()
   }, [])
 
-  /**
-   * Loads the current group names from Firestore so the "assign group"
-   * dropdown always shows the up-to-date groups (with a static fallback).
-   */
+  // Load the live group names for the "assign group" dropdown (static fallback).
   useEffect(() => {
+    // Guards against state updates after unmount.
     let active = true
 
     const loadGroups = async () => {
       let names = []
 
       try {
+        // Read the group names from the groups collection.
         const snapshot = await getDocs(collection(db, 'groups'))
         names = snapshot.docs
           .map((groupDoc) => {
@@ -227,10 +234,12 @@ export default function EventManagement({ onOpenEventDetails }) {
         console.error('Error loading groups:', groupsError)
       }
 
+      // Fall back to the static list if nothing came back.
       if (names.length === 0) {
         names = [...GROUP_NAMES]
       }
 
+      // Store a de-duplicated list.
       if (active) {
         setGroupOptions([...new Set(names)])
       }
@@ -238,22 +247,23 @@ export default function EventManagement({ onOpenEventDetails }) {
 
     loadGroups()
 
+    // Cleanup: mark as unmounted.
     return () => {
       active = false
     }
   }, [])
 
-  /**
-   * Filters the event list by name, location, group, or status.
-   * useMemo avoids recalculating unless the events or search text changed.
-   */
+  // Events filtered by the search box (recomputed only when inputs change).
   const filteredEvents = useMemo(() => {
+    // Normalize the search text.
     const searchValue = searchTerm.trim().toLowerCase()
 
+    // No search: show everything.
     if (!searchValue) {
       return events
     }
 
+    // Match the search against the event's combined text.
     return events.filter((event) => {
       const searchableText = [
         event.name,
@@ -268,10 +278,8 @@ export default function EventManagement({ onOpenEventDetails }) {
     })
   }, [events, searchTerm])
 
-  /**
-   * Builds the dropdown options: the live groups plus the "no group" option,
-   * and the value currently selected (so editing an old event keeps its group).
-   */
+  // Dropdown options: live groups + "no group", plus the currently selected
+  // value (so editing an old event keeps its group even if it's gone now).
   const selectableGroups = useMemo(() => {
     const base = [...groupOptions, NO_GROUP]
     const withCurrent =
@@ -282,9 +290,7 @@ export default function EventManagement({ onOpenEventDetails }) {
     return [...new Set(withCurrent)]
   }, [groupOptions, form.assignedGroup])
 
-  /**
-   * Updates one form field according to the input name.
-   */
+  // Update one form field by its input name.
   const handleChange = (event) => {
     const { name, value } = event.target
 
@@ -294,12 +300,12 @@ export default function EventManagement({ onOpenEventDetails }) {
     }))
   }
 
-  /**
-   * Saves a new event or updates an existing event in Firestore.
-   */
+  // Save a new event or update an existing one in Firestore.
   const handleSubmit = async (event) => {
+    // Don't let the form reload the page.
     event.preventDefault()
 
+    // Name, date and location are required.
     const isMissingRequiredField =
       !form.name.trim() ||
       !form.date ||
@@ -310,17 +316,21 @@ export default function EventManagement({ onOpenEventDetails }) {
       return
     }
 
+    // Show the saving state.
     setSaving(true)
 
     try {
+      // Build the event payload from the form.
       const eventData = createEventFromForm(form)
 
       if (isEditing) {
+        // Update the existing document.
         await updateDoc(doc(db, EVENTS_COLLECTION_NAME, editingEventId), {
           ...eventData,
           updatedAt: serverTimestamp(),
         })
       } else {
+        // Create a new document.
         await addDoc(collection(db, EVENTS_COLLECTION_NAME), {
           ...eventData,
           createdAt: serverTimestamp(),
@@ -328,33 +338,34 @@ export default function EventManagement({ onOpenEventDetails }) {
         })
       }
 
+      // Reset the form back to add mode (bump the key so the date picker clears).
       setForm(EMPTY_FORM)
       setEditingEventId(null)
+      setFormResetKey((key) => key + 1)
     } catch (firebaseError) {
+      // Report a failed save.
       console.error('Error saving event:', firebaseError)
 
       window.alert(`שגיאה בשמירת האירוע: ${firebaseError.message}`)
     } finally {
+      // Always clear the saving state.
       setSaving(false)
     }
   }
 
-  /**
-   * Loads an existing event into the form and switches to edit mode.
-   */
+  // Load an existing event into the form and switch to edit mode.
   const handleEdit = (eventToEdit) => {
     setEditingEventId(eventToEdit.id)
     setForm(createFormFromEvent(eventToEdit))
 
+    // Scroll up to the form.
     window.scrollTo({
       top: 0,
       behavior: 'smooth',
     })
   }
 
-  /**
-   * Deletes an event from Firestore after admin confirmation.
-   */
+  // Delete an event after the admin confirms.
   const handleDelete = async (eventId) => {
     const shouldDelete = window.confirm('האם למחוק את האירוע?')
 
@@ -363,8 +374,10 @@ export default function EventManagement({ onOpenEventDetails }) {
     }
 
     try {
+      // Remove the document.
       await deleteDoc(doc(db, EVENTS_COLLECTION_NAME, eventId))
 
+      // If we were editing that event, reset the form.
       if (editingEventId === eventId) {
         setForm(EMPTY_FORM)
         setEditingEventId(null)
@@ -376,17 +389,13 @@ export default function EventManagement({ onOpenEventDetails }) {
     }
   }
 
-  /**
-   * Cancels edit mode and clears the form.
-   */
+  // Cancel edit mode and clear the form.
   const handleCancelEdit = () => {
     setForm(EMPTY_FORM)
     setEditingEventId(null)
   }
 
-  /**
-   * Sends the selected event to Screen 12.
-   */
+  // Open the full details view for an event (or notify it's not wired yet).
   const handleOpenDetails = (eventItem) => {
     if (typeof onOpenEventDetails === 'function') {
       onOpenEventDetails(eventItem)
@@ -399,10 +408,12 @@ export default function EventManagement({ onOpenEventDetails }) {
   return (
     <main className="event-management-container" dir="rtl">
       <section className="event-management-card">
+
+        {/* Header: title, description and the event counter. */}
         <header className="event-management-header">
           <div>
             <div className="event-management-eyebrow">
-              מסך 11
+              ניהול
             </div>
 
             <h1 className="event-management-title">
@@ -410,28 +421,39 @@ export default function EventManagement({ onOpenEventDetails }) {
             </h1>
 
             <p className="event-management-subtitle">
-              הוספה, עריכה, מחיקה ושיוך אירועים לקבוצות. הנתונים נשמרים ב־Firebase.
+              {readOnly
+                ? 'צפייה ברשימת האירועים של הקהילה.'
+                : 'הוספה, עריכה, מחיקה ושיוך אירועים לקבוצות. הנתונים נשמרים ב־Firebase.'}
             </p>
           </div>
 
+          {/* Live count of events. */}
           <div className="event-management-count">
             <span>{events.length}</span>
             <small>אירועים</small>
           </div>
         </header>
 
+        {/* Error banner shown if the events failed to load. */}
         {error && (
           <div className="event-management-error">
             שגיאה בטעינת אירועים מ־Firebase: {error}
           </div>
         )}
 
+        {/* Add / edit event form (hidden for read-only viewers). */}
+        {!readOnly && (
         <form className="event-management-form" onSubmit={handleSubmit}>
+
+          {/* Title changes between add and edit mode. */}
           <h2>
             {isEditing ? 'עריכת אירוע' : 'הוספת אירוע חדש'}
           </h2>
 
+          {/* Two-column grid of the main fields. */}
           <div className="event-management-form-grid">
+
+            {/* Event name. */}
             <label>
               שם האירוע
 
@@ -444,17 +466,20 @@ export default function EventManagement({ onOpenEventDetails }) {
               />
             </label>
 
+            {/* Event date (custom picker). */}
             <label>
               תאריך
 
-              <input
-                type="date"
-                name="date"
+              <BirthDatePicker
+                key={editingEventId ?? `new-${formResetKey}`}
                 value={form.date}
-                onChange={handleChange}
+                onChange={(date) => setForm((currentForm) => ({ ...currentForm, date }))}
+                pastYears={3}
+                futureYears={6}
               />
             </label>
 
+            {/* Location. */}
             <label>
               מיקום
 
@@ -467,6 +492,7 @@ export default function EventManagement({ onOpenEventDetails }) {
               />
             </label>
 
+            {/* Assigned group dropdown. */}
             <label>
               שיוך קבוצה
 
@@ -483,6 +509,7 @@ export default function EventManagement({ onOpenEventDetails }) {
               </select>
             </label>
 
+            {/* Status dropdown. */}
             <label>
               סטטוס
 
@@ -499,6 +526,7 @@ export default function EventManagement({ onOpenEventDetails }) {
               </select>
             </label>
 
+            {/* Contact name. */}
             <label>
               איש קשר
 
@@ -511,6 +539,7 @@ export default function EventManagement({ onOpenEventDetails }) {
               />
             </label>
 
+            {/* Contact phone. */}
             <label>
               טלפון איש קשר
 
@@ -524,6 +553,7 @@ export default function EventManagement({ onOpenEventDetails }) {
               />
             </label>
 
+            {/* Contact email. */}
             <label>
               אימייל איש קשר
 
@@ -538,6 +568,7 @@ export default function EventManagement({ onOpenEventDetails }) {
             </label>
           </div>
 
+          {/* Full-width description field. */}
           <label className="event-management-description-label">
             תיאור האירוע
 
@@ -550,6 +581,7 @@ export default function EventManagement({ onOpenEventDetails }) {
             />
           </label>
 
+          {/* Submit + cancel buttons. */}
           <div className="event-management-actions">
             <button
               type="submit"
@@ -559,6 +591,7 @@ export default function EventManagement({ onOpenEventDetails }) {
               {getSubmitButtonText({ saving, isEditing })}
             </button>
 
+            {/* Cancel only appears while editing. */}
             {isEditing && (
               <button
                 type="button"
@@ -570,8 +603,12 @@ export default function EventManagement({ onOpenEventDetails }) {
             )}
           </div>
         </form>
+        )}
 
+        {/* Event list with its own search box. */}
         <section className="event-management-list-section">
+
+          {/* Section title + search. */}
           <div className="event-management-list-header">
             <h2>רשימת אירועים</h2>
 
@@ -584,6 +621,7 @@ export default function EventManagement({ onOpenEventDetails }) {
             />
           </div>
 
+          {/* Loading message while fetching, otherwise the table. */}
           {loading ? (
             <div className="event-management-loading">
               טוען אירועים מ־Firebase...
@@ -591,6 +629,8 @@ export default function EventManagement({ onOpenEventDetails }) {
           ) : (
             <div className="event-management-table-wrap">
               <table className="event-management-table">
+
+                {/* Column headers. */}
                 <thead>
                   <tr>
                     <th>שם</th>
@@ -603,23 +643,26 @@ export default function EventManagement({ onOpenEventDetails }) {
                 </thead>
 
                 <tbody>
+                  {/* A row per event, or an empty-state row. */}
                   {filteredEvents.length > 0 ? (
                     filteredEvents.map((eventItem) => (
                       <tr key={eventItem.id}>
-                        <td>{eventItem.name}</td>
-                        <td>{eventItem.date}</td>
-                        <td>{eventItem.location}</td>
-                        <td>{eventItem.assignedGroup}</td>
+                        <td data-label="שם">{eventItem.name}</td>
+                        <td data-label="תאריך">{eventItem.date}</td>
+                        <td data-label="מיקום">{eventItem.location}</td>
+                        <td data-label="קבוצה">{eventItem.assignedGroup}</td>
 
-                        <td>
+                        {/* Status badge — computed from the date (cancelled stays). */}
+                        <td data-label="סטטוס">
                           <span
-                            className={`event-management-status ${statusClass(eventItem.status)}`}
+                            className={`event-management-status ${statusClass(computeEventStatus(eventItem))}`}
                           >
-                            {eventItem.status}
+                            {computeEventStatus(eventItem)}
                           </span>
                         </td>
 
-                        <td>
+                        {/* Row action buttons. */}
+                        <td data-label="פעולות" className="event-management-actions-cell">
                           <div className="event-management-row-actions">
                             <button
                               type="button"
@@ -628,20 +671,24 @@ export default function EventManagement({ onOpenEventDetails }) {
                               פרטים
                             </button>
 
-                            <button
-                              type="button"
-                              onClick={() => handleEdit(eventItem)}
-                            >
-                              עריכה
-                            </button>
+                            {!readOnly && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleEdit(eventItem)}
+                                >
+                                  עריכה
+                                </button>
 
-                            <button
-                              type="button"
-                              className="danger"
-                              onClick={() => handleDelete(eventItem.id)}
-                            >
-                              מחיקה
-                            </button>
+                                <button
+                                  type="button"
+                                  className="danger"
+                                  onClick={() => handleDelete(eventItem.id)}
+                                >
+                                  מחיקה
+                                </button>
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>

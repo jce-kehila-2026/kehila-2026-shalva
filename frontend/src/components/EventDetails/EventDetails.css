@@ -1,645 +1,345 @@
-/* EventDetails screen */
-
-/* Full page wrapper for the Event Details screen */
+/* Full-page wrapper that centers the card on a soft decorative background. */
 .event-details-container {
-  /* Makes the content flow from right to left for Hebrew */
   direction: rtl;
-
-  /* Makes the container take the full width of the screen */
   width: 100%;
-
-  /* Makes the container at least as tall as the full browser window */
   min-height: 100vh;
-
-  /* Removes top/bottom margin and centers the container horizontally */
   margin: 0 auto;
-
-  /* Adds inner space: 48px top/bottom, 20px right/left */
   padding: 48px 20px;
-
-  /* Includes padding inside the element's total width and height */
   box-sizing: border-box;
-
-  /* Enables flexbox layout for positioning the card inside */
   display: flex;
-
-  /* Centers the card horizontally */
   justify-content: center;
-
-  /* Places the card near the top instead of the middle vertically */
   align-items: flex-start;
-
-  /* Uses the project font, with fallback fonts if the variable does not exist */
   font-family: var(--heading, system-ui, sans-serif);
-
-  /* Adds a soft decorative background behind the card */
   background:
-    /* Soft purple glow at the top-right */
-    radial-gradient(circle at top right, rgba(170, 59, 255, 0.12), transparent 32%),
-
-    /* Soft red/pink glow at the bottom-left */
-    radial-gradient(circle at bottom left, rgba(255, 107, 107, 0.1), transparent 28%);
+    radial-gradient(circle at top right, rgba(79, 70, 229, 0.12), transparent 32%),
+    radial-gradient(circle at bottom left, rgba(14, 165, 233, 0.1), transparent 28%);
 }
 
-/* Main card that holds all event details */
+/* The single card that holds all event details. */
 .event-details-card {
-  /* Makes the card take the full available width inside the container */
   width: 100%;
-
-  /* Limits the card width so it does not become too wide on large screens */
   max-width: 980px;
-
-  /* Hides anything that goes outside the rounded corners of the card */
   overflow: hidden;
-
-  /* Sets the card background color, using the project variable or white as fallback */
   background: var(--bg, #fff);
-
-  /* Adds a thin border around the card, using the project variable or a light color */
   border: 1px solid var(--border, #eceaf3);
-
-  /* Rounds the corners of the card */
   border-radius: 24px;
-
-  /* Adds a soft shadow to make the card look raised from the background */
   box-shadow: var(--shadow, 0 18px 45px rgba(15, 23, 42, 0.1));
 }
 
-/* Top section of the card: event title + status badge */
+
+/* Header row: event title on one side, status badge on the other. */
 .event-details-header {
-  /* Enables flexbox so the title and status can sit in the same row */
   display: flex;
-
-  /* Pushes the title to one side and the status badge to the other side */
   justify-content: space-between;
-
-  /* Aligns the title and status to the top of the header */
   align-items: flex-start;
-
-  /* Adds space between the title area and the status badge */
   gap: 18px;
-
-  /* Adds inner spacing inside the header */
   padding: 32px;
-
-  /* Adds a soft gradient background to the header */
   background:
-    /* Purple-to-pink gradient layer */
-    linear-gradient(135deg, rgba(170, 59, 255, 0.12), rgba(255, 107, 107, 0.08)),
-
-    /* Project background color fallback */
+    linear-gradient(135deg, rgba(79, 70, 229, 0.12), rgba(14, 165, 233, 0.08)),
     var(--social-bg, #f8f7fc);
-
-  /* Adds a thin line under the header to separate it from the details */
   border-bottom: 1px solid var(--border, #eceaf3);
 }
 
-/* Wraps the small label and the main event title */
+/* Stacks the small label above the main title. */
 .event-details-title-wrap {
-  /* Enables flexbox layout inside the title area */
   display: flex;
-
-  /* Places the small label and title one under the other */
   flex-direction: column;
-
-  /* Adds space between the small label and the title */
   gap: 8px;
-
-  /* Allows the title area to shrink properly inside a flex layout */
   min-width: 0;
 }
 
-/* Small label above the main event title */
+/* Small pill label above the title. */
 .event-details-eyebrow {
-  /* Makes the label width fit only its text content */
   width: fit-content;
-
-  /* Adds inner spacing: 6px top/bottom, 12px right/left */
   padding: 6px 12px;
-
-  /* Makes the label fully rounded like a pill */
   border-radius: 999px;
-
-  /* Adds a soft purple background with low opacity */
-  background: rgba(170, 59, 255, 0.1);
-
-  /* Sets the text color, using the project accent color or purple fallback */
+  background: rgba(79, 70, 229, 0.1);
   color: var(--accent, #8f28e8);
-
-  /* Sets a small font size for the label */
   font-size: 13px;
-
-  /* Makes the label text bold */
   font-weight: 700;
 }
 
-/* Main event title */
+/* The main event title. */
 .event-details-title {
-  /* Removes the browser's default margin from the heading */
   margin: 0;
-
-  /* Makes the title responsive: minimum 26px, flexible size, maximum 38px */
   font-size: clamp(26px, 4vw, 38px);
-
-  /* Controls the space between lines if the title wraps */
   line-height: 1.2;
-
-  /* Sets the title color, using the project heading color or a dark fallback */
   color: var(--text-h, #171320);
-
-  /* Allows long words or long titles to break instead of overflowing */
   word-break: break-word;
 }
 
-/* Status badge for the event, for example: מתוכנן / פעיל / בוטל */
+
+/* Status badge (default look; per-status colours follow below). */
 .event-details-status {
-  /* Adds inner spacing: 8px top/bottom, 18px right/left */
   padding: 8px 18px;
-
-  /* Makes the badge fully rounded like a pill */
   border-radius: 999px;
-
-  /* Sets the status text size */
   font-size: 14px;
-
-  /* Makes the status text very bold */
   font-weight: 800;
-
-  /* Prevents the status text from breaking into two lines */
   white-space: nowrap;
-
-  /* Sets the default badge background, using the project variable or a purple fallback */
-  background: var(--accent-bg, rgba(170, 59, 255, 0.1));
-
-  /* Sets the default badge text color, using the project accent color or purple fallback */
+  background: var(--accent-bg, rgba(79, 70, 229, 0.1));
   color: var(--accent, #8f28e8);
-
-  /* Adds a thin border around the badge */
-  border: 1px solid var(--accent-border, rgba(170, 59, 255, 0.25));
-
-  /* Adds a soft shadow so the badge looks slightly raised */
+  border: 1px solid var(--accent-border, rgba(79, 70, 229, 0.25));
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
 }
 
-/* Special colors for an active event status */
+/* "Active" status — green. */
 .event-details-status.status-active {
-  /* Sets a soft green background for the active status */
   background: rgba(34, 197, 94, 0.12);
-
-  /* Sets the text color to a darker green */
   color: #15803d;
-
-  /* Sets the border color to a transparent green */
   border-color: rgba(34, 197, 94, 0.28);
 }
 
-/* Special colors for a planned event status */
+/* "Planned" status — blue. */
 .event-details-status.status-planned {
-  /* Sets a soft blue background for the planned status */
   background: rgba(37, 99, 235, 0.1);
-
-  /* Sets the text color to blue */
   color: #2563eb;
-
-  /* Sets the border color to a transparent blue */
   border-color: rgba(37, 99, 235, 0.25);
 }
 
-/* Special colors for a finished event status */
+/* "Finished" status — gray-blue. */
 .event-details-status.status-finished {
-  /* Sets a soft gray-blue background for the finished status */
   background: rgba(100, 116, 139, 0.12);
-
-  /* Sets the text color to dark gray-blue */
   color: #475569;
-
-  /* Sets the border color to a transparent gray-blue */
   border-color: rgba(100, 116, 139, 0.25);
 }
 
-/* Special colors for a cancelled event status */
+/* "Cancelled" status — red. */
 .event-details-status.status-cancelled {
-  /* Sets a soft red background for the cancelled status */
   background: rgba(239, 68, 68, 0.12);
-
-  /* Sets the text color to red */
   color: #dc2626;
-
-  /* Sets the border color to a transparent red */
   border-color: rgba(239, 68, 68, 0.28);
 }
 
-/* Grid layout for the event detail cards */
+
+/* Two-column grid of the event detail cards. */
 .event-details-grid {
-  /* Enables CSS Grid layout */
   display: grid;
-
-  /* Creates 2 equal columns, each allowed to shrink safely if needed */
   grid-template-columns: repeat(2, minmax(0, 1fr));
-
-  /* Adds space between the grid cards */
   gap: 18px;
-
-  /* Adds inner spacing: 28px top, 32px sides, 8px bottom */
   padding: 28px 32px 8px;
 }
 
-/* Single detail card inside the event details grid */
+/* A single detail card. */
 .event-detail-item {
-  /* Allows the card to position internal decorative elements, like ::before */
   position: relative;
-
-  /* Gives each detail card a minimum height so cards look balanced */
   min-height: 96px;
-
-  /* Sets the card background color, using the project variable or a light fallback */
   background: var(--social-bg, #faf9fd);
-
-  /* Adds a thin border around the detail card */
   border: 1px solid var(--border, #eeeaf6);
-
-  /* Rounds the corners of the detail card */
   border-radius: 18px;
-
-  /* Adds inner spacing inside the detail card */
   padding: 18px;
-
-  /* Smoothly animates hover movement, shadow, and border color changes */
   transition:
     transform 0.22s ease,
     box-shadow 0.22s ease,
     border-color 0.22s ease;
 }
 
-/* Decorative side stripe inside each detail card */
+/* Decorative gradient stripe down the start edge of each card. */
 .event-detail-item::before {
-  /* Creates an empty pseudo-element so it can be styled */
   content: '';
-
-  /* Positions the stripe inside the card */
   position: absolute;
-
-  /* Places the stripe at the logical start side of the card */
   inset-inline-start: 0;
-
-  /* Starts the stripe 18px from the top of the card */
   top: 18px;
-
-  /* Ends the stripe 18px before the bottom of the card */
   bottom: 18px;
-
-  /* Sets the stripe width */
   width: 4px;
-
-  /* Makes the stripe fully rounded */
   border-radius: 999px;
-
-  /* Adds a vertical gradient from purple to pink */
-  background: linear-gradient(180deg, var(--accent, #aa3bff), #ff6b6b);
-
-  /* Makes the stripe slightly transparent */
+  background: linear-gradient(180deg, var(--accent, #aa3bff), #0ea5e9);
   opacity: 0.75;
 }
 
-/* Hover effect for a detail card */
+/* Lift the card on hover. */
 .event-detail-item:hover {
-  /* Moves the card slightly upward when the user hovers over it */
   transform: translateY(-3px);
-
-  /* Changes the border color to the accent color */
-  border-color: var(--accent-border, rgba(170, 59, 255, 0.28));
-
-  /* Adds a stronger shadow so the card feels lifted */
+  border-color: var(--accent-border, rgba(79, 70, 229, 0.28));
   box-shadow: 0 12px 26px rgba(15, 23, 42, 0.08);
 }
 
-/* Label text inside each detail card */
+/* The small label inside a detail card. */
 .event-detail-label {
-  /* Adds space below the label before the value */
   margin-bottom: 8px;
-
-  /* Moves the label slightly inward from the start side */
   padding-inline-start: 12px;
-
-  /* Sets the label text size */
   font-size: 13px;
-
-  /* Sets the label color, using the project text color or a muted fallback */
   color: var(--text, #6b6475);
-
-  /* Makes the label bold */
   font-weight: 700;
 }
 
-/* Main value text inside each detail card */
+/* The main value inside a detail card. */
 .event-detail-value {
-  /* Moves the value slightly inward from the start side */
   padding-inline-start: 12px;
-
-  /* Sets the value text size */
   font-size: 17px;
-
-  /* Sets the value text color, using the project heading color or a dark fallback */
   color: var(--text-h, #171320);
-
-  /* Makes the value text bold */
   font-weight: 700;
-
-  /* Adds comfortable spacing between lines if the text wraps */
   line-height: 1.65;
-
-  /* Allows long text to break into a new line instead of overflowing */
   word-break: break-word;
 }
 
-/* Links inside detail values, such as phone and email */
+/* Links inside a detail value (phone / email). */
 .event-detail-value a {
-  /* Sets the link color, using the project accent color or a purple fallback */
   color: var(--accent, #8f28e8);
-
-  /* Removes the default underline from links */
   text-decoration: none;
-
-  /* Makes the link text bold */
   font-weight: 700;
-
-  /* Smoothly animates link color and underline color changes */
   transition:
     color 0.2s ease,
     text-decoration-color 0.2s ease;
 }
 
-/* Hover style for links inside detail values */
+/* Underline links on hover. */
 .event-detail-value a:hover {
-  /* Adds an underline when the user hovers over the link */
   text-decoration: underline;
-
-  /* Makes the underline thicker */
   text-decoration-thickness: 2px;
-
-  /* Moves the underline slightly away from the text */
   text-underline-offset: 3px;
 }
 
-/* Keyboard focus style for links inside detail values */
+/* Keyboard focus ring for links. */
 .event-detail-value a:focus-visible {
-  /* Adds a visible outline when navigating with keyboard */
-  outline: 3px solid rgba(170, 59, 255, 0.24);
-
-  /* Adds space between the outline and the link */
+  outline: 3px solid rgba(79, 70, 229, 0.24);
   outline-offset: 3px;
-
-  /* Rounds the outline corners */
   border-radius: 6px;
 }
 
-/* Contact details list inside the contact card */
+/* The contact details list. */
 .event-contact-list {
-  /* Removes the default bullet points from the list */
   list-style: none;
-
-  /* Removes default list padding */
   padding: 0;
-
-  /* Removes default list margin */
   margin: 0;
-
-  /* Uses grid layout to stack contact items */
   display: grid;
-
-  /* Adds space between contact rows */
   gap: 6px;
 }
 
-/* Contact person name */
+/* The contact person's name. */
 .event-contact-name {
-  /* Makes the contact name extra bold */
   font-weight: 800;
-
-  /* Sets the contact name color, using the project heading color or a dark fallback */
   color: var(--text-h, #171320);
 }
 
-/* Text shown when no contact details exist */
+/* Message shown when there are no contact details. */
 .event-contact-empty {
-  /* Sets a muted text color */
   color: var(--text, #777);
-
-  /* Makes the empty contact message italic */
   font-style: italic;
 }
 
-/* Description section of the event */
+
+/* The event description box. */
 .event-details-description {
-  /* Adds outer spacing around the description box */
   margin: 20px 32px 28px;
-
-  /* Adds inner spacing inside the description box */
   padding: 24px;
-
-  /* Adds a soft gradient background to the description box */
   background:
-    /* Light purple-to-white gradient layer */
-    linear-gradient(135deg, rgba(170, 59, 255, 0.08), rgba(255, 255, 255, 0.4)),
-
-    /* Project background color fallback */
+    linear-gradient(135deg, rgba(79, 70, 229, 0.08), rgba(255, 255, 255, 0.4)),
     var(--social-bg, #faf9fd);
-
-  /* Adds a thin border around the description box */
   border: 1px solid var(--border, #eeeaf6);
-
-  /* Rounds the corners of the description box */
   border-radius: 20px;
 }
 
-/* Description section title */
+/* Description title. */
 .event-details-description h3 {
-  /* Removes default margin and keeps only bottom spacing */
   margin: 0 0 12px;
-
-  /* Sets the description title size */
   font-size: 20px;
-
-  /* Sets the title color, using the project heading color or a dark fallback */
   color: var(--text-h, #171320);
 }
 
-/* Description text */
+/* Description text (keeps line breaks from the source text). */
 .event-details-description p {
-  /* Removes default paragraph margin */
   margin: 0;
-
-  /* Sets the paragraph text color */
   color: var(--text, #464150);
-
-  /* Adds comfortable spacing between text lines */
   line-height: 1.9;
-
-  /* Keeps line breaks from the description text, like \n */
   white-space: pre-line;
-
-  /* Sets the paragraph text size */
   font-size: 16px;
 }
 
-/* Actions area at the bottom of the card */
+
+/* Actions bar at the bottom of the card. */
 .event-details-actions {
-  /* Enables flexbox for button layout */
   display: flex;
-
-  /* Aligns the action button to the start side */
   justify-content: flex-start;
-
-  /* Adds space between action buttons if more buttons are added later */
   gap: 12px;
-
-  /* Adds inner spacing around the actions area */
   padding: 22px 32px 32px;
-
-  /* Adds a separator line above the actions area */
   border-top: 1px solid var(--border, #eceaf3);
 }
 
-/* Back button */
+/* The Back button. */
 .event-details-back-btn {
-  /* Uses the project font, with fallback fonts */
   font-family: var(--heading, system-ui, sans-serif);
-
-  /* Makes the button text extra bold */
   font-weight: 800;
-
-  /* Adds inner spacing inside the button */
   padding: 12px 26px;
-
-  /* Rounds the button corners */
   border-radius: 14px;
-
-  /* Removes visible border, while keeping the border structure */
   border: 1px solid transparent;
-
-  /* Adds a purple-to-pink gradient background */
-  background: linear-gradient(135deg, var(--accent, #aa3bff), #ff6b6b);
-
-  /* Sets the button text color to white */
+  background: linear-gradient(135deg, var(--accent, #aa3bff), #0ea5e9);
   color: #fff;
-
-  /* Shows a pointer cursor when hovering over the button */
   cursor: pointer;
-
-  /* Sets the button text size */
   font-size: 15px;
-
-  /* Adds a soft purple shadow under the button */
-  box-shadow: 0 12px 24px rgba(170, 59, 255, 0.2);
-
-  /* Smoothly animates movement, shadow, and opacity changes */
+  box-shadow: 0 12px 24px rgba(79, 70, 229, 0.2);
   transition:
     transform 0.2s ease,
     box-shadow 0.2s ease,
     opacity 0.2s ease;
 }
 
-/* Hover effect for the Back button */
+/* Lift the Back button on hover. */
 .event-details-back-btn:hover {
-  /* Moves the button slightly upward on hover */
   transform: translateY(-2px);
-
-  /* Makes the button shadow stronger on hover */
-  box-shadow: 0 16px 30px rgba(170, 59, 255, 0.28);
+  box-shadow: 0 16px 30px rgba(79, 70, 229, 0.28);
 }
 
-/* Click effect for the Back button */
+/* Press effect while clicking. */
 .event-details-back-btn:active {
-  /* Returns the button to its original position while clicking */
   transform: translateY(0);
-
-  /* Makes the button slightly transparent while clicking */
   opacity: 0.9;
 }
 
-/* Keyboard focus style for the Back button */
+/* Keyboard focus ring for the Back button. */
 .event-details-back-btn:focus-visible {
-  /* Adds a visible outline when navigating with keyboard */
-  outline: 3px solid rgba(170, 59, 255, 0.28);
-
-  /* Adds space between the outline and the button */
+  outline: 3px solid rgba(79, 70, 229, 0.28);
   outline-offset: 4px;
 }
 
-/* Mobile layout styles */
+
+/* Mobile: stack the header, single-column grid, full-width button. */
 @media (max-width: 700px) {
-  /* Adjusts the full page wrapper on small screens */
   .event-details-container {
-    /* Reduces page padding on mobile */
     padding: 20px 12px;
   }
 
-  /* Adjusts the card header on small screens */
   .event-details-header {
-    /* Stacks the title and status vertically */
     flex-direction: column;
-
-    /* Reduces header padding on mobile */
     padding: 24px 20px;
   }
 
-  /* Adjusts the status badge on mobile */
   .event-details-status {
-    /* Places the status badge at the start side */
     align-self: flex-start;
   }
 
-  /* Adjusts the details grid on mobile */
   .event-details-grid {
-    /* Changes the grid from 2 columns to 1 column */
     grid-template-columns: 1fr;
-
-    /* Reduces grid padding on mobile */
     padding: 22px 20px 6px;
   }
 
-  /* Adjusts each detail card on mobile */
   .event-detail-item {
-    /* Removes the minimum height so cards can fit their content naturally */
     min-height: auto;
   }
 
-  /* Adjusts the description box on mobile */
   .event-details-description {
-    /* Reduces outer spacing on mobile */
     margin: 18px 20px 22px;
-
-    /* Reduces inner spacing on mobile */
     padding: 20px;
   }
 
-  /* Adjusts the actions area on mobile */
   .event-details-actions {
-    /* Reduces actions padding on mobile */
     padding: 20px;
   }
 
-  /* Adjusts the Back button on mobile */
   .event-details-back-btn {
-    /* Makes the button full width on mobile */
     width: 100%;
   }
 }
 
-/* Reduces animations for users who prefer less motion */
+/* For users who prefer less motion: turn transitions and hover moves off. */
 @media (prefers-reduced-motion: reduce) {
-  /* Removes transitions from animated elements */
   .event-detail-item,
   .event-detail-value a,
   .event-details-back-btn {
-    /* Disables transition animations */
     transition: none;
   }
 
-  /* Removes hover movement from animated elements */
   .event-detail-item:hover,
   .event-details-back-btn:hover {
-    /* Disables hover movement */
     transform: none;
   }
 }

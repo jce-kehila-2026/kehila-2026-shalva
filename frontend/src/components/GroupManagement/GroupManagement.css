@@ -1,0 +1,301 @@
+/* Outer admin page wrapper. */
+.admin-container {
+  direction: rtl;
+  font-family: var(--font);
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: clamp(16px, 3vw, 30px);
+}
+
+/* Page title with an underline. */
+.admin-title {
+  color: var(--text);
+  font-size: clamp(22px, 3vw, 28px);
+  margin-bottom: 28px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 15px;
+}
+
+/* Slim "back to menu" bar shown above each admin management card. */
+.admin-back-bar {
+  display: flex;
+  margin-bottom: 16px;
+}
+
+/* Top action bar (buttons + search). */
+.action-bar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 28px;
+  background: var(--surface);
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  flex-wrap: wrap;
+}
+
+/* Shared text input style. */
+.styled-input {
+  padding: 11px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  width: 250px;
+  background: var(--surface);
+  color: var(--text);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Input focus ring. */
+.styled-input:focus {
+  outline: none;
+  border-color: var(--brand-500);
+  box-shadow: 0 0 0 4px var(--brand-50);
+}
+
+/* Shared base button. */
+.btn {
+  padding: 9px 18px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+/* Button hover / press. */
+.btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.btn:active { transform: translateY(0); }
+
+/* Primary button. */
+.btn-primary { background-color: var(--brand-600); color: #fff; }
+.btn-primary:hover { background-color: var(--brand-700); }
+
+/* Success button. */
+.btn-success { background-color: var(--success); color: #fff; }
+.btn-success:hover { background-color: #15803d; }
+
+/* Outline button. */
+.btn-outline { background-color: var(--surface); border: 1px solid var(--border-strong); color: var(--text); }
+.btn-outline:hover { background-color: var(--surface-2); }
+
+/* Text-only danger button. */
+.btn-danger-text { background: none; border: none; color: var(--danger); font-weight: bold; cursor: pointer; padding: 5px; }
+.btn-danger-text:hover { color: #b91c1c; text-decoration: underline; }
+
+/* Table container (scrolls horizontally on small screens). */
+.table-container {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* The data table. */
+.styled-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: right;
+}
+
+/* Table header cells. */
+.styled-table th {
+  background-color: var(--surface-2);
+  color: var(--text-muted);
+  padding: 14px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Table body cells. */
+.styled-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  vertical-align: middle;
+}
+
+/* Row hover. */
+.styled-table tr:hover {
+  background-color: var(--brand-50);
+}
+
+/* Cell holding row action buttons. */
+.actions-cell {
+  display: flex;
+  gap: 10px;
+}
+
+/* Bars whose contents sit at the two ends. */
+.dashboard-bar,
+.spaced-action-bar {
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Titles with no border/margin/padding. */
+.dashboard-title,
+.inline-title,
+.no-border-title {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+/* Centered "empty" table cell. */
+.empty-table-cell {
+  text-align: center;
+  padding: 30px;
+  color: var(--text-muted);
+}
+
+/* Muted helper text. */
+.muted-text {
+  color: var(--text-soft);
+}
+
+/* Danger-coloured outline button variant. */
+.danger-outline {
+  border-color: var(--danger) !important;
+  color: var(--danger) !important;
+}
+
+.danger-outline:hover {
+  background-color: var(--danger-bg) !important;
+}
+
+/* Make a fixed-width input fill its container. */
+.full-width-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Centered loading/empty state (used by GroupDetails). */
+.centered-state {
+  text-align: center;
+  margin-top: 50px;
+}
+
+/* Two-column details grid (used by GroupDetails). */
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+/* A details card. */
+.details-card {
+  padding: 20px;
+}
+
+/* Details card heading. */
+.details-card h3 {
+  margin-top: 0;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+}
+
+/* Dashed placeholder card. */
+.dashed-card {
+  background-color: var(--surface-2);
+  border: 1px dashed var(--border-strong);
+}
+
+/* A details card that spans the full grid width. */
+.full-grid-row {
+  grid-column: 1 / -1;
+}
+
+/* Stacked list inside a details card. */
+.details-list {
+  display: grid;
+  gap: 8px;
+}
+
+/* Spacing above a nested details table. */
+.details-table {
+  margin-top: 10px;
+}
+
+
+/* Modal backdrop (shared by group & volunteer management). */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(2px);
+  animation: modal-fade 0.18s ease;
+}
+
+/* The modal box. */
+.modal-content {
+  width: 100%;
+  max-width: 440px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: clamp(16px, 3vw, 22px);
+  direction: rtl;
+  text-align: right;
+  animation: modal-pop 0.18s ease;
+}
+
+/* Modal title row. */
+.modal-header {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Backdrop fade-in. */
+@keyframes modal-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Modal pop-in. */
+@keyframes modal-pop {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Phone: single-column grids, stacked action bar, scrollable table. */
+@media (max-width: 800px) {
+  .details-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .action-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* Fixed-width inputs should fill the column on phones. */
+  .styled-input {
+    width: 100%;
+  }
+
+  .actions-cell {
+    flex-wrap: wrap;
+  }
+
+  /* Keep table columns readable; the container scrolls horizontally. */
+  .styled-table {
+    min-width: 540px;
+  }
+}
