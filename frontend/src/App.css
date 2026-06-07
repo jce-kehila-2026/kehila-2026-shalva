@@ -24,14 +24,29 @@
   align-items: center;
   gap: 14px;
   flex-wrap: wrap;
-  padding: 12px clamp(14px, 3vw, 22px);
+  padding: 16px clamp(14px, 3vw, 24px);
   margin-bottom: 24px;
-  background:
-    linear-gradient(135deg, rgba(99, 102, 241, 0.10), rgba(14, 165, 233, 0.06)),
-    var(--surface);
+  background: #ffffff;
   border: 1px solid var(--border);
+  border-bottom: 3.5px solid var(--brand-600);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-sm);
+}
+
+/* User block housing the logo and user text. */
+.auth-user-block {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+/* Auth header logo styling. */
+.auth-logo {
+  height: clamp(34px, 4.5vw, 48px);
+  width: auto;
+  object-fit: contain;
 }
 
 /* Greeting + role column. */

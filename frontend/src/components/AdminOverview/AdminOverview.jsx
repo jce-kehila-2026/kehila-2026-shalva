@@ -1,13 +1,12 @@
-// AdminOverview — the admin home / dashboard. Read-only: a monthly events
-// calendar and today's birthdays up top, with volunteers / groups / guides
-// in a side drawer. Event status is derived from the date; each Firestore
-// read is wrapped on its own so a blocked collection just shows as empty.
+// AdminOverview — the admin home / dashboard. A monthly events
+// calendar, today's birthdays, and quick management widgets.
+// Event status is derived from the date.
 
 // React hooks for state and side effects.
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 
-// Firestore helpers for reading collections.
-import { collection, getDocs } from 'firebase/firestore';
+// Firestore helpers for reading and writing collections.
+import { addDoc, collection, deleteDoc, doc, getDocs, updateDoc, setDoc, query, where } from 'firebase/firestore';
 
 // Our Firestore database instance.
 import { db } from '../../firebase';
@@ -17,6 +16,11 @@ import './AdminOverview.css';
 
 // Shared event date + status helpers.
 import { computeEventStatus, parseEventDate } from '../../utils/eventStatus';
+
+// Custom shared elements.
+import BirthDatePicker from '../shared/BirthDatePicker/BirthDatePicker';
+import WhatsAppButton from '../shared/WhatsAppButton/WhatsAppButton';
+import { greetingMessage } from '../../utils/whatsapp';
 
 
 // Full month names in Hebrew, indexed 0 (January) to 11 (December).
@@ -176,102 +180,141 @@ function AdminOverview() {
   const [calMonth, setCalMonth] = useState(now.getMonth());
   const [selectedDay, setSelectedDay] = useState(now.getDate());
 
+  // --- Modals & Quick Action States ---
+  const [isAddEventOpen, setIsAddEventOpen] = useState(false);
+  const [eventForm, setEventForm] = useState({
+    name: '',
+    date: '',
+    location: '',
+    description: '',
+    assignedGroup: 'ללא שיוך',
+    status: 'מתוכנן',
+    contactName: '',
+    contactPhone: '',
+    contactEmail: '',
+  });
+
+  const [isAddVolunteerOpen, setIsAddVolunteerOpen] = useState(false);
+  const [isEditVolunteerOpen, setIsEditVolunteerOpen] = useState(false);
+  const [editingVolunteerId, setEditingVolunteerId] = useState(null);
+  const [volunteerForm, setVolunteerForm] = useState({
+    name: '',
+    phone: '',
+    birthDate: '',
+    groupId: '',
+  });
+
+  const [isAddGroupOpen, setIsAddGroupOpen] = useState(false);
+  const [groupForm, setGroupForm] = useState({
+    groupName: '',
+    time: '',
+  });
+
+  const [isAssignGuideOpen, setIsAssignGuideOpen] = useState(false);
+  const [assignGuideForm, setAssignGuideForm] = useState({
+    groupId: '',
+    guideId: '',
+  });
+
+  // Search queries for dashboard lists
+  const [volunteerSearchQuery, setVolunteerSearchQuery] = useState('');
+  const [groupSearchQuery, setGroupSearchQuery] = useState('');
+
+  // Read one collection, returning null on failure (so it can be flagged).
+  const fetchDocs = async (collectionName) => {
+    try {
+      const snapshot = await getDocs(collection(db, collectionName));
+      return snapshot.docs.map((documentSnapshot) => ({ id: documentSnapshot.id, ...documentSnapshot.data() }));
+    } catch (error) {
+      console.error(`שגיאה בטעינת ${collectionName}:`, error);
+      return null;
+    }
+  };
+
+  // Load everything in parallel and shape it for the UI.
+  const loadData = useCallback(async (isMounted = true) => {
+    // Fetch all four collections at once.
+    const [volunteersRaw, groupsRaw, usersRaw, eventsRaw] = await Promise.all([
+      fetchDocs('volunteers'),
+      fetchDocs('groups'),
+      fetchDocs('users'),
+      fetchDocs('events'),
+    ]);
+
+    // Bail out if we unmounted while waiting.
+    if (!isMounted) return;
+
+    // Flag an error if any collection came back null.
+    const anyError = [volunteersRaw, groupsRaw, usersRaw, eventsRaw].some((value) => value === null);
+
+    // Shape the volunteers (keep the raw doc for birthday parsing).
+    const volunteers = (volunteersRaw || []).map((person) => ({
+      id: person.id,
+      name: getName(person),
+      phone: person.phone || '',
+      groupId: person.groupId || '',
+      groupName: person.groupName || '',
+      raw: person,
+    }));
+
+    // Shape the groups.
+    const groups = (groupsRaw || []).map((group) => ({
+      id: group.id,
+      groupName: group.groupName || group.name || 'קבוצה ללא שם',
+      guideId: group.guideId || '',
+      guideName: group.guideName || '',
+      time: group.time || '',
+    }));
+
+    // Guides are users whose role is "guide" (removed/disabled ones excluded).
+    const guides = (usersRaw || [])
+      .filter((person) => person.role === 'guide' && !person.disabled)
+      .map((person) => ({ id: person.id, name: getName(person), raw: person }));
+
+    // Shape the events (status derived from the date).
+    const events = (eventsRaw || []).map((event) => ({
+      id: event.id,
+      name: event.name || event.title || 'אירוע ללא שם',
+      date: event.date || '',
+      status: computeEventStatus(event),
+      location: event.location || '',
+      description: event.description || '',
+      assignedGroup: event.assignedGroup || event.group || '',
+      contact: event.contact || null,
+    }));
+
+    // Find everyone whose birthday is today.
+    const today = new Date();
+    const todayMonth = today.getMonth();
+    const todayDate = today.getDate();
+
+    const birthdaysToday = [...volunteers, ...guides]
+      .map((person) => {
+        // Parse the person's birth date.
+        const birthDate = parseBirthDate(person.raw);
+        if (!birthDate) return null;
+
+        // Keep only people whose birthday falls on today's month + day.
+        if (birthDate.getMonth() !== todayMonth || birthDate.getDate() !== todayDate) return null;
+
+        return { id: person.id, name: person.name, age: computeAge(birthDate, today) };
+      })
+      .filter(Boolean);
+
+    // Publish everything to state.
+    setData({ volunteers, groups, guides, events, birthdaysToday });
+    setHadError(anyError);
+    setLoading(false);
+  }, []);
+
   // Load every collection once when the screen opens.
   useEffect(() => {
-    // Guards against state updates after unmount.
     let isMounted = true;
-
-    // Read one collection, returning null on failure (so it can be flagged).
-    const fetchDocs = async (collectionName) => {
-      try {
-        const snapshot = await getDocs(collection(db, collectionName));
-        return snapshot.docs.map((documentSnapshot) => ({ id: documentSnapshot.id, ...documentSnapshot.data() }));
-      } catch (error) {
-        console.error(`שגיאה בטעינת ${collectionName}:`, error);
-        return null;
-      }
-    };
-
-    // Load everything in parallel and shape it for the UI.
-    const load = async () => {
-      // Fetch all four collections at once.
-      const [volunteersRaw, groupsRaw, usersRaw, eventsRaw] = await Promise.all([
-        fetchDocs('volunteers'),
-        fetchDocs('groups'),
-        fetchDocs('users'),
-        fetchDocs('events'),
-      ]);
-
-      // Bail out if we unmounted while waiting.
-      if (!isMounted) return;
-
-      // Flag an error if any collection came back null.
-      const anyError = [volunteersRaw, groupsRaw, usersRaw, eventsRaw].some((value) => value === null);
-
-      // Shape the volunteers (keep the raw doc for birthday parsing).
-      const volunteers = (volunteersRaw || []).map((person) => ({
-        id: person.id,
-        name: getName(person),
-        groupName: person.groupName || '',
-        raw: person,
-      }));
-
-      // Shape the groups.
-      const groups = (groupsRaw || []).map((group) => ({
-        id: group.id,
-        groupName: group.groupName || group.name || 'קבוצה ללא שם',
-        guideName: group.guideName || '',
-        time: group.time || '',
-      }));
-
-      // Guides are users whose role is "guide" (removed/disabled ones excluded).
-      const guides = (usersRaw || [])
-        .filter((person) => person.role === 'guide' && !person.disabled)
-        .map((person) => ({ id: person.id, name: getName(person), raw: person }));
-
-      // Shape the events (status derived from the date).
-      const events = (eventsRaw || []).map((event) => ({
-        id: event.id,
-        name: event.name || event.title || 'אירוע ללא שם',
-        date: event.date || '',
-        status: computeEventStatus(event),
-        location: event.location || '',
-        description: event.description || '',
-        assignedGroup: event.assignedGroup || event.group || '',
-        contact: event.contact || null,
-      }));
-
-      // Find everyone whose birthday is today.
-      const today = new Date();
-      const todayMonth = today.getMonth();
-      const todayDate = today.getDate();
-
-      const birthdaysToday = [...volunteers, ...guides]
-        .map((person) => {
-          // Parse the person's birth date.
-          const birthDate = parseBirthDate(person.raw);
-          if (!birthDate) return null;
-
-          // Keep only people whose birthday falls on today's month + day.
-          if (birthDate.getMonth() !== todayMonth || birthDate.getDate() !== todayDate) return null;
-
-          return { id: person.id, name: person.name, age: computeAge(birthDate, today) };
-        })
-        .filter(Boolean);
-
-      // Publish everything to state.
-      setData({ volunteers, groups, guides, events, birthdaysToday });
-      setHadError(anyError);
-      setLoading(false);
-    };
-
-    load();
-
-    // Cleanup: mark as unmounted.
+    loadData(isMounted);
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [loadData]);
 
   // Toggle an event card open/closed.
   const toggleEvent = (id) => setOpenEventId((current) => (current === id ? null : id));
@@ -292,6 +335,204 @@ function AdminOverview() {
     setCalMonth(next.getMonth());
     setSelectedDay(null);
     setOpenEventId(null);
+  };
+
+  // --- Quick Actions Firestore Handlers ---
+  const handleSaveEvent = async (e) => {
+    e.preventDefault();
+    if (!eventForm.name.trim() || !eventForm.date || !eventForm.location.trim()) {
+      alert('נא למלא שם אירוע, תאריך ומיקום.');
+      return;
+    }
+    try {
+      await addDoc(collection(db, 'events'), {
+        name: eventForm.name.trim(),
+        date: eventForm.date,
+        location: eventForm.location.trim(),
+        description: eventForm.description.trim(),
+        assignedGroup: eventForm.assignedGroup,
+        status: eventForm.status,
+        contact: {
+          name: eventForm.contactName.trim(),
+          phone: eventForm.contactPhone.trim(),
+          email: eventForm.contactEmail.trim(),
+        },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      setIsAddEventOpen(false);
+      setEventForm({
+        name: '',
+        date: '',
+        location: '',
+        description: '',
+        assignedGroup: 'ללא שיוך',
+        status: 'מתוכנן',
+        contactName: '',
+        contactPhone: '',
+        contactEmail: '',
+      });
+      await loadData();
+    } catch (err) {
+      console.error('Error saving event:', err);
+      alert('אירעה שגיאה בשמירת האירוע.');
+    }
+  };
+
+  const handleSaveVolunteer = async (e) => {
+    e.preventDefault();
+    if (!volunteerForm.name.trim() || !volunteerForm.birthDate.trim()) {
+      alert('יש להזין שם ותאריך לידה.');
+      return;
+    }
+    const selectedGroup = data?.groups.find((g) => g.id === volunteerForm.groupId);
+    const payload = {
+      name: volunteerForm.name.trim(),
+      phone: volunteerForm.phone.trim(),
+      birthDate: volunteerForm.birthDate.trim(),
+      groupId: volunteerForm.groupId,
+      groupName: selectedGroup ? selectedGroup.groupName : '',
+    };
+    try {
+      if (isEditVolunteerOpen && editingVolunteerId) {
+        await updateDoc(doc(db, 'volunteers', editingVolunteerId), payload);
+      } else {
+        await addDoc(collection(db, 'volunteers'), {
+          ...payload,
+          createdAt: new Date(),
+        });
+      }
+      setIsAddVolunteerOpen(false);
+      setIsEditVolunteerOpen(false);
+      setEditingVolunteerId(null);
+      setVolunteerForm({ name: '', phone: '', birthDate: '', groupId: '' });
+      await loadData();
+    } catch (err) {
+      console.error('Error saving volunteer:', err);
+      alert('אירעה שגיאה בשמירת המתנדב.');
+    }
+  };
+
+  const handleEditVolunteerClick = (volunteer) => {
+    setEditingVolunteerId(volunteer.id);
+    setVolunteerForm({
+      name: volunteer.name,
+      phone: volunteer.phone || '',
+      birthDate: volunteer.raw?.birthDate || '',
+      groupId: volunteer.groupId || '',
+    });
+    setIsEditVolunteerOpen(true);
+  };
+
+  const handleDeleteVolunteer = async (id) => {
+    if (!window.confirm('האם אתה בטוח שברצונך למחוק מתנדב זה?')) return;
+    try {
+      await deleteDoc(doc(db, 'volunteers', id));
+      await loadData();
+    } catch (err) {
+      console.error('Error deleting volunteer:', err);
+      alert('שגיאה במחיקת מתנדב.');
+    }
+  };
+
+  const handleSaveGroup = async (e) => {
+    e.preventDefault();
+    if (!groupForm.groupName.trim()) {
+      alert('יש להזין שם קבוצה.');
+      return;
+    }
+    try {
+      await addDoc(collection(db, 'groups'), {
+        groupName: groupForm.groupName.trim(),
+        time: groupForm.time.trim(),
+        guideId: '',
+        guideName: '',
+        createdAt: new Date(),
+      });
+      setIsAddGroupOpen(false);
+      setGroupForm({ groupName: '', time: '' });
+      await loadData();
+    } catch (err) {
+      console.error('Error saving group:', err);
+      alert('אירעה שגיאה ביצירת הקבוצה.');
+    }
+  };
+
+  const handleDeleteGroup = async (id) => {
+    if (!window.confirm('האם למחוק קבוצה זו?')) return;
+    try {
+      await deleteDoc(doc(db, 'groups', id));
+      await loadData();
+    } catch (err) {
+      console.error('Error deleting group:', err);
+      alert('שגיאה במחיקת קבוצה.');
+    }
+  };
+
+  const handleOpenAssignGuide = (group) => {
+    setAssignGuideForm({
+      groupId: group.id,
+      guideId: group.guideId || '',
+    });
+    setIsAssignGuideOpen(true);
+  };
+
+  const handleSaveGuideAssignment = async () => {
+    if (!assignGuideForm.guideId || !assignGuideForm.groupId) return;
+    const selectedGroup = data.groups.find((g) => g.id === assignGuideForm.groupId);
+    const selectedGuide = data.guides.find((g) => g.id === assignGuideForm.guideId);
+    if (!selectedGroup || !selectedGuide) return;
+
+    try {
+      // Clear guide from other groups
+      const prevGroupsQuery = await getDocs(query(collection(db, 'groups'), where('guideId', '==', assignGuideForm.guideId)));
+      for (const pGroup of prevGroupsQuery.docs) {
+        if (pGroup.id !== assignGuideForm.groupId) {
+          await updateDoc(doc(db, 'groups', pGroup.id), { guideId: '', guideName: '' });
+        }
+      }
+
+      await updateDoc(doc(db, 'groups', assignGuideForm.groupId), {
+        guideId: assignGuideForm.guideId,
+        guideName: selectedGuide.name,
+      });
+
+      await setDoc(doc(db, 'guides', assignGuideForm.guideId), {
+        groupId: assignGuideForm.groupId,
+        groupName: selectedGroup.groupName,
+      }, { merge: true });
+
+      setIsAssignGuideOpen(false);
+      await loadData();
+    } catch (err) {
+      console.error('Error assigning guide:', err);
+      alert('שגיאה בשיוך המדריך.');
+    }
+  };
+
+  // --- Search & Filter lists for widgets ---
+  const filteredVolunteers = useMemo(() => {
+    if (!data?.volunteers) return [];
+    const queryStr = volunteerSearchQuery.trim().toLowerCase();
+    const list = data.volunteers.filter((v) =>
+      v.name.toLowerCase().includes(queryStr) ||
+      v.groupName.toLowerCase().includes(queryStr)
+    );
+    return list.slice(0, 5);
+  }, [data?.volunteers, volunteerSearchQuery]);
+
+  const filteredGroupsForMgmt = useMemo(() => {
+    if (!data?.groups) return [];
+    const queryStr = groupSearchQuery.trim().toLowerCase();
+    const list = data.groups.filter((g) =>
+      g.groupName.toLowerCase().includes(queryStr)
+    );
+    return list.slice(0, 5);
+  }, [data?.groups, groupSearchQuery]);
+
+  const getGroupVolunteersCount = (groupId) => {
+    if (!data?.volunteers) return 0;
+    return data.volunteers.filter((v) => v.groupId === groupId).length;
   };
 
   // Render an event's contact details (or a fallback note).
@@ -459,16 +700,21 @@ function AdminOverview() {
   return (
     <section className="admin-overview" dir="rtl" aria-label="דף הבית">
 
-      {/* Page heading + "more info" button that opens the drawer. */}
+      {/* Page heading + "more info" & "add event" actions. */}
       <header className="ao-head">
         <div className="ao-head-text">
           <div className="ao-eyebrow">דף הבית</div>
           <h2 className="ao-title">סקירת מערכת</h2>
           <p className="ao-subtitle">לוח האירועים של החודש וימי ההולדת של היום — במבט אחד.</p>
         </div>
-        <button type="button" className="ao-more-btn" onClick={() => setDrawerOpen(true)}>
-          <span aria-hidden="true">☰</span> מידע נוסף
-        </button>
+        <div className="ao-head-actions">
+          <button type="button" className="ao-add-event-btn" onClick={() => setIsAddEventOpen(true)}>
+            + הוספת אירוע
+          </button>
+          <button type="button" className="ao-more-btn" onClick={() => setDrawerOpen(true)}>
+            <span aria-hidden="true">☰</span> מידע נוסף
+          </button>
+        </div>
       </header>
 
       {/* Warning shown when some data failed to load. */}
@@ -628,6 +874,322 @@ function AdminOverview() {
           </aside>
         </div>
       )}
+
+      {/* ---------- Quick Management Section ---------- */}
+      <div className="ao-quick-mgmt">
+
+        {/* Volunteer Quick Mgmt Widget */}
+        <div className="ao-quick-card">
+          <header className="ao-quick-card-header">
+            <h3>🧑‍🤝‍🧑 ניהול מהיר של מתנדבים</h3>
+            <button type="button" className="ao-quick-add-btn" onClick={() => setIsAddVolunteerOpen(true)}>
+              + הוספת מתנדב
+            </button>
+          </header>
+          <div className="ao-quick-filter-row">
+            <input
+              type="search"
+              className="ao-quick-search"
+              value={volunteerSearchQuery}
+              onChange={(e) => setVolunteerSearchQuery(e.target.value)}
+              placeholder="🔍 חפש מתנדב..."
+            />
+          </div>
+          <div className="ao-quick-list-wrapper">
+            {filteredVolunteers.length > 0 ? (
+              <ul className="ao-quick-list">
+                {filteredVolunteers.map((v) => (
+                  <li className="ao-quick-row" key={v.id}>
+                    <div className="ao-quick-row-info">
+                      <strong>{v.name}</strong>
+                      <span className="ao-quick-row-tag">{v.groupName || 'ללא קבוצה'}</span>
+                    </div>
+                    <div className="ao-quick-row-actions">
+                      <WhatsAppButton phone={v.phone} message={greetingMessage(v.name)} label="וואטסאפ" compact />
+                      <button type="button" className="btn-edit-small" onClick={() => handleEditVolunteerClick(v)}>📝</button>
+                      <button type="button" className="btn-delete-small" onClick={() => handleDeleteVolunteer(v.id)}>🗑️</button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="ao-quick-empty">לא נמצאו מתנדבים.</div>
+            )}
+          </div>
+        </div>
+
+        {/* Group Quick Mgmt Widget */}
+        <div className="ao-quick-card">
+          <header className="ao-quick-card-header">
+            <h3>👥 ניהול מהיר של קבוצות</h3>
+            <button type="button" className="ao-quick-add-btn" onClick={() => setIsAddGroupOpen(true)}>
+              + יצירת קבוצה
+            </button>
+          </header>
+          <div className="ao-quick-filter-row">
+            <input
+              type="search"
+              className="ao-quick-search"
+              value={groupSearchQuery}
+              onChange={(e) => setGroupSearchQuery(e.target.value)}
+              placeholder="🔍 חפש קבוצה..."
+            />
+          </div>
+          <div className="ao-quick-list-wrapper">
+            {filteredGroupsForMgmt.length > 0 ? (
+              <ul className="ao-quick-list">
+                {filteredGroupsForMgmt.map((g) => (
+                  <li className="ao-quick-row" key={g.id}>
+                    <div className="ao-quick-row-info">
+                      <strong>{g.groupName}</strong>
+                      <span className="ao-quick-row-sub">
+                        {g.guideName ? `מדריך: ${g.guideName}` : 'טרם שויך מדריך'} · {getGroupVolunteersCount(g.id)} מתנדבים
+                      </span>
+                    </div>
+                    <div className="ao-quick-row-actions">
+                      <button type="button" className="btn-assign-small" onClick={() => handleOpenAssignGuide(g)} title="שיוך מדריך">👤</button>
+                      <button type="button" className="btn-delete-small" onClick={() => handleDeleteGroup(g.id)} title="מחיקה">🗑️</button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="ao-quick-empty">לא נמצאו קבוצות.</div>
+            )}
+          </div>
+        </div>
+
+      </div>
+
+      {/* ---------- Modals Section ---------- */}
+
+      {/* Modal: Add Event */}
+      {isAddEventOpen && (
+        <div className="ao-modal-overlay" role="dialog" aria-modal="true">
+          <div className="ao-modal-content">
+            <div className="ao-modal-header">הוספת אירוע חדש</div>
+            <form onSubmit={handleSaveEvent} className="ao-modal-form">
+              <div className="ao-form-group">
+                <label>שם האירוע:</label>
+                <input
+                  type="text"
+                  value={eventForm.name}
+                  onChange={(e) => setEventForm({ ...eventForm, name: e.target.value })}
+                  placeholder="לדוגמה: יום כיף בבריכה"
+                  required
+                />
+              </div>
+              <div className="ao-form-group">
+                <label>תאריך:</label>
+                <input
+                  type="date"
+                  value={eventForm.date}
+                  onChange={(e) => setEventForm({ ...eventForm, date: e.target.value })}
+                  required
+                  style={{ width: '100%', padding: '11px 14px', borderRadius: '12px', border: '1px solid var(--border-strong)' }}
+                />
+              </div>
+              <div className="ao-form-group">
+                <label>מיקום:</label>
+                <input
+                  type="text"
+                  value={eventForm.location}
+                  onChange={(e) => setEventForm({ ...eventForm, location: e.target.value })}
+                  placeholder="מיקום האירוע"
+                  required
+                />
+              </div>
+              <div className="ao-form-group">
+                <label>קבוצה משויכת:</label>
+                <select
+                  value={eventForm.assignedGroup}
+                  onChange={(e) => setEventForm({ ...eventForm, assignedGroup: e.target.value })}
+                >
+                  <option value="ללא שיוך">ללא שיוך</option>
+                  {data?.groups.map((g) => (
+                    <option key={g.id} value={g.groupName}>{g.groupName}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="ao-form-group">
+                <label>סטטוס:</label>
+                <select
+                  value={eventForm.status}
+                  onChange={(e) => setEventForm({ ...eventForm, status: e.target.value })}
+                >
+                  <option value="מתוכנן">מתוכנן</option>
+                  <option value="פעיל">פעיל</option>
+                  <option value="הסתיים">הסתיים</option>
+                  <option value="בוטל">בוטל</option>
+                </select>
+              </div>
+              <div className="ao-form-group">
+                <label>שם איש קשר:</label>
+                <input
+                  type="text"
+                  value={eventForm.contactName}
+                  onChange={(e) => setEventForm({ ...eventForm, contactName: e.target.value })}
+                  placeholder="שם איש קשר"
+                />
+              </div>
+              <div className="ao-form-group">
+                <label>טלפון איש קשר:</label>
+                <input
+                  type="tel"
+                  value={eventForm.contactPhone}
+                  onChange={(e) => setEventForm({ ...eventForm, contactPhone: e.target.value })}
+                  placeholder="טלפון"
+                />
+              </div>
+              <div className="ao-form-group">
+                <label>אימייל איש קשר:</label>
+                <input
+                  type="email"
+                  value={eventForm.contactEmail}
+                  onChange={(e) => setEventForm({ ...eventForm, contactEmail: e.target.value })}
+                  placeholder="אימייל"
+                />
+              </div>
+              <div className="ao-form-group" style={{ gridColumn: '1 / -1' }}>
+                <label>תיאור האירוע:</label>
+                <textarea
+                  value={eventForm.description}
+                  onChange={(e) => setEventForm({ ...eventForm, description: e.target.value })}
+                  placeholder="תיאור קצר..."
+                  rows="3"
+                  style={{ width: '100%', padding: '11px 14px', borderRadius: '12px', border: '1px solid var(--border-strong)', font: 'inherit' }}
+                />
+              </div>
+              <div className="ao-modal-actions" style={{ gridColumn: '1 / -1' }}>
+                <button type="button" className="ao-btn-outline" onClick={() => setIsAddEventOpen(false)}>ביטול</button>
+                <button type="submit" className="ao-btn-success">הוסף אירוע</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Add/Edit Volunteer */}
+      {(isAddVolunteerOpen || isEditVolunteerOpen) && (
+        <div className="ao-modal-overlay" role="dialog" aria-modal="true">
+          <div className="ao-modal-content">
+            <div className="ao-modal-header">{isEditVolunteerOpen ? 'עריכת מתנדב' : 'הוספת מתנדב חדש'}</div>
+            <form onSubmit={handleSaveVolunteer} className="ao-modal-form">
+              <div className="ao-form-group">
+                <label>שם המתנדב:</label>
+                <input
+                  type="text"
+                  value={volunteerForm.name}
+                  onChange={(e) => setVolunteerForm({ ...volunteerForm, name: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="ao-form-group">
+                <label>טלפון:</label>
+                <input
+                  type="tel"
+                  value={volunteerForm.phone}
+                  onChange={(e) => setVolunteerForm({ ...volunteerForm, phone: e.target.value })}
+                  placeholder="050-0000000"
+                  dir="ltr"
+                />
+              </div>
+              <div className="ao-form-group" style={{ gridColumn: '1 / -1' }}>
+                <label>תאריך לידה:</label>
+                <BirthDatePicker
+                  key={isEditVolunteerOpen ? editingVolunteerId : 'new-vol'}
+                  value={volunteerForm.birthDate}
+                  onChange={(birthDate) => setVolunteerForm({ ...volunteerForm, birthDate })}
+                  required
+                  showPreview
+                />
+              </div>
+              <div className="ao-form-group" style={{ gridColumn: '1 / -1' }}>
+                <label>שיוך לקבוצה:</label>
+                <select
+                  value={volunteerForm.groupId}
+                  onChange={(e) => setVolunteerForm({ ...volunteerForm, groupId: e.target.value })}
+                >
+                  <option value="">-- ללא קבוצה --</option>
+                  {data?.groups.map((group) => (
+                    <option key={group.id} value={group.id}>{group.groupName}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="ao-modal-actions" style={{ gridColumn: '1 / -1' }}>
+                <button type="button" className="ao-btn-outline" onClick={() => {
+                  setIsAddVolunteerOpen(false);
+                  setIsEditVolunteerOpen(false);
+                  setEditingVolunteerId(null);
+                  setVolunteerForm({ name: '', phone: '', birthDate: '', groupId: '' });
+                }}>ביטול</button>
+                <button type="submit" className="ao-btn-success">{isEditVolunteerOpen ? 'שמור שינויים' : 'הוסף מתנדב'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Add Group */}
+      {isAddGroupOpen && (
+        <div className="ao-modal-overlay" role="dialog" aria-modal="true">
+          <div className="ao-modal-content">
+            <div className="ao-modal-header">יצירת קבוצה חדשה</div>
+            <form onSubmit={handleSaveGroup} className="ao-modal-form">
+              <div className="ao-form-group">
+                <label>שם הקבוצה:</label>
+                <input
+                  type="text"
+                  value={groupForm.groupName}
+                  onChange={(e) => setGroupForm({ ...groupForm, groupName: e.target.value })}
+                  placeholder="לדוגמה: קבוצת תמר"
+                  required
+                />
+              </div>
+              <div className="ao-form-group">
+                <label>שעת מפגש:</label>
+                <input
+                  type="text"
+                  value={groupForm.time}
+                  onChange={(e) => setGroupForm({ ...groupForm, time: e.target.value })}
+                  placeholder="לדוגמה: יום ראשון ב-17:00"
+                />
+              </div>
+              <div className="ao-modal-actions" style={{ gridColumn: '1 / -1' }}>
+                <button type="button" className="ao-btn-outline" onClick={() => setIsAddGroupOpen(false)}>ביטול</button>
+                <button type="submit" className="ao-btn-success">צור קבוצה</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Assign Guide */}
+      {isAssignGuideOpen && (
+        <div className="ao-modal-overlay" role="dialog" aria-modal="true">
+          <div className="ao-modal-content">
+            <div className="ao-modal-header">שיוך מדריך לקבוצה</div>
+            <div className="ao-form-group" style={{ margin: '15px 0' }}>
+              <label>בחר מדריך מהרשימה:</label>
+              <select
+                value={assignGuideForm.guideId}
+                onChange={(e) => setAssignGuideForm({ ...assignGuideForm, guideId: e.target.value })}
+                style={{ width: '100%', padding: '11px 14px', borderRadius: '12px', border: '1px solid var(--border-strong)' }}
+              >
+                <option value="">-- בחר מדריך --</option>
+                {data?.guides.map((guide) => (
+                  <option key={guide.id} value={guide.id}>{guide.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="ao-modal-actions">
+              <button type="button" className="ao-btn-outline" onClick={() => setIsAssignGuideOpen(false)}>ביטול</button>
+              <button type="button" className="ao-btn-success" onClick={handleSaveGuideAssignment} disabled={!assignGuideForm.guideId}>שמור שיוך</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </section>
   );
 }

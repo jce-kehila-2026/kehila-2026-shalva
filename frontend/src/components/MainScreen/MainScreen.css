@@ -1,112 +1,204 @@
-/* Outer page wrapper (centered, right-aligned). */
+/* Outer page wrapper (centered, right-aligned, offset for fixed header). */
 .main-container {
-  width: min(1120px, 100%);
+  width: min(1180px, 100%);
   margin: 0 auto;
-  padding: 32px 20px 56px;
+  padding: 110px 20px 56px;
   box-sizing: border-box;
   text-align: right;
 }
 
-/* Hero header card: title + login button. */
+/* Fixed website replica header at the top of the page. */
 .main-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 85px;
+  background: #ffffff;
+  border-bottom: 3.5px solid var(--brand-600); /* Shalva's official Purple line */
+  box-shadow: 0 4px 20px rgba(158, 33, 136, 0.04);
+  z-index: 1000;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 24px;
-  padding: 28px;
-  border-radius: 24px;
-  background: linear-gradient(135deg, #f8fafc, #eef2ff);
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 16px 42px rgba(15, 23, 42, 0.08);
+  padding: 0 clamp(20px, 5vw, 60px);
 }
 
-/* The big gradient title. */
-.main-header h1 {
-  margin: 0 0 8px;
-  font-size: clamp(36px, 6vw, 64px);
-  font-weight: 800;
-  background: linear-gradient(135deg, var(--brand-700), var(--info));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: var(--brand-700); /* fallback for non-clip browsers */
+/* Header logo style. */
+.main-logo {
+  height: 48px;
+  width: auto;
+  object-fit: contain;
+  cursor: pointer;
 }
 
-/* Subtitle under the title. */
-.main-header p {
-  color: var(--text-muted);
+/* Navigation menu centered inside header. */
+.main-nav {
+  display: flex;
+  gap: clamp(15px, 2.5vw, 30px);
+  align-items: center;
+}
+
+.main-nav a {
+  color: var(--text);
+  font-weight: 700;
+  font-size: 15px;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.main-nav a:hover {
+  color: var(--brand-600);
+  text-decoration: none;
 }
 
 /* Group of header buttons. */
 .header-buttons {
   display: flex;
   gap: 12px;
-  flex-wrap: wrap;
+  align-items: center;
 }
 
-/* Shared pill shape for the header / tab buttons. */
-.btn-login,
-.btn-register,
-.btn-birthdays,
-.tab-btn {
-  border: 0;
-  border-radius: 999px;
-  padding: 12px 18px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-/* Birthdays toggle: festive outline button (fills when active). */
-.btn-birthdays {
-  background: var(--surface);
-  color: var(--brand-700);
-  border: 1px solid var(--brand-200) !important;
-}
-
-.btn-birthdays:hover {
-  background: var(--brand-50);
-}
-
-.btn-birthdays.active {
-  background: var(--brand-600);
-  color: #fff;
-  border-color: var(--brand-600) !important;
-}
-
-/* Login button (outline). */
+/* Pill shape buttons. */
 .btn-login {
+  border: 1.5px solid var(--brand-600);
+  border-radius: var(--radius-pill);
+  padding: 9px 22px;
+  font-weight: 700;
+  font-size: 14.5px;
+  cursor: pointer;
   background: var(--surface);
-  color: var(--brand-700);
-  border: 1px solid var(--brand-200) !important;
+  color: var(--brand-600);
+  box-shadow: none;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
 
 .btn-login:hover {
-  background: var(--brand-50);
-}
-
-/* Register button (solid). */
-.btn-register {
   background: var(--brand-600);
-  color: white;
+  color: #ffffff;
+  transform: none;
+  box-shadow: none;
 }
 
-.btn-register:hover {
-  background: var(--brand-700);
+/* Hero Section imitating official homepage banner */
+.main-hero {
+  display: grid;
+  grid-template-columns: 1.25fr 0.75fr;
+  gap: 40px;
+  background: linear-gradient(135deg, rgba(158, 33, 136, 0.04) 0%, rgba(82, 167, 221, 0.04) 100%);
+  padding: 48px;
+  border-radius: 28px;
+  border: 1px solid rgba(158, 33, 136, 0.08);
+  align-items: center;
+  margin-top: 10px;
+  margin-bottom: 36px;
+}
+
+.hero-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.hero-badge {
+  display: inline-block;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-100);
+  color: var(--brand-600);
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.hero-content h1 {
+  font-size: clamp(28px, 4.2vw, 44px);
+  font-weight: 800;
+  color: var(--brand-700);
+  margin: 0 0 16px;
+  line-height: 1.2;
+}
+
+.hero-text {
+  font-size: 17.5px;
+  line-height: 1.65;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* Left graphic visual decoration in hero */
+.hero-visual {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.visual-card {
+  position: relative;
+  width: 100%;
+  max-width: 280px;
+  height: 220px;
+  background: #ffffff;
+  border: 1px solid rgba(158, 33, 136, 0.08);
+  border-radius: 24px;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.visual-glow-purple {
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 180px;
+  height: 180px;
+  background: radial-gradient(circle, rgba(158, 33, 136, 0.12) 0%, transparent 70%);
+}
+
+.visual-glow-cyan {
+  position: absolute;
+  bottom: -40px;
+  left: -40px;
+  width: 180px;
+  height: 180px;
+  background: radial-gradient(circle, rgba(82, 167, 221, 0.12) 0%, transparent 70%);
+}
+
+.visual-text-overlay {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: center;
+}
+
+.visual-text-overlay h3 {
+  font-size: clamp(24px, 3.2vw, 30px);
+  font-weight: 800;
+  margin: 0;
+  background: linear-gradient(135deg, var(--brand-600), var(--info));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: var(--brand-600);
 }
 
 /* The "active groups" panel. */
 .groups-section {
-  margin-top: 32px;
-  padding: 28px;
-  border: 1px solid #e2e8f0;
-  border-radius: 20px;
+  padding: 32px;
+  border: 1px solid var(--border);
+  border-radius: 24px;
   background: #ffffff;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  box-shadow: var(--shadow);
 }
 
-/* Panel heading. */
 .groups-section h2 {
   margin-top: 0;
+  margin-bottom: 20px;
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 800;
 }
 
 /* Row of group tab buttons. */
@@ -117,49 +209,90 @@
   margin: 20px 0;
 }
 
-/* A single tab button. */
+/* Exact replica button tab style */
 .tab-btn {
-  background: var(--surface-2);
-  color: var(--text-muted);
-  border: 1px solid var(--border);
+  border: 1.5px solid var(--brand-600);
+  border-radius: var(--radius-pill);
+  padding: 10px 22px;
+  font-weight: 700;
+  font-size: 14.5px;
+  cursor: pointer;
+  background: #ffffff;
+  color: var(--brand-600);
+  transition: all 0.2s ease;
 }
 
 .tab-btn:hover {
   background: var(--brand-50);
   color: var(--brand-700);
+  border-color: var(--brand-500);
 }
 
-/* The selected tab. */
 .tab-btn.active {
   background: var(--brand-600);
-  color: white;
+  color: #ffffff;
   border-color: var(--brand-600);
+  box-shadow: 0 4px 12px rgba(158, 33, 136, 0.15);
 }
 
 /* The selected group's details card. */
 .tab-content {
   border-radius: var(--radius-lg);
   background: var(--surface-2);
-  padding: 22px;
+  padding: 24px;
   border: 1px solid var(--border);
 }
 
-/* Card heading. */
 .tab-content h3 {
   margin-top: 0;
+  margin-bottom: 16px;
+  color: var(--brand-700);
+  font-size: 20px;
+}
+
+.tab-details {
+  display: grid;
+  gap: 12px;
+}
+
+.tab-details p {
+  margin: 0;
+  font-size: 16px;
+  color: var(--text-muted);
+}
+
+.tab-details strong {
   color: var(--text);
 }
 
-/* Stacked group detail lines. */
-.tab-details {
-  display: grid;
-  gap: 10px;
+/* Responsive Styles. */
+@media (max-width: 900px) {
+  .main-hero {
+    grid-template-columns: 1fr;
+    gap: 30px;
+    padding: 32px;
+  }
+  
+  .hero-visual {
+    display: none; /* Hide visual graphic on tablet/mobile to save space */
+  }
 }
 
-/* Phone: stack the hero header vertically. */
-@media (max-width: 720px) {
+@media (max-width: 760px) {
+  .main-container {
+    padding-top: 165px; /* Adjust wrapper spacing for double-row header */
+  }
+
   .main-header {
-    align-items: flex-start;
     flex-direction: column;
+    height: auto;
+    padding: 16px 20px;
+    gap: 12px;
+  }
+
+  .main-nav {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px 18px;
   }
 }

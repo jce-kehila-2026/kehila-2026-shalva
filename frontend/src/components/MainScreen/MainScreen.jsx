@@ -58,17 +58,41 @@ function MainScreen({ onNavigateLogin }) {
   return (
     <div className="main-container">
 
-      {/* Hero header: title + login button. */}
+      {/* Hero header: logo + login button. */}
       <header className="main-header">
-        <div>
-          <h1>קהילת שלווה</h1>
-          <p>מערכת קהילתית לניהול מתנדבים, קבוצות ואירועים</p>
-        </div>
+        <img
+          src="https://www.shalva.org/wp-content/uploads/2025/02/Logo-Hebrew-1024x488-1.png"
+          alt="שלוה"
+          className="main-logo"
+        />
 
         <div className="header-buttons">
-          <button className="btn-login" onClick={onNavigateLogin}>כניסה</button>
+          <button className="btn-login" onClick={onNavigateLogin}>כניסה למערכת</button>
         </div>
       </header>
+
+      {/* Hero Section */}
+      <section className="main-hero" aria-label="באנר ראשי">
+        <div className="hero-content">
+          <span className="hero-badge">פורטל הקהילה</span>
+          <h1>נותנים תקווה. משנים חיים.</h1>
+          <p className="hero-text">
+            ברוכים הבאים למערכת הקהילתית של שלוה. כאן אנו מחברים בין מתנדבים, מדריכים ורכזי פעילויות 
+            בכדי להעניק את הטיפול והשילוב המיטבי בקהילה.
+          </p>
+        </div>
+        <div className="hero-visual">
+          <div className="visual-card">
+            <div className="visual-glow-purple"></div>
+            <div className="visual-glow-cyan"></div>
+            <div className="visual-text-overlay">
+              <h3>קהילה.</h3>
+              <h3>שילוב.</h3>
+              <h3>שלווה.</h3>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Preview of the active groups. */}
       <section className="groups-section" aria-label="קבוצות פעילות">

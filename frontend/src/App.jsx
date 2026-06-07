@@ -275,10 +275,17 @@ function App() {
               </button>
             </div>
 
-            {/* Greeting + role badge. */}
-            <div className="auth-user">
-              <h2 className="auth-greeting">שלום, {user.firstName || user.displayName || user.email}</h2>
-              <span className="auth-role-badge">הרשאה: {ROLE_LABELS[user.role] || user.role || 'צופה'}</span>
+            {/* Greeting + role badge + Logo. */}
+            <div className="auth-user-block">
+              <img
+                src="https://www.shalva.org/wp-content/uploads/2025/02/Logo-Hebrew-1024x488-1.png"
+                alt="שלוה"
+                className="auth-logo"
+              />
+              <div className="auth-user">
+                <h2 className="auth-greeting">שלום, {user.firstName || user.displayName || user.email}</h2>
+                <span className="auth-role-badge">הרשאה: {ROLE_LABELS[user.role] || user.role || 'צופה'}</span>
+              </div>
             </div>
           </header>
 
