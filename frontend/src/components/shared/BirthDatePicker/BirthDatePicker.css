@@ -1,0 +1,50 @@
+/* Wrapper: the three dropdowns stacked above the optional preview. */
+.birth-date-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* The day / month / year dropdown row. */
+.bdp-selects {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 1.1fr;
+  gap: 8px;
+}
+
+/* A single dropdown. */
+.bdp-select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 11px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+/* Dropdown focus ring. */
+.bdp-select:focus {
+  outline: 2px solid var(--brand-200);
+  border-color: var(--brand-400);
+}
+
+/* The "🎂 date · age" preview line. */
+.bdp-preview {
+  padding: 9px 13px;
+  border-radius: var(--radius);
+  background: var(--brand-50);
+  border: 1px solid var(--brand-100);
+  color: var(--brand-700);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+/* Small phones: tighter dropdown padding. */
+@media (max-width: 420px) {
+  .bdp-select {
+    padding: 10px 8px;
+  }
+}

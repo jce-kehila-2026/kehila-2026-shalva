@@ -1,0 +1,12 @@
+rules_version = '2';
+
+// Cloud Storage rules for Kehila Hub.
+// The app doesn't upload or read any files yet, so everything is denied by
+// default. Open up specific paths here only when a storage feature is added.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,13 +1,32 @@
 <!doctype html>
-<html lang="en">
+<!-- Hebrew, right-to-left document. -->
+<html lang="he" dir="rtl">
   <head>
+    <!-- Character encoding. -->
     <meta charset="UTF-8" />
+
+    <!-- Browser tab icon. -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- Responsive viewport for mobile. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
+
+    <!-- Preconnect + load the Heebo font used across the app. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Browser tab title. -->
+    <title>קהילת שלווה — מערכת קהילתית</title>
   </head>
   <body>
+    <!-- React mounts the app into this element. -->
     <div id="root"></div>
+
+    <!-- App entry point. -->
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

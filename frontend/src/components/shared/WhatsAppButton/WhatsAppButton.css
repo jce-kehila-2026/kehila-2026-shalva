@@ -1,0 +1,58 @@
+/* The green "send on WhatsApp" button. */
+.wa-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 999px;
+  background: #25d366;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 700;
+  font-family: inherit;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 2px 8px rgba(37, 211, 102, 0.3);
+}
+
+/* The logo glyph inside the button. */
+.wa-btn svg {
+  font-size: 1.15em;
+  flex-shrink: 0;
+}
+
+/* Lift the button on hover. */
+.wa-btn:hover {
+  background: #1ebe5d;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(37, 211, 102, 0.4);
+}
+
+/* Press effect. */
+.wa-btn:active {
+  transform: translateY(0);
+}
+
+/* Compact variant for table rows and dense lists. */
+.wa-btn--compact {
+  padding: 6px 10px;
+  font-size: 0.82rem;
+  gap: 5px;
+}
+
+/* Disabled chip shown when there is no usable phone number. */
+.wa-btn--disabled {
+  background: var(--surface-2, #eef0f4);
+  color: var(--text-muted, #8b93a7);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.wa-btn--disabled:hover {
+  background: var(--surface-2, #eef0f4);
+  transform: none;
+  box-shadow: none;
+}

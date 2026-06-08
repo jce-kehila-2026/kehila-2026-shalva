@@ -1,0 +1,66 @@
+/* Page header row: title on one side, actions on the other. */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 15px;
+}
+
+/* Subtitle under a title. */
+.subtitle {
+  color: var(--text-muted);
+  margin: 6px 0 0;
+  font-size: 16px;
+}
+
+/* The modal form layout (shared by the volunteer & guide modals). */
+.volunteer-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* One labelled field (label above its input). */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: right;
+}
+
+/* Field label. */
+.form-group label {
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Footer row of a modal form (action buttons). */
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 6px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+/* Variant of the action bar that stacks vertically. */
+.vertical-action-bar {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 15px;
+}
+
+/* Constrain the input width inside the vertical action bar. */
+.vertical-action-bar .styled-input {
+  width: min(320px, 100%);
+}
+
+/* Error-coloured state text. */
+.error-state {
+  color: var(--danger);
+}

@@ -1,9 +1,15 @@
+// React hooks for state, effects and memoization.
 import { useEffect, useMemo, useState } from 'react'
-import { useParams, useLocation, useNavigate } from 'react-router-dom'
-import { doc, getDoc, collection, getDocs } from 'firebase/firestore'
 
+// Firestore helpers for reading collections.
+import { collection, getDocs } from 'firebase/firestore'
+
+// Our Firestore database instance.
 import { db } from '../../firebase'
+
+// Styles for this screen.
 import './VolunteerDetails.css'
+
 
 // Firestore collection used for attendance history.
 const ATTENDANCE_COLLECTION_NAME = 'attendance'
@@ -21,9 +27,8 @@ const ATTENDANCE_STATUS = {
   UNKNOWN: 'unknown',
 }
 
-/**
- * Returns safe display text for optional values.
- */
+
+// Safe display text for optional values (turns blanks into a fallback).
 function safeText(value, fallback = FALLBACK) {
   if (value === null || value === undefined || value === '') {
     return fallback
@@ -32,14 +37,15 @@ function safeText(value, fallback = FALLBACK) {
   return String(value)
 }
 
-/**
- * Builds the best available full name for a volunteer.
- */
+
+// Best available full name for a volunteer, with graceful fallbacks.
 function getFullName(volunteer) {
+  // No volunteer at all.
   if (!volunteer) {
     return 'מתנדב לא נבחר'
   }
 
+  // Prefer first + last name joined together.
   const fullName = [
     volunteer.firstName,
     volunteer.lastName,
@@ -48,6 +54,7 @@ function getFullName(volunteer) {
     .join(' ')
     .trim()
 
+  // Fall back through name / email / id / a generic label.
   return (
     fullName ||
     volunteer.name ||
@@ -57,16 +64,14 @@ function getFullName(volunteer) {
   )
 }
 
-/**
- * Uses the first letter of the volunteer name for the avatar.
- */
+
+// First letter of the name, used for the avatar circle.
 function getInitial(volunteer) {
   return getFullName(volunteer).charAt(0).toUpperCase()
 }
 
-/**
- * Finds the best available group field for a volunteer.
- */
+
+// Best available group field for a volunteer.
 function getVolunteerGroup(volunteer) {
   return (
     volunteer?.group ||
@@ -77,9 +82,8 @@ function getVolunteerGroup(volunteer) {
   )
 }
 
-/**
- * Finds the best available unique identifier for a volunteer.
- */
+
+// Best available unique identifier for a volunteer.
 function getVolunteerIdentifier(volunteer) {
   return (
     volunteer?.idNumber ||
@@ -91,9 +95,8 @@ function getVolunteerIdentifier(volunteer) {
   )
 }
 
-/**
- * Converts a Firestore document snapshot into a plain object with its id.
- */
+
+// Turn a Firestore document snapshot into a plain object that keeps its id.
 function normalizeDocument(documentSnapshot) {
   return {
     id: documentSnapshot.id,
@@ -101,10 +104,10 @@ function normalizeDocument(documentSnapshot) {
   }
 }
 
-/**
- * Converts different attendance values into one consistent status.
- */
+
+// Normalize the many possible attendance values into one consistent status.
 function normalizeAttendanceStatus(value) {
+  // Booleans map directly.
   if (value === true) {
     return ATTENDANCE_STATUS.PRESENT
   }
@@ -113,22 +116,25 @@ function normalizeAttendanceStatus(value) {
     return ATTENDANCE_STATUS.ABSENT
   }
 
+  // Otherwise compare a lower-cased text form.
   const text = String(value || '').trim().toLowerCase()
 
+  // Words that mean "present".
   if (['present', 'yes', 'true', '1', 'נוכח', 'כן'].includes(text)) {
     return ATTENDANCE_STATUS.PRESENT
   }
 
+  // Words that mean "absent".
   if (['absent', 'no', 'false', '0', 'נעדר', 'לא'].includes(text)) {
     return ATTENDANCE_STATUS.ABSENT
   }
 
+  // Anything else is unknown.
   return ATTENDANCE_STATUS.UNKNOWN
 }
 
-/**
- * Converts internal attendance status into Hebrew display text.
- */
+
+// Internal status -> Hebrew display text.
 function statusText(status) {
   if (status === ATTENDANCE_STATUS.PRESENT) {
     return 'נוכח'
@@ -141,9 +147,8 @@ function statusText(status) {
   return 'לא ידוע'
 }
 
-/**
- * Maps attendance status into a CSS class.
- */
+
+// Internal status -> CSS class.
 function statusClass(status) {
   if (status === ATTENDANCE_STATUS.PRESENT) {
     return 'status-present'
@@ -156,25 +161,34 @@ function statusClass(status) {
   return 'status-unknown'
 }
 
-/**
- * Gets a readable date from an attendance record.
- */
+
+// Readable date from an attendance record, handling the several shapes
+// Firestore can return (string, Timestamp, native Date, or { seconds }).
 function getAttendanceDate(attendanceItem) {
-  if (attendanceItem.date) {
-    return attendanceItem.date
-  }
+  // Prefer an explicit date, fall back to createdAt.
+  const value = attendanceItem.date || attendanceItem.createdAt
 
-  if (attendanceItem.createdAt?.toDate) {
-    return attendanceItem.createdAt.toDate().toLocaleDateString('he-IL')
-  }
+  // No date at all.
+  if (!value) return 'ללא תאריך'
 
-  return 'ללא תאריך'
+  // Plain string date (e.g. "2026-05-31").
+  if (typeof value === 'string') return value
+
+  // Firestore Timestamp.
+  if (typeof value.toDate === 'function') return value.toDate().toLocaleDateString('he-IL')
+
+  // Native Date.
+  if (value instanceof Date) return value.toLocaleDateString('he-IL')
+
+  // Plain { seconds } object.
+  if (typeof value.seconds === 'number') return new Date(value.seconds * 1000).toLocaleDateString('he-IL')
+
+  // Unrecognized shape — show something rather than crash.
+  return String(value)
 }
 
-/**
- * Gets the group for an attendance record.
- * Falls back to the volunteer group when the attendance record has no group.
- */
+
+// Group for an attendance record, falling back to the volunteer's group.
 function getAttendanceGroup(attendanceItem, volunteer) {
   return (
     attendanceItem.group ||
@@ -184,24 +198,23 @@ function getAttendanceGroup(attendanceItem, volunteer) {
   )
 }
 
-/**
- * Normalizes a value before comparing it to volunteer identifiers.
- */
+
+// Normalize a value for comparison (trimmed, lower-cased string).
 function toSearchValue(value) {
   return String(value || '').trim().toLowerCase()
 }
 
-/**
- * Builds a list of possible identifiers for matching attendance records.
- * This supports different Firestore data shapes.
- */
+
+// All the identifiers we can use to match attendance records to a volunteer.
 function buildVolunteerCandidates(volunteer) {
+  // No volunteer: nothing to match on.
   if (!volunteer) {
     return []
   }
 
   const fullName = getFullName(volunteer)
 
+  // Collect every possible id/name, normalize, and drop empties + duplicates.
   return [
     volunteer.id,
     volunteer.uid,
@@ -220,25 +233,28 @@ function buildVolunteerCandidates(volunteer) {
     .filter((value, index, values) => value && values.indexOf(value) === index)
 }
 
-/**
- * Checks whether a value contains or equals one of the volunteer candidates.
- * Supports strings, arrays, and nested objects.
- */
+
+// Does a value contain or equal one of the candidates? Handles strings,
+// arrays and nested objects by recursing into them.
 function valueMatchesCandidate(value, candidates) {
+  // Nothing to compare.
   if (!value || candidates.length === 0) {
     return false
   }
 
+  // Arrays: match if any item matches.
   if (Array.isArray(value)) {
     return value.some((item) => valueMatchesCandidate(item, candidates))
   }
 
+  // Objects: match if any of their values match.
   if (typeof value === 'object') {
     return Object.values(value).some((item) =>
       valueMatchesCandidate(item, candidates),
     )
   }
 
+  // Plain value: compare it against every candidate.
   const text = toSearchValue(value)
 
   return candidates.some(
@@ -249,10 +265,10 @@ function valueMatchesCandidate(value, candidates) {
   )
 }
 
-/**
- * Checks whether one attendance record belongs to the selected volunteer.
- */
+
+// Does one attendance record belong to the selected volunteer?
 function recordMatchesVolunteer(attendanceItem, candidates) {
+  // Direct fields that might hold the volunteer's id / name.
   const directFields = [
     attendanceItem.volunteerId,
     attendanceItem.userId,
@@ -266,6 +282,7 @@ function recordMatchesVolunteer(attendanceItem, candidates) {
     attendanceItem.volunteerName,
   ]
 
+  // A match on any direct field is enough.
   const hasDirectMatch = directFields.some((fieldValue) =>
     valueMatchesCandidate(fieldValue, candidates),
   )
@@ -274,6 +291,7 @@ function recordMatchesVolunteer(attendanceItem, candidates) {
     return true
   }
 
+  // Otherwise look inside the nested lists a record might carry.
   const nestedLists = [
     attendanceItem.records,
     attendanceItem.volunteers,
@@ -288,10 +306,10 @@ function recordMatchesVolunteer(attendanceItem, candidates) {
   )
 }
 
-/**
- * Finds the selected volunteer status inside direct or nested attendance data.
- */
+
+// Find the selected volunteer's status inside direct or nested attendance data.
 function getNestedAttendanceStatus(attendanceItem, candidates) {
+  // First try the record's own status field.
   const directStatus = normalizeAttendanceStatus(
     attendanceItem.status ??
       attendanceItem.attendance ??
@@ -302,6 +320,7 @@ function getNestedAttendanceStatus(attendanceItem, candidates) {
     return directStatus
   }
 
+  // Volunteer listed in a "present" / "absent" bucket.
   if (valueMatchesCandidate(attendanceItem.present, candidates)) {
     return ATTENDANCE_STATUS.PRESENT
   }
@@ -310,6 +329,7 @@ function getNestedAttendanceStatus(attendanceItem, candidates) {
     return ATTENDANCE_STATUS.ABSENT
   }
 
+  // Otherwise search the nested lists for the matching person's status.
   const nestedLists = [
     attendanceItem.records,
     attendanceItem.volunteers,
@@ -318,14 +338,17 @@ function getNestedAttendanceStatus(attendanceItem, candidates) {
   ]
 
   for (const listValue of nestedLists) {
+    // Skip non-arrays.
     if (!Array.isArray(listValue)) {
       continue
     }
 
+    // Find the entry that belongs to this volunteer.
     const matchingItem = listValue.find((item) =>
       valueMatchesCandidate(item, candidates),
     )
 
+    // Read its status if we found one.
     if (matchingItem) {
       return normalizeAttendanceStatus(
         matchingItem.status ??
@@ -336,19 +359,22 @@ function getNestedAttendanceStatus(attendanceItem, candidates) {
     }
   }
 
+  // Nothing found.
   return ATTENDANCE_STATUS.UNKNOWN
 }
 
-/**
- * Builds table rows for the selected volunteer attendance history.
- */
+
+// Build the attendance-history table rows for the selected volunteer.
 function buildAttendanceRows(attendanceRecords, volunteer) {
+  // The identifiers we'll match records against.
   const candidates = buildVolunteerCandidates(volunteer)
 
+  // No volunteer to match: no rows.
   if (candidates.length === 0) {
     return []
   }
 
+  // Keep only this volunteer's records and shape them for the table.
   return attendanceRecords
     .filter((attendanceItem) =>
       recordMatchesVolunteer(attendanceItem, candidates),
@@ -367,9 +393,8 @@ function buildAttendanceRows(attendanceRecords, volunteer) {
     }))
 }
 
-/**
- * Counts attendance statuses for the summary cards.
- */
+
+// Count present / absent / unknown across the rows, for the summary cards.
 function buildAttendanceSummary(attendanceRows) {
   return attendanceRows.reduce(
     (summary, attendanceItem) => ({
@@ -391,42 +416,9 @@ function buildAttendanceSummary(attendanceRows) {
   )
 }
 
-/**
- * Screen 14 — Volunteer Details.
- * Shows personal information, group assignment, and attendance history.
- */
-export default function VolunteerDetails({ volunteer: propVolunteer, onBack }) {
-  const { volunteerId } = useParams();
-  const location = useLocation();
-  const navigate = useNavigate();
-  const [volunteer, setVolunteer] = useState(propVolunteer || location.state?.volunteer || null);
-  const [volunteerLoading, setVolunteerLoading] = useState(!volunteer);
 
-  // Fetch volunteer details if not provided
-  useEffect(() => {
-    if (volunteer) return;
-    let isMounted = true;
-    async function fetchVolunteer() {
-      try {
-        const docRef = doc(db, 'volunteers', volunteerId);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists() && isMounted) {
-          setVolunteer({ id: docSnap.id, ...docSnap.data() });
-        }
-      } catch (error) {
-        console.error("Error fetching volunteer details:", error);
-      } finally {
-        if (isMounted) {
-          setVolunteerLoading(false);
-        }
-      }
-    }
-    fetchVolunteer();
-    return () => {
-      isMounted = false;
-    };
-  }, [volunteerId, volunteer]);
-
+// Volunteer details: personal info, group assignment and attendance history.
+export default function VolunteerDetails({ volunteer, onBack }) {
   // Attendance records loaded from Firestore.
   const [attendanceRecords, setAttendanceRecords] = useState([])
 
@@ -434,26 +426,28 @@ export default function VolunteerDetails({ volunteer: propVolunteer, onBack }) {
   const [attendanceLoading, setAttendanceLoading] = useState(true)
   const [attendanceError, setAttendanceError] = useState(null)
 
-  /**
-   * Loads attendance history once when the screen opens.
-   * The isMounted flag prevents state updates after unmount.
-   */
+  // Load attendance history once when the screen opens.
   useEffect(() => {
+    // Guards against state updates after unmount.
     let isMounted = true
 
     async function loadAttendanceHistory() {
       try {
+        // Read the whole attendance collection.
         const snapshot = await getDocs(
           collection(db, ATTENDANCE_COLLECTION_NAME),
         )
 
+        // Bail out if we unmounted while waiting.
         if (!isMounted) {
           return
         }
 
+        // Store the normalized records.
         setAttendanceRecords(snapshot.docs.map(normalizeDocument))
         setAttendanceError(null)
       } catch (error) {
+        // Record the error (if still mounted).
         console.error('Error loading attendance history:', error)
 
         if (!isMounted) {
@@ -462,6 +456,7 @@ export default function VolunteerDetails({ volunteer: propVolunteer, onBack }) {
 
         setAttendanceError(error.message)
       } finally {
+        // Clear the loading flag.
         if (isMounted) {
           setAttendanceLoading(false)
         }
@@ -470,48 +465,32 @@ export default function VolunteerDetails({ volunteer: propVolunteer, onBack }) {
 
     loadAttendanceHistory()
 
+    // Cleanup: mark as unmounted.
     return () => {
       isMounted = false
     }
   }, [])
 
-  /**
-   * Builds attendance rows only when the records or selected volunteer change.
-   */
+  // The table rows for this volunteer (recomputed only when inputs change).
   const attendanceRows = useMemo(
     () => buildAttendanceRows(attendanceRecords, volunteer),
     [attendanceRecords, volunteer],
   )
 
-  /**
-   * Builds the summary cards from the filtered attendance rows.
-   */
+  // The summary-card counts derived from those rows.
   const attendanceSummary = useMemo(
     () => buildAttendanceSummary(attendanceRows),
     [attendanceRows],
   )
 
-  /**
-   * Returns to the volunteer list if a back handler exists.
-   */
+  // Go back to the volunteer list if a handler was provided.
   const handleBack = () => {
     if (typeof onBack === 'function') {
       onBack()
-    } else {
-      navigate(-1)
     }
   }
 
-  if (volunteerLoading) {
-    return (
-      <main className="volunteer-details-container" dir="rtl">
-        <section className="volunteer-details-card" style={{ textAlign: 'center', padding: '40px' }}>
-          טוען פרטי מתנדב...
-        </section>
-      </main>
-    );
-  }
-
+  // Empty state: no volunteer was selected.
   if (!volunteer) {
     return (
       <main className="volunteer-details-container" dir="rtl">
@@ -539,15 +518,19 @@ export default function VolunteerDetails({ volunteer: propVolunteer, onBack }) {
       aria-labelledby={TITLE_ID}
     >
       <section className="volunteer-details-card">
+
+        {/* Header: avatar, name and the back button. */}
         <header className="volunteer-details-header">
           <div className="volunteer-details-profile">
+
+            {/* Avatar showing the name's first letter. */}
             <div className="volunteer-details-avatar">
               {getInitial(volunteer)}
             </div>
 
             <div>
               <div className="volunteer-details-eyebrow">
-                מסך 14
+                פרטי מתנדב
               </div>
 
               <h1 id={TITLE_ID} className="volunteer-details-title">
@@ -569,6 +552,7 @@ export default function VolunteerDetails({ volunteer: propVolunteer, onBack }) {
           </button>
         </header>
 
+        {/* Attendance summary cards. */}
         <div className="volunteer-details-summary-grid">
           <article className="volunteer-details-summary-card">
             <span>{attendanceSummary.present}</span>
@@ -591,8 +575,9 @@ export default function VolunteerDetails({ volunteer: propVolunteer, onBack }) {
           </article>
         </div>
 
+        {/* Personal information section. */}
         <section className="volunteer-details-section">
-          <h2>Personal Info</h2>
+          <h2>פרטים אישיים</h2>
 
           <div className="volunteer-details-info-grid">
             <div className="volunteer-details-info-item">
@@ -644,8 +629,9 @@ export default function VolunteerDetails({ volunteer: propVolunteer, onBack }) {
           </div>
         </section>
 
+        {/* Group assignment section. */}
         <section className="volunteer-details-section volunteer-details-group-section">
-          <h2>Group</h2>
+          <h2>שיוך לקבוצה</h2>
 
           <div className="volunteer-details-group-card">
             <span>קבוצה משויכת</span>
@@ -653,15 +639,18 @@ export default function VolunteerDetails({ volunteer: propVolunteer, onBack }) {
           </div>
         </section>
 
+        {/* Attendance history section. */}
         <section className="volunteer-details-section">
-          <h2>Attendance History</h2>
+          <h2>היסטוריית נוכחות</h2>
 
+          {/* Error banner if the history failed to load. */}
           {attendanceError && (
             <div className="volunteer-details-error">
               שגיאה בטעינת היסטוריית נוכחות: {attendanceError}
             </div>
           )}
 
+          {/* Loading message, otherwise the history table. */}
           {attendanceLoading ? (
             <div className="volunteer-details-loading">
               טוען היסטוריית נוכחות...
@@ -669,6 +658,8 @@ export default function VolunteerDetails({ volunteer: propVolunteer, onBack }) {
           ) : (
             <div className="volunteer-details-table-wrap">
               <table className="volunteer-details-table">
+
+                {/* Column headers. */}
                 <thead>
                   <tr>
                     <th>תאריך</th>
@@ -679,12 +670,14 @@ export default function VolunteerDetails({ volunteer: propVolunteer, onBack }) {
                 </thead>
 
                 <tbody>
+                  {/* A row per attendance record, or an empty-state row. */}
                   {attendanceRows.length > 0 ? (
                     attendanceRows.map((attendanceItem) => (
                       <tr key={attendanceItem.id}>
                         <td>{attendanceItem.date}</td>
                         <td>{attendanceItem.group}</td>
 
+                        {/* Status badge (colour comes from statusClass). */}
                         <td>
                           <span
                             className={`volunteer-details-status ${statusClass(attendanceItem.status)}`}

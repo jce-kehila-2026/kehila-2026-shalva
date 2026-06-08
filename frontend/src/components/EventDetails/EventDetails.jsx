@@ -1,8 +1,3 @@
-import { useState, useEffect } from 'react'
-import { useParams, useLocation, useNavigate } from 'react-router-dom'
-import { doc, getDoc } from 'firebase/firestore'
-import { db } from '../../firebase'
-
 // Import styles for the EventDetails component.
 import './EventDetails.css'
 
@@ -66,47 +61,24 @@ function phoneHref(phone) {
 }
 
 // Main Event Details component. Uses mock data until a real event is passed in.
-export default function EventDetails({ event: propEvent, onBack }) {
-  const { eventId } = useParams();
-  const location = useLocation();
-  const navigate = useNavigate();
-  const [event, setEvent] = useState(propEvent || location.state?.event || null);
-  const [loading, setLoading] = useState(!event);
-
-  useEffect(() => {
-    if (event) return;
-    const fetchEvent = async () => {
-      try {
-        const docRef = doc(db, 'events', eventId);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setEvent({ id: docSnap.id, ...docSnap.data() });
-        }
-      } catch (err) {
-        console.error("Error fetching event details:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchEvent();
-  }, [eventId, event]);
-
+export default function EventDetails({ event = MOCK_EVENT, onBack }) {
+  // Handles the Back button using a custom callback or browser history.
   const handleBack = () => {
     if (typeof onBack === 'function') {
       onBack()
       return
     }
-    navigate(-1);
-  }
 
-  if (loading) {
-    return <div className="event-details-container" dir="rtl" style={{ textAlign: 'center', padding: '40px' }}>טוען פרטי אירוע...</div>;
+    // If no custom onBack was provided, try to use the browser's Back button behavior.
+    if (typeof window !== 'undefined' && window.history && window.history.length > 1) {
+      window.history.back()
+    }
   }
 
   // Prepare safe values for display, with fallback text for missing fields.
   const name = event?.name || FALLBACK
   const date = event?.date || FALLBACK
-  const eventLocation = event?.location || FALLBACK
+  const location = event?.location || FALLBACK
   const description = event?.description || FALLBACK
   const status = event?.status || FALLBACK
 
@@ -145,7 +117,7 @@ export default function EventDetails({ event: propEvent, onBack }) {
 
           <div className="event-detail-item">
             <div className="event-detail-label">מיקום</div>
-            <div className="event-detail-value">{eventLocation}</div>
+            <div className="event-detail-value">{location}</div>
           </div>
 
           <div className="event-detail-item">

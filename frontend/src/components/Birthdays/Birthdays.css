@@ -1,0 +1,554 @@
+/* Root wrapper for the whole birthdays screen (right-aligned, RTL). */
+.birthdays {
+  margin-top: 24px;
+  text-align: right;
+}
+
+
+/* The festive header box that holds the confetti, cake and title. */
+.bday-hero {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-height: clamp(280px, 42vh, 380px);
+  padding: clamp(30px, 5vw, 52px) 22px clamp(28px, 4vw, 44px);
+  border: 1px solid var(--brand-100);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(720px 320px at 50% -10%, rgba(255, 255, 255, 0.85), transparent 70%),
+    linear-gradient(135deg, #eef2ff 0%, #fce7f3 48%, #cffafe 100%);
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+}
+
+
+/* Full-cover layer that contains the confetti pieces. */
+.bday-confetti {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* A single confetti piece; size/colour/speed come from inline CSS variables. */
+.bday-confetti i {
+  position: absolute;
+  top: 0;
+  width: var(--s);
+  height: calc(var(--s) * 0.42);
+  background: var(--c);
+  border-radius: 1px;
+  opacity: 0;
+  transform: rotate(var(--r));
+  animation: bday-fall var(--d) linear var(--delay) infinite;
+}
+
+/* Confetti motion: fade in near the top, fall and spin to the bottom. */
+@keyframes bday-fall {
+  0% { transform: translateY(-24px) rotate(0deg); opacity: 0; }
+  12% { opacity: 0.95; }
+  100% { transform: translateY(400px) rotate(620deg); opacity: 0; }
+}
+
+
+/* Floating emoji decorations (balloons / gift / party). */
+.bday-deco {
+  position: absolute;
+  z-index: 1;
+  font-size: clamp(26px, 4vw, 44px);
+  filter: drop-shadow(0 6px 10px rgba(15, 23, 42, 0.12));
+  animation: bday-float 4.5s ease-in-out infinite;
+}
+
+/* Place each decoration in a corner and offset its float timing. */
+.bday-deco-1 { top: 10%; inset-inline-end: 9%; animation-delay: 0s; }
+.bday-deco-2 { top: 16%; inset-inline-start: 8%; animation-delay: 0.9s; }
+.bday-deco-3 { bottom: 12%; inset-inline-start: 11%; animation-delay: 1.6s; }
+.bday-deco-4 { bottom: 14%; inset-inline-end: 10%; animation-delay: 0.4s; }
+
+/* Gentle up-and-down bobbing for the decorations. */
+@keyframes bday-float {
+  0%, 100% { transform: translateY(0) rotate(-6deg); }
+  50% { transform: translateY(-14px) rotate(6deg); }
+}
+
+
+/* Wrapper that centers the cake and positions the sparkles around it. */
+.bday-cake-wrap {
+  position: relative;
+  z-index: 2;
+  display: inline-grid;
+  place-items: center;
+  margin-top: 6px;
+}
+
+/* The big cake emoji. */
+.bday-cake {
+  font-size: clamp(74px, 13vw, 128px);
+  line-height: 1;
+  filter: drop-shadow(0 14px 24px rgba(219, 39, 119, 0.28));
+  animation: bday-bounce 2.6s ease-in-out infinite;
+}
+
+/* Cake bounce. */
+@keyframes bday-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+
+/* The small sparkles next to the cake. */
+.bday-spark {
+  position: absolute;
+  font-size: clamp(16px, 2.5vw, 28px);
+  animation: bday-twinkle 1.8s ease-in-out infinite;
+}
+
+/* Position each sparkle and offset its twinkle timing. */
+.bday-spark-1 { top: -4px; inset-inline-start: -8px; animation-delay: 0s; }
+.bday-spark-2 { top: 18px; inset-inline-end: -16px; animation-delay: 0.5s; }
+.bday-spark-3 { bottom: 4px; inset-inline-start: 10px; animation-delay: 1s; }
+
+/* Sparkle twinkle: fade and scale in and out. */
+@keyframes bday-twinkle {
+  0%, 100% { opacity: 0.25; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+
+/* Container for the eyebrow, title and subtitle, above the background. */
+.bday-hero-text {
+  position: relative;
+  z-index: 2;
+  margin-top: 10px;
+}
+
+/* Small pill label above the title ("קהילה"). */
+.birthdays-eyebrow {
+  display: inline-block;
+  padding: 4px 14px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.75);
+  color: var(--brand-700);
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: var(--shadow-sm);
+}
+
+/* The main "happy birthday" heading. */
+.bday-hero-text h2 {
+  margin: 14px 0 0;
+  font-size: clamp(27px, 4.6vw, 42px);
+  font-weight: 800;
+  color: var(--brand-700);
+}
+
+/* Where supported, paint the heading with a gradient instead of a flat colour. */
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .bday-hero-text h2 {
+    background: linear-gradient(90deg, var(--brand-600), #db2777 75%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+}
+
+/* The subtitle line under the heading. */
+.bday-hero-text p {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: clamp(14px, 1.8vw, 17px);
+}
+
+
+/* Back button floating over the top-left of the hero. */
+.birthdays-back {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 3;
+  border: 1px solid var(--brand-200);
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--brand-700);
+  border-radius: var(--radius-pill);
+  padding: 9px 18px;
+  font-weight: 700;
+  backdrop-filter: blur(4px);
+}
+
+/* Solid background on hover. */
+.birthdays-back:hover {
+  background: #fff;
+}
+
+
+/* Centered box used for the loading and empty messages. */
+.birthdays-state {
+  margin-top: 22px;
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-weight: 600;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+
+/* Panel that wraps all the month groups. */
+.birthday-months {
+  margin-top: 22px;
+  padding: clamp(18px, 3.5vw, 28px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+/* Spacing between one month group and the next. */
+.birthday-month {
+  margin-top: 26px;
+}
+
+/* No top gap before the first month. */
+.birthday-month:first-of-type {
+  margin-top: 0;
+}
+
+/* Month title row (name + count + divider line). */
+.birthday-month-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+  font-size: 18px;
+  color: var(--text);
+}
+
+/* Divider line that fills the rest of the title row. */
+.birthday-month-title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* Small pill showing how many birthdays are in the month. */
+.birthday-month-count {
+  flex: none;
+  min-width: 24px;
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-600);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+
+
+/* Responsive grid that lays out the birthday cards. */
+.birthday-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+/* Each list item stacks the card and (admin only) a send-wish button. */
+.birthday-grid > li {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Centers the WhatsApp button under its card. */
+.birthday-card-wa {
+  display: flex;
+  justify-content: center;
+}
+
+/* A single birthday card (works as both a div and a button). */
+.birthday-card {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background:
+    radial-gradient(120px 80px at 100% 0, var(--brand-50), transparent 70%),
+    var(--surface);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  font: inherit;
+  text-align: right;
+  color: inherit;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+/* Coloured accent strip down the side of each card. */
+.birthday-card::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: linear-gradient(180deg, #f472b6, #a78bfa, #60a5fa);
+}
+
+/* Lift the card on hover. */
+.birthday-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--brand-200);
+  box-shadow: var(--shadow);
+}
+
+/* Editable cards show a pointer cursor. */
+.birthday-card--editable {
+  cursor: pointer;
+}
+
+/* The faint pencil hint in the corner of editable cards. */
+.birthday-edit-hint {
+  position: absolute;
+  top: 6px;
+  inset-inline-end: 8px;
+  font-size: 13px;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* Make the pencil hint clearer on hover. */
+.birthday-card--editable:hover .birthday-edit-hint {
+  opacity: 0.95;
+}
+
+/* Round badge holding the cake emoji on each card. */
+.birthday-emoji {
+  flex-shrink: 0;
+  width: 50px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #fce7f3, #ede9fe 55%, #cffafe);
+  border: 1px solid var(--brand-100);
+  font-size: 26px;
+}
+
+/* Name + date block; grows to push the age badge to the end. */
+.birthday-card-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin-inline-end: auto;
+}
+
+/* Person's name (truncated with an ellipsis if too long). */
+.birthday-name {
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The "day in month" line under the name. */
+.birthday-date {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+/* Pill badge showing the person's age. */
+.birthday-age {
+  flex-shrink: 0;
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(135deg, var(--brand-50), #fce7f3);
+  color: var(--brand-700);
+  border: 1px solid var(--brand-200);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* On small screens: one card per row and hide some decorations. */
+@media (max-width: 600px) {
+  .birthday-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .bday-deco-2,
+  .bday-deco-3 {
+    display: none;
+  }
+}
+
+
+/* The admin "click to edit" hint inside the hero. */
+.bday-hero-text .bday-edit-tip {
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--brand-700);
+}
+
+/* Dark backdrop behind the edit modal. */
+.bday-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+/* The modal dialog box. */
+.bday-modal {
+  width: min(440px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--brand-100);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  text-align: right;
+}
+
+/* Coloured header strip of the modal. */
+.bday-modal-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 22px;
+  background: linear-gradient(135deg, #fce7f3, #ede9fe 55%, #e0f2fe);
+  border-bottom: 1px solid var(--brand-100);
+}
+
+/* Cake icon in the modal header. */
+.bday-modal-cake {
+  font-size: 30px;
+  line-height: 1;
+  filter: drop-shadow(0 6px 10px rgba(219, 39, 119, 0.22));
+}
+
+/* Modal title text. */
+.bday-modal-head h3 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+/* Padding around the modal's form. */
+.bday-modal-body {
+  padding: 20px 22px 22px;
+}
+
+/* One labelled field (label stacked above its input). */
+.bday-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+/* Field label. */
+.bday-field label {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text);
+}
+
+/* Field text input. */
+.bday-field input {
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+/* Focus ring for inputs. */
+.bday-field input:focus {
+  outline: 2px solid var(--brand-200);
+  border-color: var(--brand-400);
+}
+
+/* Row holding the save / cancel buttons. */
+.bday-modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+/* Shared base style for modal buttons. */
+.bday-btn {
+  padding: 10px 20px;
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* Primary (save) button. */
+.bday-btn-primary {
+  background: linear-gradient(160deg, var(--brand-600), var(--brand-700));
+  color: #fff;
+}
+
+/* Primary button hover. */
+.bday-btn-primary:hover {
+  box-shadow: var(--shadow);
+}
+
+/* Secondary (cancel) button. */
+.bday-btn-ghost {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+/* Secondary button hover. */
+.bday-btn-ghost:hover {
+  background: var(--surface-2);
+}
+
+/* Dim disabled buttons while a save is running. */
+.bday-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+
+/* For users who prefer less motion: turn the animations off. */
+@media (prefers-reduced-motion: reduce) {
+  .bday-confetti i,
+  .bday-deco,
+  .bday-cake,
+  .bday-spark {
+    animation: none;
+  }
+
+  /* Keep confetti visible even without the falling animation. */
+  .bday-confetti i {
+    opacity: 0.9;
+  }
+}

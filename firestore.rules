@@ -1,0 +1,124 @@
+rules_version = '2';
+
+// Firestore security rules for Kehila Hub.
+//
+// Role-based access enforced on the server. Roles live in users/{uid}.role
+// ('admin' | 'guide' | 'viewer'); a removed guide has users/{uid}.disabled ===
+// true and is treated as "no access" — disabled users can't even read data.
+//
+// NOTE: the first admin's users/{uid} document must be created manually in the
+// Firebase Console. Review and test in the Emulator / a test project before
+// deploying to production.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Is anyone signed in?
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // The signed-in user's profile document data.
+    function profile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // A signed-in user who has a profile and is NOT disabled. Uses .get() with
+    // defaults so a profile missing the 'disabled' field still counts as active
+    // (admins are created without that field).
+    function isActiveUser() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && profile().get('disabled', false) != true;
+    }
+
+    // An active user with the given role (a missing 'role' counts as no role).
+    function hasRole(role) {
+      return isActiveUser() && profile().get('role', '') == role;
+    }
+
+    // An active admin.
+    function isAdmin() {
+      return hasRole('admin');
+    }
+
+    // An active admin or guide.
+    function isStaff() {
+      return hasRole('admin') || hasRole('guide');
+    }
+
+
+    // Active community groups — shown on the public home page, so anyone may
+    // read them; only an admin may change them.
+    match /groups/{groupId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Public volunteer sign-up: anyone may create a registration, but only with
+    // the expected fields (blocks spam / malformed docs). Admin only otherwise.
+    match /registrants/{id} {
+      allow create: if request.resource.data.keys().hasOnly([
+            'firstName', 'lastName', 'email', 'phone', 'status',
+            'age', 'birthDate', 'experience', 'address', 'school', 'createdAt'
+          ])
+        && request.resource.data.keys().hasAll(['firstName', 'lastName', 'email', 'phone', 'createdAt'])
+        && request.resource.data.firstName is string
+        && request.resource.data.lastName is string
+        && request.resource.data.email is string
+        && request.resource.data.phone is string
+        && request.resource.data.status is string
+        && request.resource.data.birthDate is string
+        && request.resource.data.age is number
+        && request.resource.data.createdAt is timestamp;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Volunteers: active users may read; admin and guides may write.
+    match /volunteers/{id} {
+      allow read: if isActiveUser();
+      allow write: if isStaff();
+    }
+
+    // Attendance: active users may read; admin and guides may write.
+    match /attendance/{id} {
+      allow read: if isActiveUser();
+      allow write: if isStaff();
+    }
+
+    // Events: active users may read; only an admin may write.
+    match /events/{id} {
+      allow read: if isActiveUser();
+      allow write: if isAdmin();
+    }
+
+    // User profiles / roles: a user may always read their own document (the app
+    // gate needs it); active users may read others.
+    //
+    // Writes are admin-only, with self-guards enforced here (not just in the
+    // UI): an admin can't change their OWN role or disabled flag, and can't
+    // delete their own account. NOTE: the "don't remove the last admin" rule is
+    // enforced only in the UI — strong enforcement needs a counter/transaction
+    // or a backend.
+    match /users/{uid} {
+      allow read: if request.auth.uid == uid || isActiveUser();
+
+      allow create: if isAdmin();
+
+      allow update: if isAdmin()
+        && (request.auth.uid != uid
+            || (request.resource.data.get('role', '') == resource.data.get('role', '')
+                && request.resource.data.get('disabled', false) == resource.data.get('disabled', false)));
+
+      allow delete: if isAdmin() && request.auth.uid != uid;
+    }
+
+    // Guide ↔ group mapping: active users read; only an admin writes. (A
+    // disabled user never needs this — the access gate only reads users/{uid}.)
+    match /guides/{uid} {
+      allow read: if isActiveUser();
+      allow write: if isAdmin();
+    }
+
+    // Everything not matched above is denied by default.
+  }
+}

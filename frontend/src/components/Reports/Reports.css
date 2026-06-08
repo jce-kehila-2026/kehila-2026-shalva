@@ -1,9 +1,4 @@
-﻿/* ==========================================================================
-   Reports Screen
-   Styles for Screen 13: attendance, group, event reports, and export actions.
-   ========================================================================== */
-
-/* Main page wrapper */
+/* Full-page wrapper that centers the reports card on a soft gradient. */
 .reports-container {
   direction: rtl;
   width: 100%;
@@ -15,11 +10,11 @@
   align-items: flex-start;
   font-family: var(--heading, system-ui, sans-serif);
   background:
-    radial-gradient(circle at top right, rgba(170, 59, 255, 0.12), transparent 32%),
-    radial-gradient(circle at bottom left, rgba(255, 107, 107, 0.1), transparent 28%);
+    radial-gradient(circle at top right, rgba(79, 70, 229, 0.12), transparent 32%),
+    radial-gradient(circle at bottom left, rgba(14, 165, 233, 0.1), transparent 28%);
 }
 
-/* Main card that contains the full reports screen */
+/* The single card that holds the whole reports screen. */
 .reports-card {
   width: 100%;
   max-width: 1120px;
@@ -31,11 +26,8 @@
   text-align: right;
 }
 
-/* ==========================================================================
-   Header
-   ========================================================================== */
 
-/* Top header with title, description, and export actions */
+/* Top header: title, description and export actions. */
 .reports-header {
   display: flex;
   justify-content: space-between;
@@ -43,24 +35,24 @@
   gap: 18px;
   padding: 32px;
   background:
-    linear-gradient(135deg, rgba(170, 59, 255, 0.12), rgba(255, 107, 107, 0.08)),
+    linear-gradient(135deg, rgba(79, 70, 229, 0.12), rgba(14, 165, 233, 0.08)),
     var(--social-bg, #f8f7fc);
   border-bottom: 1px solid var(--border, #eceaf3);
 }
 
-/* Small screen label above the title */
+/* Small pill label above the title. */
 .reports-eyebrow {
   width: fit-content;
   padding: 6px 12px;
   border-radius: 999px;
-  background: rgba(170, 59, 255, 0.1);
+  background: rgba(79, 70, 229, 0.1);
   color: var(--accent, #8f28e8);
   font-size: 13px;
   font-weight: 800;
   margin-bottom: 10px;
 }
 
-/* Main page title */
+/* Main page title. */
 .reports-title {
   margin: 0;
   color: var(--text-h, #171320);
@@ -68,7 +60,7 @@
   line-height: 1.2;
 }
 
-/* Short description under the title */
+/* Short description under the title. */
 .reports-subtitle {
   margin: 10px 0 0;
   color: var(--text, #6b6375);
@@ -76,7 +68,7 @@
   line-height: 1.6;
 }
 
-/* Action buttons: refresh, PDF export, and Excel export */
+/* Container for the refresh / export buttons. */
 .reports-actions {
   display: flex;
   flex-wrap: wrap;
@@ -85,13 +77,13 @@
   min-width: 280px;
 }
 
-/* Shared style for header action buttons and report tabs */
+/* Shared base style for header buttons and report tabs. */
 .reports-actions button,
 .reports-tabs button {
-  border: 1px solid var(--accent-border, rgba(170, 59, 255, 0.25));
+  border: 1px solid var(--accent-border, rgba(79, 70, 229, 0.25));
   border-radius: 999px;
   padding: 10px 16px;
-  background: var(--accent-bg, rgba(170, 59, 255, 0.1));
+  background: var(--accent-bg, rgba(79, 70, 229, 0.1));
   color: var(--accent, #8f28e8);
   font: inherit;
   font-weight: 800;
@@ -99,26 +91,23 @@
   transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
-/* Button hover effect */
+/* Lift buttons on hover. */
 .reports-actions button:hover,
 .reports-tabs button:hover {
   transform: translateY(-1px);
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
 }
 
-/* Main export buttons */
+/* Make the two export buttons stand out (solid accent). */
 .reports-actions button:nth-child(2),
 .reports-actions button:nth-child(3) {
   background: var(--accent, #8f28e8);
   color: #fff;
-  box-shadow: 0 10px 22px rgba(170, 59, 255, 0.22);
+  box-shadow: 0 10px 22px rgba(79, 70, 229, 0.22);
 }
 
-/* ==========================================================================
-   Error State
-   ========================================================================== */
 
-/* Firebase loading errors */
+/* Banner listing any Firebase collections that failed to load. */
 .reports-error {
   margin: 24px 32px 0;
   padding: 14px 16px;
@@ -129,15 +118,13 @@
   font-weight: 700;
 }
 
+/* The list of individual error messages. */
 .reports-error ul {
   margin: 10px 20px 0 0;
 }
 
-/* ==========================================================================
-   Summary Cards
-   ========================================================================== */
 
-/* Four summary cards: volunteers, groups, events, and attendance rate */
+/* Grid of the four headline summary cards. */
 .reports-summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -145,7 +132,7 @@
   padding: 30px 32px 18px;
 }
 
-/* Single summary card */
+/* A single summary card. */
 .reports-summary-card {
   margin: 0;
   padding: 22px 18px;
@@ -158,7 +145,7 @@
   text-align: center;
 }
 
-/* Main number in each summary card */
+/* The big number in a summary card. */
 .reports-summary-card span {
   display: block;
   color: var(--accent, #8f28e8);
@@ -167,7 +154,7 @@
   line-height: 1;
 }
 
-/* Label under the summary number */
+/* The label under the number. */
 .reports-summary-card p {
   margin: 8px 0 0;
   color: var(--text, #6b6375);
@@ -175,11 +162,8 @@
   font-weight: 700;
 }
 
-/* ==========================================================================
-   Event Status Summary
-   ========================================================================== */
 
-/* Section that summarizes event counts by status */
+/* Section that summarizes event counts by status. */
 .reports-status-section {
   margin: 0 32px 22px;
   padding: 24px;
@@ -188,7 +172,7 @@
   background: var(--social-bg, #faf9fd);
 }
 
-/* Section titles */
+/* Section titles (status summary + report panel). */
 .reports-status-section h2,
 .reports-panel h2 {
   margin: 0 0 18px;
@@ -196,14 +180,14 @@
   font-size: 24px;
 }
 
-/* Grid for event status counters */
+/* Grid of status counters. */
 .reports-status-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
 }
 
-/* Single status counter card */
+/* A single status counter card. */
 .reports-status-item {
   padding: 18px;
   border-radius: 16px;
@@ -212,7 +196,7 @@
   text-align: center;
 }
 
-/* Status count number */
+/* The count number. */
 .reports-status-item strong {
   display: block;
   color: var(--accent, #8f28e8);
@@ -220,7 +204,7 @@
   line-height: 1;
 }
 
-/* Status label */
+/* The status label under the count. */
 .reports-status-item span {
   display: block;
   margin-top: 8px;
@@ -228,16 +212,13 @@
   font-weight: 800;
 }
 
-/* ==========================================================================
-   Report Panel
-   ========================================================================== */
 
-/* Main panel that contains tabs, search, and report table */
+/* The panel that holds the tabs, search and report table. */
 .reports-panel {
   padding: 0 32px 34px;
 }
 
-/* Header row above the active report table */
+/* Row above the table holding the tabs and search box. */
 .reports-panel-header {
   display: flex;
   justify-content: space-between;
@@ -246,21 +227,21 @@
   margin-bottom: 18px;
 }
 
-/* Report tab button wrapper */
+/* Wrapper around the tab buttons. */
 .reports-tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
 }
 
-/* Active report tab */
+/* The currently selected tab. */
 .reports-tabs button.active {
   background: var(--accent, #8f28e8);
   color: #fff;
-  box-shadow: 0 10px 22px rgba(170, 59, 255, 0.22);
+  box-shadow: 0 10px 22px rgba(79, 70, 229, 0.22);
 }
 
-/* Search input for the current report table */
+/* Search box for the current report. */
 .reports-search {
   width: min(100%, 340px);
   box-sizing: border-box;
@@ -274,13 +255,13 @@
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-/* Visible focus state for search input */
+/* Focus ring for the search box. */
 .reports-search:focus {
-  border-color: var(--accent-border, rgba(170, 59, 255, 0.5));
-  box-shadow: 0 0 0 4px rgba(170, 59, 255, 0.12);
+  border-color: var(--accent-border, rgba(79, 70, 229, 0.5));
+  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.12);
 }
 
-/* Loading and empty states inside reports */
+/* Centered loading / empty messages. */
 .reports-loading,
 .reports-empty {
   padding: 28px;
@@ -288,11 +269,13 @@
   text-align: center;
 }
 
-/* ==========================================================================
-   Report Tables
-   ========================================================================== */
+/* Report heading that only appears in the printed PDF (hidden on screen). */
+.reports-print-title {
+  display: none;
+}
 
-/* Table wrapper with horizontal scroll support */
+
+/* Scroll wrapper around a report table. */
 .reports-table-wrap {
   width: 100%;
   overflow-x: auto;
@@ -301,14 +284,14 @@
   background: var(--bg, #fff);
 }
 
-/* Base table style */
+/* The report table itself. */
 .reports-table {
   width: 100%;
   min-width: 760px;
   border-collapse: collapse;
 }
 
-/* Shared table cell spacing */
+/* Shared padding/borders for header and body cells. */
 .reports-table th,
 .reports-table td {
   padding: 16px;
@@ -317,7 +300,7 @@
   vertical-align: middle;
 }
 
-/* Table header cells */
+/* Header cells. */
 .reports-table th {
   background: var(--social-bg, #faf9fd);
   color: var(--text-h, #171320);
@@ -325,22 +308,19 @@
   font-weight: 900;
 }
 
-/* Table body cells */
+/* Body cells. */
 .reports-table td {
   color: var(--text, #6b6375);
   font-size: 15px;
 }
 
-/* Remove the bottom border from the last row */
+/* Drop the border under the last row. */
 .reports-table tr:last-child td {
   border-bottom: 0;
 }
 
-/* ==========================================================================
-   Responsive Layout
-   ========================================================================== */
 
-/* Tablet layout */
+/* Tablet: stack the header rows and use two-column grids. */
 @media (max-width: 900px) {
   .reports-header,
   .reports-panel-header {
@@ -368,7 +348,7 @@
   }
 }
 
-/* Mobile layout */
+/* Mobile: tighter padding and single-column grids. */
 @media (max-width: 600px) {
   .reports-container {
     padding: 24px 12px;
@@ -392,11 +372,82 @@
   }
 }
 
-/* ==========================================================================
-   Print Layout
-   ========================================================================== */
 
-/* Print-friendly style for PDF export */
+/* Phone: turn report tables into stacked cards (no horizontal scroll). */
+@media (max-width: 640px) {
+  /* Drop the scroll frame around the table. */
+  .reports-table-wrap {
+    border: 0;
+    overflow: visible;
+  }
+
+  .reports-table {
+    min-width: 0;
+  }
+
+  /* Visually hide the header row (labels move onto each cell instead). */
+  .reports-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  /* Let the table parts stack vertically. */
+  .reports-table,
+  .reports-table tbody,
+  .reports-table tr,
+  .reports-table td {
+    display: block;
+    width: 100%;
+  }
+
+  /* Each row becomes a little card. */
+  .reports-table tbody tr {
+    background: var(--surface, #fff);
+    border: 1px solid var(--border, #eceaf3);
+    border-radius: 16px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+    padding: 6px 14px;
+    margin-bottom: 12px;
+  }
+
+  /* Each cell shows its label on one side and the value on the other. */
+  .reports-table td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px dashed var(--border, #eceaf3);
+    text-align: start;
+  }
+
+  /* Pull the column name from the cell's data-label attribute. */
+  .reports-table td::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    font-weight: 800;
+    font-size: 13px;
+    color: var(--text-muted, #64748b);
+  }
+
+  /* The empty-state cell spans the whole card and has no label. */
+  .reports-table td.reports-empty {
+    display: block;
+    text-align: center;
+    border-bottom: 0;
+  }
+
+  .reports-table td.reports-empty::before {
+    display: none;
+  }
+}
+
+
+/* Print: show only the selected report table, cleaned up for PDF export. */
 @media print {
   body {
     background: #fff !important;
@@ -413,14 +464,16 @@
     border-radius: 0;
   }
 
+  /* Hide everything except the report table (header, cards, summary, etc.). */
   .reports-actions,
   .reports-tabs,
-  .reports-search {
+  .reports-search,
+  .reports-panel-header,
+  .reports-header,
+  .reports-summary-grid,
+  .reports-status-section,
+  .reports-error {
     display: none !important;
-  }
-
-  .reports-header {
-    background: #fff;
   }
 
   .reports-table-wrap {
@@ -429,5 +482,18 @@
 
   .reports-table {
     min-width: 0;
+  }
+
+  /* Start the table at the very top — no cover/overview page. */
+  .reports-panel {
+    padding-top: 0;
+  }
+
+  /* Show the report name as the heading of the printed page. */
+  .reports-print-title {
+    display: block;
+    margin: 0 0 16px;
+    font-size: 22px;
+    color: #0f172a;
   }
 }

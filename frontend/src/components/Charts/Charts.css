@@ -1,0 +1,221 @@
+/* Root wrapper for the whole charts screen (centered, right-aligned). */
+.charts-screen {
+  max-width: 1000px;
+  margin: 8px auto;
+  text-align: right;
+}
+
+
+/* Heading block at the top of the screen. */
+.charts-head {
+  margin-bottom: 18px;
+}
+
+/* Small pill label above the title. */
+.charts-eyebrow {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-50);
+  color: var(--brand-700);
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+/* Main page title. */
+.charts-title {
+  margin: 0;
+  font-size: clamp(24px, 3.5vw, 32px);
+  color: var(--text);
+}
+
+/* Subtitle under the title. */
+.charts-subtitle {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+}
+
+/* Warning banner shown when some data failed to load. */
+.charts-note {
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  border: 1px solid #fcd34d;
+  background: #fffbeb;
+  color: #92400e;
+  border-radius: var(--radius);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+
+/* Responsive grid that lays out the chart cards. */
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+/* A single chart card. */
+.chart-card {
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Make a card span the full grid width. */
+.chart-card-wide {
+  grid-column: 1 / -1;
+}
+
+/* Card title. */
+.chart-card h3 {
+  margin: 0 0 14px;
+  font-size: 17px;
+  color: var(--text);
+}
+
+/* Centered "no data / loading" message. */
+.chart-empty {
+  padding: 30px 0;
+  text-align: center;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+
+/* Lays the donut and its legend side by side. */
+.chart-donut-wrap {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+/* The donut SVG, sized responsively. */
+.chart-donut {
+  width: clamp(140px, 42vw, 170px);
+  height: auto;
+  flex-shrink: 0;
+}
+
+/* The big total number in the middle of the donut. */
+.chart-donut-center {
+  font-size: 34px;
+  font-weight: 800;
+  fill: var(--text);
+}
+
+/* Legend list next to the donut. */
+.chart-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  flex: 1 1 150px;
+}
+
+/* One legend row. */
+.chart-legend li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text);
+}
+
+/* Coloured square next to each legend label. */
+.chart-legend-dot {
+  width: 13px;
+  height: 13px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+/* Legend label text; grows to push the value to the end. */
+.chart-legend-label {
+  flex: 1 1 auto;
+}
+
+/* Legend value (the count). */
+.chart-legend-value {
+  color: var(--text-muted);
+  font-weight: 800;
+}
+
+
+/* Row of bars; scrolls sideways if there are many. */
+.chart-bars {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  height: 190px;
+  padding-top: 20px;
+  overflow-x: auto;
+}
+
+/* One bar column (track + label stacked). */
+.chart-bar-col {
+  flex: 1 0 32px;
+  min-width: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The track the bar fill grows inside, aligned to the bottom. */
+.chart-bar-track {
+  flex: 1 1 auto;
+  width: 70%;
+  max-width: 36px;
+  display: flex;
+  align-items: flex-end;
+}
+
+/* The coloured filled portion of a bar. */
+.chart-bar-fill {
+  position: relative;
+  width: 100%;
+  min-height: 3px;
+  border-radius: 7px 7px 0 0;
+  background: linear-gradient(180deg, var(--brand-500), var(--brand-700));
+  transition: height 0.35s ease;
+}
+
+/* The value label floating above each bar. */
+.chart-bar-value {
+  position: absolute;
+  top: -18px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-muted);
+}
+
+/* The label under each bar. */
+.chart-bar-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+
+/* On small screens: tighter cards and center the donut. */
+@media (max-width: 600px) {
+  .chart-card {
+    padding: 14px;
+  }
+
+  .chart-donut-wrap {
+    justify-content: center;
+  }
+}

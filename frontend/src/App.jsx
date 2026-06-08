@@ -1,293 +1,316 @@
-import { useState, useEffect } from 'react';
+// App — root component and top-level router. Tracks the Firebase auth session
+// and the user's role, then renders the matching experience (public pages /
+// admin / guide / viewer). The shared signed-in header is rendered once here.
+
+// React hooks for state and side effects.
+import { useEffect, useState } from 'react';
+
+// Firebase auth helpers.
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { auth, db } from './firebase'; 
+
+// Firestore helpers for reading the user's profile.
 import { doc, getDoc } from 'firebase/firestore';
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+
+// Our Firebase auth + database instances.
+import { auth, db } from './firebase';
+
+// App-level styles.
 import './App.css';
 
-// Import Screens
-import MainScreen from './components/MainScreen'; 
-import Login from './components/login'; // Casing fixed to lowercase
-import RegistrationScreen from './components/RegistrationScreen';
-import AdminDashboard from './components/AdminDashboard';
-import GuideDashboard from './components/GuideDashboard';
-import GroupManagement from './components/GroupManagement';
-import GroupDetails from './components/GroupDetails';
-import VolunteersManagement from './components/VolunteersManagement';
-import GuideManagement from './components/GuideManagement';
-import AttendanceScreen from './components/AttendanceScreen';
-import EventManagement from './components/EventManagement/EventManagement';
+// Screen components (signed-in dashboards, viewer screens and public pages).
+import AdminDashboard from './components/AdminDashboard/AdminDashboard';
 import EventDetails from './components/EventDetails/EventDetails';
+import EventManagement from './components/EventManagement/EventManagement';
+import GuideDashboard from './components/GuideDashboard/GuideDashboard';
+import Login from './components/Login/Login';
+import MainScreen from './components/MainScreen/MainScreen';
+import RegistrationScreen from './components/RegistrationScreen/RegistrationScreen';
 import Reports from './components/Reports/Reports';
+import UserList from './components/UserList/UserList';
 import VolunteerDetails from './components/VolunteerDetails/VolunteerDetails';
 
-// Route Guard Component
-const ProtectedRoute = ({ user, requiredRole, allowedRoles, children }) => {
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-  
-  if (requiredRole && user.role !== requiredRole) {
-    return <Navigate to="/" replace />;
-  }
 
-  if (allowedRoles && !allowedRoles.includes(user.role)) {
-    return <Navigate to="/" replace />;
-  }
-
-  return children;
+// Hebrew labels for the system roles shown in the header.
+const ROLE_LABELS = {
+  admin: 'מנהל',
+  guide: 'מדריך',
+  viewer: 'צופה',
 };
 
-// Layout for Logged In Users
-const AuthenticatedLayout = ({ user, handleLogout, children }) => (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-    {/* Universal Authenticated Header */}
-    <header style={{ 
-      display: 'flex', 
-      justifyContent: 'space-between', 
-      alignItems: 'center', 
-      paddingBottom: '20px', 
-      borderBottom: '2px solid #eee' 
-    }}>
-      <div>
-        <h2 style={{ margin: 0, color: '#2c3e50' }}>Welcome, {user.email}</h2>
-        <p style={{ margin: 0, color: '#7f8c8d', fontSize: '0.9rem', marginTop: '5px' }}>
-          System Clearance: <strong style={{ textTransform: 'capitalize' }}>{user.role || 'User'}</strong>
-        </p>
-      </div>
-      <button 
-        onClick={handleLogout}
-        style={{ padding: '8px 16px', backgroundColor: '#e74c3c', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-      >
-        Sign Out
-      </button>
-    </header>
-    
-    {children}
-  </div>
-);
 
 function App() {
+  // The signed-in user (null when logged out).
   const [user, setUser] = useState(null);
+
+  // True while the auth session is being resolved.
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
 
+  // Which viewer tab is active.
+  const [activeScreen, setActiveScreen] = useState('users');
+
+  // The admin dashboard's current view.
+  const [adminView, setAdminView] = useState('overview');
+
+  // The guide dashboard's current view.
+  const [guideView, setGuideView] = useState('menu');
+
+  // The event / volunteer opened in the viewer (null when none).
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [selectedVolunteer, setSelectedVolunteer] = useState(null);
+
+  // Which public page is showing when logged out.
+  const [publicView, setPublicView] = useState('main');
+
+  // Subscribe to Firebase auth changes and enrich the user with their
+  // Firestore profile (role defaults to "viewer" when none is set).
   useEffect(() => {
-    // Global Authentication Listener
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      try {
-        if (currentUser) {
-          // Fetch the user's specific role from the 'users' collection
-          const userDocRef = doc(db, 'users', currentUser.uid);
-          const userDocSnap = await getDoc(userDocRef);
+      setLoading(true);
 
-          if (userDocSnap.exists()) {
-            const userData = userDocSnap.data();
-            
-            // Merge Auth data with Firestore data (so user.role is accessible everywhere)
-            setUser({
-              ...currentUser,
-              role: userData.role 
-            });
-          } else {
-            console.warn("No user document found in Firestore!");
-            setUser({ ...currentUser, role: 'viewer' }); // Fallback role
-          }
-        } else {
-          // No user is logged in
+      try {
+        // Logged out: clear the user and show the public home.
+        if (!currentUser) {
           setUser(null);
+          setPublicView('main');
+          return;
         }
+
+        // Read the user's profile document.
+        const userDocRef = doc(db, 'users', currentUser.uid);
+        const userDocSnap = await getDoc(userDocRef);
+
+        // The profile record (if any).
+        const userData = userDocSnap.exists() ? userDocSnap.data() : null;
+
+        // No record, or a disabled one (a removed guide) → no access. Sign them
+        // out so a leftover login can't use the app.
+        if (!userData || userData.disabled) {
+          await signOut(auth);
+          setUser(null);
+          setPublicView('main');
+          window.alert('אין לחשבון זה הרשאת גישה למערכת. פנה/י למנהל המערכת.');
+          return;
+        }
+
+        // Merge the auth user with the profile (defaulting the role).
+        setUser({
+          uid: currentUser.uid,
+          email: currentUser.email,
+          displayName: currentUser.displayName,
+          ...userData,
+          role: userData.role || 'viewer',
+        });
       } catch (error) {
-        console.error("Error fetching user role:", error);
+        // On error, treat the user as logged out.
+        console.error('Error fetching user role:', error);
         setUser(null);
       } finally {
         setLoading(false);
       }
     });
 
+    // Stop listening when the component unmounts.
     return () => unsubscribe();
   }, []);
 
-  // Secure Logout Handler
+  // Sign out and reset all view state back to defaults.
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      navigate('/');
+      setSelectedEvent(null);
+      setSelectedVolunteer(null);
+      setActiveScreen('users');
+      setAdminView('overview');
+      setGuideView('menu');
+      setPublicView('main');
     } catch (error) {
       console.error('Error logging out:', error);
     }
   };
 
-  // Show a loading screen while Firebase checks the user's tokens
-  if (loading) {
+  // Render the active viewer screen (or an opened event / volunteer).
+  const renderViewerScreens = () => {
+    // An opened event takes over the view.
+    if (selectedEvent) {
+      return (
+        <EventDetails
+          event={selectedEvent}
+          onBack={() => {
+            setSelectedEvent(null);
+            setActiveScreen('events');
+          }}
+        />
+      );
+    }
+
+    // An opened volunteer takes over the view.
+    if (selectedVolunteer) {
+      return (
+        <VolunteerDetails
+          volunteer={selectedVolunteer}
+          onBack={() => {
+            setSelectedVolunteer(null);
+            setActiveScreen('users');
+          }}
+        />
+      );
+    }
+
+    // Otherwise show the screen for the active tab.
+    switch (activeScreen) {
+      case 'events':
+        return <EventManagement readOnly onOpenEventDetails={(eventItem) => setSelectedEvent(eventItem)} />;
+      case 'reports':
+        return <Reports />;
+      case 'users':
+      default:
+        return <UserList onOpenVolunteerDetails={(volunteer) => setSelectedVolunteer(volunteer)} />;
+    }
+  };
+
+  // Render the content for the signed-in user's role.
+  const renderRoleContent = () => {
+    const role = user?.role || 'viewer';
+
+    // Admins get the admin dashboard.
+    if (role === 'admin') {
+      return <AdminDashboard currentView={adminView} setCurrentView={setAdminView} />;
+    }
+
+    // Guides get the guide dashboard.
+    if (role === 'guide') {
+      return <GuideDashboard user={user} onLogout={handleLogout} currentView={guideView} setCurrentView={setGuideView} />;
+    }
+
+    // Everyone else gets the tabbed viewer screens.
     return (
-      <div id="center" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <div className="counter" style={{ fontSize: '1.2rem', color: '#555' }}>
-          Loading System Profiles...
+      <>
+        {/* Tab nav (hidden while an event / volunteer is open). */}
+        {!selectedEvent && !selectedVolunteer && (
+          <nav className="app-tabs" aria-label="ניווט משתמש">
+            <button
+              className={activeScreen === 'users' ? 'active' : ''}
+              aria-current={activeScreen === 'users' ? 'page' : undefined}
+              onClick={() => setActiveScreen('users')}
+            >
+              רשימת מתנדבים
+            </button>
+            <button
+              className={activeScreen === 'events' ? 'active' : ''}
+              aria-current={activeScreen === 'events' ? 'page' : undefined}
+              onClick={() => setActiveScreen('events')}
+            >
+              ניהול אירועים
+            </button>
+            <button
+              className={activeScreen === 'reports' ? 'active' : ''}
+              aria-current={activeScreen === 'reports' ? 'page' : undefined}
+              onClick={() => setActiveScreen('reports')}
+            >
+              דוחות
+            </button>
+          </nav>
+        )}
+        {renderViewerScreens()}
+      </>
+    );
+  };
+
+  // A shared registration-form link (?register=1) opens the public volunteer
+  // form for anyone, regardless of sign-in. Admins send this link by WhatsApp
+  // or email; once it is filled, the submission shows up in the admin screen.
+  const isRegistrationForm =
+    new URLSearchParams(window.location.search).get('register') === '1';
+
+  // The public registration form, shown straight from the share link.
+  if (isRegistrationForm) {
+    return (
+      <div className="app-shell" dir="rtl">
+        <div className="public-layout">
+          <section className="public-card public-card-wide" aria-label="הרשמה להתנדבות">
+            <RegistrationScreen />
+          </section>
         </div>
       </div>
     );
   }
 
+  // While the auth session resolves, show a loading message.
+  if (loading) {
+    return (
+      <div id="center">
+        <div className="counter loading-message">טוען פרופיל מערכת...</div>
+      </div>
+    );
+  }
+
   return (
-    <div style={{ width: '100%', padding: '20px', boxSizing: 'border-box' }}>
-      <Routes>
-        {/* Public Routes (Only if not logged in) */}
-        <Route path="/" element={
-          user ? <Navigate to={user.role === 'admin' ? "/admin" : "/guide"} replace /> : (
-            <MainScreen 
-              onNavigateLogin={() => navigate('/login')} 
-              onNavigateRegister={() => navigate('/register')} 
-            />
-          )
-        } />
-        
-        <Route path="/login" element={
-          user ? <Navigate to={user.role === 'admin' ? "/admin" : "/guide"} replace /> : (
-            <div style={{ maxWidth: '400px', margin: '40px auto' }}>
-              <button 
-                onClick={() => navigate('/')}
-                style={{ marginBottom: '20px', background: 'none', border: 'none', color: '#3498db', cursor: 'pointer', padding: 0 }}
-              >
-                ← Back to Home
+    <div className="app-shell" dir="rtl">
+      {user ? (
+
+        // ----- Signed-in layout -----
+        <div className="authenticated-layout">
+
+          {/* Shared top header: actions + greeting/role. */}
+          <header className="authenticated-header">
+
+            {/* Action buttons (admin menu shortcuts + logout). */}
+            <div className="auth-actions">
+              {user.role === 'admin' && adminView === 'overview' && (
+                <button type="button" className="auth-btn" onClick={() => setAdminView('menu')}>
+                  ⚙️ מרכז ניהול
+                </button>
+              )}
+              {user.role === 'admin' && adminView !== 'overview' && (
+                <button
+                  type="button"
+                  className="auth-btn"
+                  onClick={() => setAdminView(adminView === 'menu' ? 'overview' : 'menu')}
+                >
+                  {adminView === 'menu' ? 'חזרה לדף הבית' : 'חזרה לתפריט'}
+                </button>
+              )}
+              <button type="button" className="auth-btn auth-btn-danger" onClick={handleLogout}>
+                התנתקות
               </button>
+            </div>
+
+            {/* Greeting + role badge + Logo. */}
+            <div className="auth-user-block">
+              <img
+                src="https://www.shalva.org/wp-content/uploads/2025/02/Logo-Hebrew-1024x488-1.png"
+                alt="שלוה"
+                className="auth-logo"
+              />
+              <div className="auth-user">
+                <h2 className="auth-greeting">שלום, {user.firstName || user.displayName || user.email}</h2>
+                <span className="auth-role-badge">הרשאה: {ROLE_LABELS[user.role] || user.role || 'צופה'}</span>
+              </div>
+            </div>
+          </header>
+
+          {/* The role-specific content. */}
+          {renderRoleContent()}
+        </div>
+      ) : (
+
+        // ----- Public (logged-out) layout -----
+        <div className="public-layout">
+
+          {/* Home page. */}
+          {publicView === 'main' && (
+            <MainScreen onNavigateLogin={() => setPublicView('login')} />
+          )}
+
+          {/* Login page. */}
+          {publicView === 'login' && (
+            <section className="public-card" aria-label="כניסה למערכת">
+              <button className="link-button" onClick={() => setPublicView('main')}>חזרה לדף הבית</button>
               <Login />
-            </div>
-          )
-        } />
-
-        <Route path="/register" element={
-          user ? <Navigate to={user.role === 'admin' ? "/admin" : "/guide"} replace /> : (
-            <div style={{ maxWidth: '600px', margin: '40px auto' }}>
-              <button 
-                onClick={() => navigate('/')}
-                style={{ marginBottom: '20px', background: 'none', border: 'none', color: '#3498db', cursor: 'pointer', padding: 0 }}
-              >
-                ← Back to Home
-              </button>
-              <RegistrationScreen />
-            </div>
-          )
-        } />
-
-        {/* Admin Routes (Required role: admin) */}
-        <Route path="/admin" element={
-          <ProtectedRoute user={user} requiredRole="admin">
-            <AuthenticatedLayout user={user} handleLogout={handleLogout}>
-              <AdminDashboard />
-            </AuthenticatedLayout>
-          </ProtectedRoute>
-        } />
-
-        <Route path="/admin/groups" element={
-          <ProtectedRoute user={user} requiredRole="admin">
-            <AuthenticatedLayout user={user} handleLogout={handleLogout}>
-              <GroupManagement />
-            </AuthenticatedLayout>
-          </ProtectedRoute>
-        } />
-
-        <Route path="/admin/volunteers" element={
-          <ProtectedRoute user={user} requiredRole="admin">
-            <AuthenticatedLayout user={user} handleLogout={handleLogout}>
-              <VolunteersManagement />
-            </AuthenticatedLayout>
-          </ProtectedRoute>
-        } />
-
-        <Route path="/admin/guides" element={
-          <ProtectedRoute user={user} requiredRole="admin">
-            <AuthenticatedLayout user={user} handleLogout={handleLogout}>
-              <GuideManagement />
-            </AuthenticatedLayout>
-          </ProtectedRoute>
-        } />
-
-        <Route path="/admin/events" element={
-          <ProtectedRoute user={user} requiredRole="admin">
-            <AuthenticatedLayout user={user} handleLogout={handleLogout}>
-              <EventManagement />
-            </AuthenticatedLayout>
-          </ProtectedRoute>
-        } />
-
-        <Route path="/admin/reports" element={
-          <ProtectedRoute user={user} requiredRole="admin">
-            <AuthenticatedLayout user={user} handleLogout={handleLogout}>
-              <Reports />
-            </AuthenticatedLayout>
-          </ProtectedRoute>
-        } />
-
-        {/* Guide Routes (Required role: guide) */}
-        <Route path="/guide" element={
-          <ProtectedRoute user={user} requiredRole="guide">
-            <AuthenticatedLayout user={user} handleLogout={handleLogout}>
-              <GuideDashboard />
-            </AuthenticatedLayout>
-          </ProtectedRoute>
-        } />
-
-        <Route path="/attendance" element={
-          <ProtectedRoute user={user} allowedRoles={['admin', 'guide']}>
-            <AuthenticatedLayout user={user} handleLogout={handleLogout}>
-              <AttendanceScreen />
-            </AuthenticatedLayout>
-          </ProtectedRoute>
-        } />
-
-        {/* Shared Authenticated Routes */}
-        <Route path="/group-details/:groupId" element={
-          <ProtectedRoute user={user} allowedRoles={['admin', 'guide']}>
-            <AuthenticatedLayout user={user} handleLogout={handleLogout}>
-              <GroupDetails />
-            </AuthenticatedLayout>
-          </ProtectedRoute>
-        } />
-
-        <Route path="/group-details" element={
-          <ProtectedRoute user={user} allowedRoles={['admin', 'guide']}>
-            <AuthenticatedLayout user={user} handleLogout={handleLogout}>
-              <GroupDetails />
-            </AuthenticatedLayout>
-          </ProtectedRoute>
-        } />
-
-        <Route path="/volunteer-details/:volunteerId" element={
-          <ProtectedRoute user={user} allowedRoles={['admin', 'guide']}>
-            <AuthenticatedLayout user={user} handleLogout={handleLogout}>
-              <VolunteerDetails />
-            </AuthenticatedLayout>
-          </ProtectedRoute>
-        } />
-
-        <Route path="/volunteer-details" element={
-          <ProtectedRoute user={user} allowedRoles={['admin', 'guide']}>
-            <AuthenticatedLayout user={user} handleLogout={handleLogout}>
-              <VolunteerDetails />
-            </AuthenticatedLayout>
-          </ProtectedRoute>
-        } />
-
-        <Route path="/event-details/:eventId" element={
-          <ProtectedRoute user={user} allowedRoles={['admin', 'guide']}>
-            <AuthenticatedLayout user={user} handleLogout={handleLogout}>
-              <EventDetails />
-            </AuthenticatedLayout>
-          </ProtectedRoute>
-        } />
-
-        <Route path="/event-details" element={
-          <ProtectedRoute user={user} allowedRoles={['admin', 'guide']}>
-            <AuthenticatedLayout user={user} handleLogout={handleLogout}>
-              <EventDetails />
-            </AuthenticatedLayout>
-          </ProtectedRoute>
-        } />
-
-        {/* Fallback Route */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+            </section>
+          )}
+        </div>
+      )}
     </div>
   );
 }

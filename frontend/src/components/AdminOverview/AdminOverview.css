@@ -1,0 +1,1382 @@
+/* Root wrapper for the admin overview screen (centered, right-aligned). */
+.admin-overview {
+  max-width: 960px;
+  margin: 8px auto;
+  text-align: right;
+}
+
+
+/* Header row: title block + "more info" button. */
+.ao-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+/* Title/eyebrow/subtitle column. */
+.ao-head-text {
+  min-width: 0;
+}
+
+/* The button that opens the side drawer. */
+.ao-more-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border: 1px solid var(--brand-200);
+  background: var(--surface);
+  color: var(--brand-700);
+  border-radius: var(--radius-pill);
+  font-weight: 700;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+/* Lift the button on hover. */
+.ao-more-btn:hover {
+  background: var(--brand-50);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow);
+}
+
+/* Small pill label above the title. */
+.ao-eyebrow {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-50);
+  color: var(--brand-700);
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+/* Main page title. */
+.ao-title {
+  margin: 0;
+  font-size: clamp(24px, 3.5vw, 32px);
+  color: var(--text);
+}
+
+/* Subtitle under the title. */
+.ao-subtitle {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+}
+
+/* Warning banner when some data failed to load. */
+.ao-note {
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  border: 1px solid #fcd34d;
+  background: #fffbeb;
+  color: #92400e;
+  border-radius: var(--radius);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+/* Centered empty / loading message. */
+.ao-empty {
+  padding: 18px 4px;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-align: center;
+}
+
+/* Smaller inline empty message. */
+.ao-empty-inline {
+  padding: 8px 2px;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+
+/* The featured calendar card. */
+.ao-cal-card {
+  margin-bottom: 16px;
+  border: 1px solid var(--brand-100);
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: 0 22px 48px rgba(158, 33, 136, 0.13);
+  overflow: hidden;
+}
+
+/* Gradient header strip of the calendar card. */
+.ao-cal-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 22px;
+  background: linear-gradient(120deg, var(--brand-600) 0%, var(--info) 100%);
+  color: #fff;
+  overflow: hidden;
+}
+
+/* Soft glow decoration in the header. */
+.ao-cal-header::after {
+  content: '';
+  position: absolute;
+  top: -65%;
+  inset-inline-start: -5%;
+  width: 260px;
+  height: 260px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.22), transparent 65%);
+  pointer-events: none;
+}
+
+/* Eyebrow + month label column in the header. */
+.ao-cal-header-text {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* "📅 לוח אירועים" eyebrow. */
+.ao-cal-eyebrow {
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0.9;
+}
+
+/* The big month + year label. */
+.ao-cal-month {
+  font-size: clamp(22px, 3.4vw, 30px);
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+/* Prev/next month arrow group (forced LTR). */
+.ao-cal-arrows {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 8px;
+  direction: ltr;
+}
+
+/* A single round arrow button. */
+.ao-cal-arrows button {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+/* Arrow hover. */
+.ao-cal-arrows button:hover {
+  background: rgba(255, 255, 255, 0.32);
+  transform: translateY(-1px);
+}
+
+/* Padded body that holds the day grid. */
+.ao-cal-body {
+  padding: clamp(14px, 2.5vw, 20px);
+  background: var(--surface);
+}
+
+
+/* Stack of expandable event cards. */
+.ao-events {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* A single event card. */
+.ao-event {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+/* Coloured accent strip down the side of each event card. */
+.ao-event::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  background: var(--brand-400);
+}
+
+/* Accent-strip colour per event status. */
+.ao-event--active::before { background: #16a34a; }
+.ao-event--planned::before { background: #4f46e5; }
+.ao-event--finished::before { background: #94a3b8; }
+.ao-event--cancelled::before { background: #dc2626; }
+
+/* Lift the card on hover. */
+.ao-event:hover {
+  transform: translateY(-2px);
+  border-color: var(--brand-200);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.1);
+}
+
+/* Highlight the card while it's expanded. */
+.ao-event.is-open {
+  border-color: var(--brand-200);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.1);
+}
+
+/* The clickable header row of an event card. */
+.ao-event-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  cursor: pointer;
+  text-align: right;
+}
+
+/* Tint the header on hover. */
+.ao-event-head:hover {
+  background: var(--brand-50);
+  transform: none;
+  box-shadow: none;
+}
+
+/* The gradient date badge on the left of the card. */
+.ao-event-date {
+  flex-shrink: 0;
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: linear-gradient(160deg, var(--brand-600), var(--info));
+  color: #fff;
+  line-height: 1.05;
+  box-shadow: 0 8px 18px rgba(158, 33, 136, 0.2);
+}
+
+/* Day number in the date badge. */
+.ao-event-day {
+  display: block;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+/* Month name in the date badge. */
+.ao-event-month {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.9;
+}
+
+/* Name + meta column; grows to fill the row. */
+.ao-event-info {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Event name (truncated if too long). */
+.ao-event-name {
+  display: block;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Date · location meta line. */
+.ao-event-meta {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Status pill on the card header. */
+.ao-event-status {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Expand/collapse chevron. */
+.ao-event-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+
+/* Base status badge (shown in the details grid). */
+.ao-status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Status badge colours. */
+.ao-status-active { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+.ao-status-planned { background: #e0e7ff; color: #3730a3; border-color: #c7d2fe; }
+.ao-status-finished { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
+.ao-status-cancelled { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
+
+
+/* The revealed details panel under an event header. */
+.ao-event-detail {
+  padding: 4px 16px 16px;
+  border-top: 1px solid var(--border);
+  animation: ao-fade 0.2s ease;
+}
+
+/* Fade-in used by the reveal panels. */
+@keyframes ao-fade {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Grid of detail items. */
+.ao-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+/* A single detail item (label + value). */
+.ao-detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+/* A detail item that spans the full grid width. */
+.ao-detail-wide {
+  grid-column: 1 / -1;
+}
+
+/* Detail label. */
+.ao-detail-label {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Detail value. */
+.ao-detail-value {
+  color: var(--text);
+  font-weight: 700;
+}
+
+/* Contact list (name / phone / email). */
+.ao-contact {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-weight: 700;
+}
+
+/* Contact links. */
+.ao-contact a {
+  color: var(--brand-700);
+}
+
+/* Description block under the details. */
+.ao-event-desc {
+  margin-top: 14px;
+}
+
+/* Description heading. */
+.ao-event-desc h5 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+/* Description text (keeps line breaks). */
+.ao-event-desc p {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.6;
+  white-space: pre-line;
+}
+
+
+/* The 7-column calendar day grid. */
+.ao-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+/* Each day / blank is its own bordered tile. */
+.ao-cal-empty,
+.ao-cal-day {
+  box-sizing: border-box;
+  border: 1px solid #e8ecf2;
+  border-radius: 6px;
+}
+
+/* Weekday header cells. */
+.ao-cal-weekday {
+  text-align: center;
+  font-weight: 800;
+  color: var(--brand-700);
+  font-size: 12px;
+  padding: 10px 0;
+  background: var(--surface);
+  letter-spacing: 0.02em;
+}
+
+/* Blank leading cell before the 1st. */
+.ao-cal-empty {
+  min-height: clamp(52px, 8.5vw, 78px);
+  background: var(--surface);
+}
+
+/* A clickable day cell. */
+.ao-cal-day {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: clamp(52px, 8.5vw, 78px);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+/* Day hover. */
+.ao-cal-day:hover {
+  background: var(--surface-2);
+}
+
+/* Saturday gets a soft yellow fill. */
+.ao-cal-day.is-shabbat {
+  background: #fef9c3;
+}
+
+/* The round number inside each day cell. */
+.ao-cal-num {
+  width: clamp(34px, 6vw, 42px);
+  height: clamp(34px, 6vw, 42px);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: clamp(14px, 1.9vw, 17px);
+  font-weight: 700;
+  color: var(--text);
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Selected day: indigo frame around the cell. */
+.ao-cal-day.is-selected {
+  box-shadow: inset 0 0 0 2px var(--brand-500);
+  z-index: 1;
+}
+
+/* Today: bold black frame so it stands out. */
+.ao-cal-day.is-today {
+  box-shadow: inset 0 0 0 2px #0f172a;
+  z-index: 2;
+}
+
+/* Bolder number for today. */
+.ao-cal-day.is-today .ao-cal-num {
+  font-weight: 800;
+}
+
+/* Black dot marking days that have events. */
+.ao-cal-mark {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #0f172a;
+}
+
+/* The "events for selected day" area below the grid. */
+.ao-cal-events {
+  padding: clamp(16px, 2.5vw, 22px);
+  border-top: 1px solid var(--border);
+}
+
+/* Its heading. */
+.ao-cal-events-title {
+  margin: 0 0 14px;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+
+/* Wrapper around the birthdays cake. */
+.ao-bday-block {
+  margin-bottom: 16px;
+}
+
+/* The big tappable cake card. */
+.ao-cake {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: clamp(14px, 3vw, 22px);
+  border: 1px solid var(--brand-200);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, #fce7f3, #ede9fe 55%, #e0f2fe);
+  cursor: pointer;
+  text-align: right;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+/* Lift the cake on hover. */
+.ao-cake:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+/* The cake emoji (gently bouncing). */
+.ao-cake-emoji {
+  flex-shrink: 0;
+  font-size: clamp(40px, 8vw, 58px);
+  line-height: 1;
+  filter: drop-shadow(0 8px 14px rgba(219, 39, 119, 0.22));
+  animation: ao-bday-bounce 2.4s ease-in-out infinite;
+}
+
+/* Title + subtitle column on the cake. */
+.ao-cake-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* "ימי הולדת" title. */
+.ao-cake-title {
+  font-size: clamp(18px, 2.6vw, 23px);
+  font-weight: 800;
+  color: var(--text);
+}
+
+/* Cake subtitle (how many celebrate today). */
+.ao-cake-sub {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--brand-700);
+}
+
+/* Cake expand/collapse chevron. */
+.ao-cake-chevron {
+  flex-shrink: 0;
+  color: var(--brand-700);
+  font-size: 13px;
+}
+
+/* The revealed birthdays panel. */
+.ao-bday-reveal {
+  margin-top: 14px;
+  animation: ao-fade 0.2s ease;
+}
+
+/* Grid of today's birthday cards. */
+.ao-today-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+
+/* A single festive birthday card. */
+.ao-today-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--brand-200);
+  background: linear-gradient(135deg, #fce7f3, #ede9fe 55%, #e0f2fe);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+/* Accent strip on the birthday card. */
+.ao-today-card::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: linear-gradient(180deg, #f472b6, #a78bfa, #60a5fa);
+}
+
+/* The bouncing cake emoji on each card. */
+.ao-today-emoji {
+  flex-shrink: 0;
+  font-size: 30px;
+  animation: ao-bday-bounce 2.2s ease-in-out infinite;
+}
+
+/* Cake bounce animation. */
+@keyframes ao-bday-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+/* Name + sub column on the birthday card. */
+.ao-today-info {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Birthday person's name. */
+.ao-today-name {
+  font-weight: 800;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* "celebrating today" sub-line. */
+.ao-today-sub {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--brand-700);
+}
+
+/* Age badge on the birthday card. */
+.ao-today-age {
+  flex-shrink: 0;
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  background: #fff;
+  color: var(--brand-700);
+  border: 1px solid var(--brand-200);
+  font-weight: 800;
+  font-size: 13px;
+}
+
+
+/* Dark backdrop behind the side drawer. */
+.ao-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(15, 23, 42, 0.45);
+  animation: ao-backdrop-in 0.2s ease;
+}
+
+/* Backdrop fade-in. */
+@keyframes ao-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* The sliding drawer panel. */
+.ao-drawer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: min(390px, 90vw);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  animation: ao-drawer-in 0.24s ease;
+}
+
+/* Drawer slide-in. */
+@keyframes ao-drawer-in {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+/* Drawer header row. */
+.ao-drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Drawer title. */
+.ao-drawer-head h3 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--text);
+}
+
+/* Drawer close button. */
+.ao-drawer-close {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 15px;
+}
+
+/* Close button hover. */
+.ao-drawer-close:hover {
+  background: var(--brand-50);
+  color: var(--brand-700);
+}
+
+/* Scrollable drawer body. */
+.ao-drawer-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Vertical stack helper. */
+.ao-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* A collapsible section in the drawer. */
+.ao-section {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  transition: box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+/* Highlight a section on hover / when open. */
+.ao-section:hover,
+.ao-section.is-open {
+  border-color: var(--brand-200);
+  box-shadow: var(--shadow);
+}
+
+/* The section header button. */
+.ao-section-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  cursor: pointer;
+  text-align: right;
+}
+
+/* Tint the section header on hover. */
+.ao-section-head:hover {
+  background: var(--brand-50);
+  transform: none;
+  box-shadow: none;
+}
+
+/* The section's icon badge. */
+.ao-section-icon {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  font-size: 22px;
+  background: var(--brand-50);
+  border: 1px solid var(--brand-100);
+}
+
+/* Section label (truncated if long). */
+.ao-section-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 800;
+  font-size: 16px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Count pill on the section header. */
+.ao-section-count {
+  flex-shrink: 0;
+  min-width: 30px;
+  padding: 3px 11px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-600);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  text-align: center;
+}
+
+/* Section expand/collapse chevron. */
+.ao-section-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+/* Scrollable section body. */
+.ao-section-body {
+  padding: 4px 16px 16px;
+  border-top: 1px solid var(--border);
+  animation: ao-fade 0.2s ease;
+  max-height: 55vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+
+/* Responsive list of rows inside a section. */
+.ao-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+/* A single stacked row (name on top, details below). */
+.ao-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+/* The main line of a row (never truncated). */
+.ao-row-main {
+  font-weight: 700;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* The sub-line of a row. */
+.ao-row-sub {
+  color: var(--text-muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+/* Small tag pill on a row (e.g. group name). */
+.ao-row-tag {
+  align-self: flex-start;
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-50);
+  color: var(--brand-700);
+  border: 1px solid var(--brand-200);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+
+/* Per-section accent colours for the icon badges. */
+.ao-accent-a .ao-section-icon { background: #eef2ff; border-color: #c7d2fe; }
+.ao-accent-b .ao-section-icon { background: #ecfeff; border-color: #a5f3fc; }
+.ao-accent-c .ao-section-icon { background: #f0fdf4; border-color: #bbf7d0; }
+.ao-accent-d.ao-feature-icon { background: #fff7ed; border-color: #fed7aa; }
+.ao-accent-f.ao-feature-icon { background: #fdf4ff; border-color: #f5d0fe; }
+
+
+/* Phone: tighter headers/grids and a phone-sized calendar. */
+@media (max-width: 640px) {
+  .ao-event-head,
+  .ao-section-head {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .ao-detail-grid,
+  .ao-today-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ao-event-status {
+    display: none;
+  }
+
+  /* Calendar fits a phone: tighter spacing, smaller cells. */
+  .ao-cal-header {
+    padding: 16px;
+  }
+
+  .ao-cal-month {
+    font-size: 20px;
+  }
+
+  .ao-cal-arrows button {
+    width: 36px;
+    height: 36px;
+    font-size: 20px;
+  }
+
+  .ao-cal-body {
+    padding: 12px;
+  }
+
+  .ao-cal-grid {
+    gap: 5px;
+  }
+
+  .ao-cal-weekday {
+    font-size: 11px;
+    padding: 8px 0;
+  }
+
+  .ao-cal-empty,
+  .ao-cal-day {
+    min-height: 46px;
+  }
+
+  .ao-cal-day {
+    gap: 3px;
+  }
+
+  .ao-cal-num {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+
+  /* Drawer fills the phone nicely. */
+  .ao-drawer {
+    width: min(360px, 92vw);
+  }
+
+  .ao-drawer-head,
+  .ao-drawer-body {
+    padding: 14px;
+  }
+}
+
+/* Very small phones: even tighter calendar cells. */
+@media (max-width: 400px) {
+  .ao-cal-body {
+    padding: 8px;
+  }
+
+  .ao-cal-weekday {
+    font-size: 10px;
+    padding: 6px 0;
+  }
+
+  .ao-cal-empty,
+  .ao-cal-day {
+    min-height: 42px;
+  }
+
+  .ao-cal-num {
+    width: 30px;
+    height: 30px;
+    font-size: 13px;
+  }
+
+  .ao-cal-dots {
+    gap: 2px;
+  }
+}
+
+/* For users who prefer less motion: turn the animations off. */
+@media (prefers-reduced-motion: reduce) {
+  .ao-today-emoji,
+  .ao-cake-emoji,
+  .ao-drawer,
+  .ao-drawer-backdrop {
+    animation: none;
+  }
+}
+
+/* Quick management grid dashboard */
+.ao-quick-mgmt {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 20px;
+  margin-top: 24px;
+  margin-bottom: 24px;
+}
+
+.ao-quick-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ao-quick-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ao-quick-card-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--text);
+  font-weight: 800;
+}
+
+.ao-quick-add-btn {
+  background: var(--brand-50);
+  color: var(--brand-700);
+  border: 1px solid var(--brand-200);
+  border-radius: var(--radius-pill);
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ao-quick-add-btn:hover {
+  background: var(--brand-600);
+  color: #ffffff;
+  border-color: var(--brand-600);
+}
+
+.ao-quick-filter-row {
+  width: 100%;
+}
+
+.ao-quick-search {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  outline: none;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.ao-quick-search:focus {
+  border-color: var(--brand-500);
+  box-shadow: 0 0 0 3px var(--brand-50);
+}
+
+.ao-quick-list-wrapper {
+  max-height: 250px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px;
+  background: var(--surface-2);
+}
+
+.ao-quick-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ao-quick-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+}
+
+.ao-quick-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ao-quick-row-info strong {
+  font-size: 14.5px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ao-quick-row-tag {
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-50);
+  color: var(--brand-700);
+  border: 1px solid var(--brand-200);
+}
+
+.ao-quick-row-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.ao-quick-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.ao-quick-row-actions button {
+  padding: 6px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s ease;
+}
+
+.ao-quick-row-actions button:hover {
+  background: var(--brand-50);
+  border-color: var(--brand-400);
+}
+
+.ao-quick-row-actions button.btn-delete-small {
+  border-color: var(--danger-bg);
+}
+
+.ao-quick-row-actions button.btn-delete-small:hover {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.ao-quick-empty {
+  text-align: center;
+  padding: 24px;
+  color: var(--text-soft);
+  font-size: 14px;
+}
+
+/* Modals layout rules */
+.ao-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.ao-modal-content {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border);
+  width: 100%;
+  max-width: 580px;
+  padding: 28px;
+  direction: rtl;
+  text-align: right;
+  animation: ao-fade 0.22s ease-out;
+}
+
+.ao-modal-header {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text);
+  border-bottom: 2px solid var(--border);
+  padding-bottom: 12px;
+  margin-bottom: 18px;
+}
+
+.ao-modal-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 500px) {
+  .ao-modal-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ao-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ao-form-group label {
+  font-weight: 700;
+  font-size: 13.5px;
+  color: var(--text);
+}
+
+.ao-form-group input,
+.ao-form-group select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  font-size: 14.5px;
+  outline: none;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.ao-form-group input:focus,
+.ao-form-group select:focus {
+  border-color: var(--brand-500);
+  box-shadow: 0 0 0 3px var(--brand-50);
+}
+
+.ao-modal-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.ao-btn-outline {
+  background: var(--surface);
+  color: var(--text-muted);
+  border: 1px solid var(--border-strong) !important;
+  border-radius: var(--radius-pill);
+  padding: 8px 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ao-btn-outline:hover {
+  background: var(--surface-2);
+}
+
+.ao-btn-success {
+  background: var(--brand-600);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 8px 20px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+}
+
+.ao-btn-success:hover {
+  background: var(--brand-700);
+}
+
+/* Actions positioning in Overview header */
+.ao-head-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.ao-add-event-btn {
+  background: var(--brand-600);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 10px 20px;
+  font-weight: 700;
+  font-size: 14.5px;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+}
+
+.ao-add-event-btn:hover {
+  background: var(--brand-700);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow);
+}

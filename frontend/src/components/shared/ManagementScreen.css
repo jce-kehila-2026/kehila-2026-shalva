@@ -1,0 +1,541 @@
+/* Shared card-based layout for the admin management screens (groups /
+   volunteers / guides / registrations), so they all match and stay responsive. */
+
+/* Outer page wrapper. */
+.mgmt-container {
+  direction: rtl;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* The single card that holds a management screen. */
+.mgmt-card {
+  width: 100%;
+  min-width: 0;
+  max-width: 1100px;
+  margin: 0 auto;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  text-align: right;
+}
+
+
+/* Header row: title block + count, on a gradient. */
+.mgmt-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: clamp(22px, 4vw, 32px);
+  background:
+    linear-gradient(135deg, rgba(79, 70, 229, 0.12), rgba(14, 165, 233, 0.08)),
+    var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Small pill label above the title. */
+.mgmt-eyebrow {
+  width: fit-content;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-50);
+  color: var(--brand-700);
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+/* Main title. */
+.mgmt-title {
+  margin: 0;
+  font-size: clamp(26px, 4vw, 38px);
+  line-height: 1.2;
+  color: var(--text);
+}
+
+/* Subtitle under the title. */
+.mgmt-subtitle {
+  margin: 10px 0 0;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+/* The right side of the header (back button + count). */
+.mgmt-header-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+/* Count box. */
+.mgmt-count {
+  min-width: 112px;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  text-align: center;
+  box-shadow: var(--shadow-sm);
+}
+
+/* The big count number. */
+.mgmt-count span {
+  display: block;
+  color: var(--brand-600);
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+/* The label under the count. */
+.mgmt-count small {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+
+/* A content section within the card. */
+.mgmt-section {
+  padding: clamp(20px, 3vw, 28px) clamp(20px, 4vw, 32px);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Drop the divider under the last section. */
+.mgmt-section:last-child {
+  border-bottom: 0;
+}
+
+/* Section heading. */
+.mgmt-section h2 {
+  margin: 0 0 18px;
+  color: var(--text);
+  font-size: 22px;
+}
+
+/* An inline subtitle inside a section. */
+.mgmt-subtitle-inline {
+  margin: -8px 0 18px;
+  color: var(--text-muted);
+}
+
+
+/* Toolbar row (create button / search / actions). */
+.mgmt-toolbar {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Shared style for the toolbar input + search box. */
+.mgmt-input,
+.mgmt-search {
+  flex: 1 1 240px;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  padding: 11px 14px;
+  font: inherit;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Input focus ring. */
+.mgmt-input:focus,
+.mgmt-search:focus {
+  border-color: var(--brand-500);
+  box-shadow: 0 0 0 4px var(--brand-50);
+}
+
+
+/* Inline add/edit form layout. */
+.mgmt-form {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+/* One labelled field. */
+.mgmt-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Field label. */
+.mgmt-field label {
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Make the field's input fill its column. */
+.mgmt-field .mgmt-input {
+  flex: none;
+  width: 100%;
+}
+
+/* Form action buttons row. */
+.mgmt-form-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+
+/* Shared base for the management buttons. */
+.mgmt-primary-btn,
+.mgmt-secondary-btn,
+.mgmt-danger-btn {
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 11px 18px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.12s ease, box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+/* Primary button. */
+.mgmt-primary-btn {
+  background: var(--brand-600);
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+}
+.mgmt-primary-btn:hover {
+  background: var(--brand-700);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow);
+}
+.mgmt-primary-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Secondary button. */
+.mgmt-secondary-btn {
+  background: var(--brand-50);
+  color: var(--brand-700);
+  border-color: var(--brand-200);
+}
+.mgmt-secondary-btn:hover {
+  background: var(--brand-100);
+}
+
+/* Danger button. */
+.mgmt-danger-btn {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-color: rgba(220, 38, 38, 0.25);
+}
+.mgmt-danger-btn:hover {
+  background: #fecaca;
+}
+
+
+/* Header row above a list (title + search). */
+.mgmt-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+/* Constrain the search width in the list header. */
+.mgmt-list-header .mgmt-search {
+  max-width: 360px;
+}
+
+
+/* Scroll wrapper around a table. */
+.mgmt-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+/* The data table. */
+.mgmt-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 560px;
+  background: var(--surface);
+}
+
+/* Shared padding/borders for header and body cells. */
+.mgmt-table th,
+.mgmt-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+  vertical-align: middle;
+}
+
+/* Header cells. */
+.mgmt-table th {
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Drop the border under the last row. */
+.mgmt-table tr:last-child td {
+  border-bottom: 0;
+}
+
+/* Body cells. */
+.mgmt-table td {
+  color: var(--text);
+  font-size: 15px;
+}
+
+/* Row hover. */
+.mgmt-table tbody tr:hover {
+  background: var(--brand-50);
+}
+
+/* Muted cell text. */
+.mgmt-muted {
+  color: var(--text-soft);
+}
+
+/* Centered empty / loading rows. */
+.mgmt-empty,
+.mgmt-loading {
+  padding: 28px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+
+/* Container for the buttons in a table row. */
+.mgmt-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* A single row-action button. */
+.mgmt-row-actions button {
+  border: 1px solid var(--brand-200);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  background: var(--brand-50);
+  color: var(--brand-700);
+  transition: transform 0.12s ease, box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+/* Row-action button hover (stays light so the dark label stays visible). */
+.mgmt-row-actions button:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+  background: var(--brand-100);
+}
+
+/* Primary row-action button. */
+.mgmt-row-actions button.primary {
+  background: var(--brand-600);
+  color: #fff;
+  border-color: var(--brand-600);
+}
+
+.mgmt-row-actions button.primary:hover {
+  background: var(--brand-700);
+}
+
+/* Danger row-action button. */
+.mgmt-row-actions button.danger {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-color: rgba(220, 38, 38, 0.25);
+}
+
+.mgmt-row-actions button.danger:hover {
+  background: #fecaca;
+}
+
+
+/* Badge for an assigned guide / group / status. */
+.mgmt-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  background: var(--brand-50);
+  color: var(--brand-700);
+  border: 1px solid var(--brand-200);
+}
+
+/* Muted badge variant (e.g. "not assigned"). */
+.mgmt-badge.muted {
+  background: var(--surface-2);
+  color: var(--text-soft);
+  border-color: var(--border);
+}
+
+
+/* Tablet: stack the header and list-header, tighter table cells. */
+@media (max-width: 760px) {
+  .mgmt-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .mgmt-count {
+    width: 100%;
+  }
+
+  .mgmt-header-side {
+    align-items: stretch;
+  }
+
+  .mgmt-list-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .mgmt-list-header .mgmt-search {
+    max-width: none;
+  }
+
+  .mgmt-table th,
+  .mgmt-table td {
+    padding: 12px 12px;
+    font-size: 14px;
+  }
+}
+
+/* Phone: turn the table into stacked cards (no horizontal scroll). */
+@media (max-width: 640px) {
+  /* Drop the scroll frame around the table. */
+  .mgmt-table-wrap {
+    border: 0;
+    border-radius: 0;
+    overflow: visible;
+  }
+
+  .mgmt-table {
+    min-width: 0;
+  }
+
+  /* Visually hide the header row (labels move onto each cell instead). */
+  .mgmt-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  /* Let the table parts stack vertically. */
+  .mgmt-table,
+  .mgmt-table tbody,
+  .mgmt-table tr,
+  .mgmt-table td {
+    display: block;
+    width: 100%;
+  }
+
+  /* Each row becomes a card. */
+  .mgmt-table tbody tr {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    padding: 6px 14px;
+    margin-bottom: 12px;
+  }
+
+  /* No gap under the last card. */
+  .mgmt-table tbody tr:last-child {
+    margin-bottom: 0;
+  }
+
+  /* Don't tint cards on hover on phones. */
+  .mgmt-table tbody tr:hover {
+    background: var(--surface);
+  }
+
+  /* Each cell shows its label on one side and the value on the other. */
+  .mgmt-table td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px dashed var(--border);
+    font-size: 15px;
+  }
+
+  /* Pull the column name from the cell's data-label attribute. */
+  .mgmt-table td::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  /* Actions cell: full-width buttons, no label. */
+  .mgmt-table td.mgmt-actions-cell {
+    display: block;
+    border-bottom: 0;
+    padding: 12px 0 4px;
+  }
+
+  .mgmt-table td.mgmt-actions-cell::before {
+    display: none;
+  }
+
+  .mgmt-actions-cell .mgmt-row-actions {
+    width: 100%;
+  }
+
+  .mgmt-actions-cell .mgmt-row-actions button {
+    flex: 1 1 auto;
+    text-align: center;
+    justify-content: center;
+  }
+
+  /* Empty / loading rows: centered, no label. */
+  .mgmt-table td.mgmt-empty,
+  .mgmt-table td.mgmt-loading {
+    display: block;
+    text-align: center;
+    border-bottom: 0;
+  }
+
+  .mgmt-table td.mgmt-empty::before,
+  .mgmt-table td.mgmt-loading::before {
+    display: none;
+  }
+}
