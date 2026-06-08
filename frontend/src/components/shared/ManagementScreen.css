@@ -8,12 +8,11 @@
   box-sizing: border-box;
 }
 
-/* The single card that holds a management screen. */
+/* The single card that holds a management screen (fills the content area,
+   like the events-management screen). */
 .mgmt-card {
   width: 100%;
   min-width: 0;
-  max-width: 1100px;
-  margin: 0 auto;
   overflow: hidden;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -23,17 +22,15 @@
 }
 
 
-/* Header row: title block + count, on a gradient. */
+/* Header row: just the count now (titles were removed) — a clean compact bar,
+   matching the events-management screen (no gradient band). */
 .mgmt-header {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  justify-content: flex-start;
+  align-items: center;
   gap: 18px;
   flex-wrap: wrap;
-  padding: clamp(22px, 4vw, 32px);
-  background:
-    linear-gradient(135deg, rgba(79, 70, 229, 0.12), rgba(14, 165, 233, 0.08)),
-    var(--surface-2);
+  padding: 18px clamp(20px, 4vw, 32px);
   border-bottom: 1px solid var(--border);
 }
 
@@ -402,6 +399,54 @@
 }
 
 
+/* Desktop only: balanced, predictable column widths so each value lines up
+   neatly under its header, and the action buttons form a tidy cluster at the
+   end of the row instead of drifting. Scoped to min-width so it never touches
+   the stacked-card mobile layout below. */
+@media (min-width: 641px) {
+
+  /* First column (the name) gets the most room. */
+  .mgmt-table th:nth-child(1),
+  .mgmt-table td:nth-child(1) {
+    width: 26%;
+  }
+
+  /* Second column (group / email / guide). */
+  .mgmt-table th:nth-child(2),
+  .mgmt-table td:nth-child(2) {
+    width: 24%;
+  }
+
+  /* Third column (count / phone / group). */
+  .mgmt-table th:nth-child(3),
+  .mgmt-table td:nth-child(3) {
+    width: 18%;
+  }
+
+  /* The actions header sits above its button cluster (left edge in RTL). */
+  .mgmt-table thead th:last-child {
+    text-align: left;
+  }
+
+  /* The actions column only takes the width its buttons need. */
+  .mgmt-table td.mgmt-actions-cell {
+    width: 1%;
+    white-space: nowrap;
+  }
+
+  /* Keep a row's buttons on one line, aligned to the end of the row. */
+  .mgmt-actions-cell .mgmt-row-actions {
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+  }
+
+  /* A purely-numeric column: center the value under its header. */
+  .mgmt-table th.mgmt-col-num,
+  .mgmt-table td.mgmt-col-num {
+    text-align: center;
+  }
+}
+
 /* Tablet: stack the header and list-header, tighter table cells. */
 @media (max-width: 760px) {
   .mgmt-header {
@@ -430,6 +475,23 @@
   .mgmt-table td {
     padding: 12px 12px;
     font-size: 14px;
+  }
+
+  /* Registrations: keep the three share buttons in one row on phones. */
+  .mgmt-share-toolbar {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  /* Compact, full-width, centered buttons so all three fit the row. */
+  .mgmt-share-toolbar .mgmt-primary-btn,
+  .mgmt-share-toolbar .mgmt-secondary-btn {
+    width: 100%;
+    padding: 9px 4px;
+    font-size: 12.5px;
+    text-align: center;
+    justify-content: center;
   }
 }
 

@@ -11,11 +11,10 @@ import { doc, getDoc } from 'firebase/firestore';
 // Our Firebase auth + database instances.
 import { auth, db } from '../../firebase';
 
-// The screens this dashboard can swap to.
-import ActivityCommandCenter from '../ActivityCommandCenter/ActivityCommandCenter';
+// The screens this dashboard can swap to. (Volunteer management and the
+// activity command center were removed from the guide flow.)
 import AttendanceScreen from '../AttendanceScreen/AttendanceScreen';
 import GroupDetails from '../GroupManagement/GroupDetails';
-import VolunteersManagement from '../VolunteersManagement/VolunteersManagement';
 
 // Styles for this screen.
 import './GuideDashboard.css';
@@ -141,27 +140,6 @@ const GuideDashboard = ({ user, onLogout, currentView, setCurrentView }) => {
     );
   }
 
-  // View: manage the group's volunteers (pre-filtered to the group).
-  if (activeView === 'volunteers') {
-    if (isUnassigned) return renderNoGroup();
-    return (
-      <VolunteersManagement
-        initialGroup={guideGroup}
-        onBack={backToMenu}
-      />
-    );
-  }
-
-  // View: the activity command center (scoped to the guide's group).
-  if (activeView === 'activity') {
-    return (
-      <ActivityCommandCenter
-        groupFilter={guideGroup.id ? { id: guideGroup.id, name: guideGroup.groupName } : null}
-        onBack={backToMenu}
-      />
-    );
-  }
-
   // Default view: the action menu.
   return (
     <div className="guide-dashboard-container" dir="rtl">
@@ -170,19 +148,17 @@ const GuideDashboard = ({ user, onLogout, currentView, setCurrentView }) => {
       <header className="guide-header">
         <h1>לוח בקרה - מדריך</h1>
         <p>
-          ברוך הבא {guideData?.firstName || guideData?.email || 'מדריך'}, בחר את הפעולה הרצויה.
+          ברוך הבא {guideData?.firstName || guideData?.email || 'מדריך'}.
         </p>
         <p className="guide-group-label">
           קבוצה משויכת: <strong>{guideGroup.groupName || 'טרם שויכה קבוצה'}</strong>
         </p>
       </header>
 
-      {/* The three action buttons. */}
+      {/* The guide's action buttons (group details + attendance marking). */}
       <main className="guide-actions">
         <button className="action-button secondary" onClick={() => updateActiveView('group')}>👤 הקבוצה שלי</button>
         <button className="action-button primary" onClick={() => updateActiveView('attendance')}>📝 סימון נוכחות</button>
-        <button className="action-button secondary" onClick={() => updateActiveView('volunteers')}>👥 רשימת מתנדבים</button>
-        <button className="action-button secondary" onClick={() => updateActiveView('activity')}>🎖️ חמ״ל פעילות</button>
       </main>
 
       {/* Optional logout footer. */}

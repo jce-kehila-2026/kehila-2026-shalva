@@ -1,24 +1,15 @@
 /* Full-page wrapper that centers the card on a soft decorative background. */
+/* Plain full-width block — embedded in the dashboard, not a full page. */
 .event-management-container {
   direction: rtl;
   width: 100%;
-  min-height: 100vh;
-  margin: 0 auto;
-  padding: 48px 20px;
   box-sizing: border-box;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  font-family: var(--heading, system-ui, sans-serif);
-  background:
-    radial-gradient(circle at top right, rgba(79, 70, 229, 0.12), transparent 32%),
-    radial-gradient(circle at bottom left, rgba(14, 165, 233, 0.1), transparent 28%);
+  font-family: var(--font);
 }
 
 /* The single card that contains the whole screen. */
 .event-management-card {
   width: 100%;
-  max-width: 1100px;
   overflow: hidden;
   background: var(--bg, #fff);
   border: 1px solid var(--border, #eceaf3);
@@ -28,16 +19,14 @@
 }
 
 
-/* Header row: title block on one side, event counter on the other. */
+/* Header row: just the event counter (the title was removed, so no gradient
+   band — keep it a clean, compact bar). */
 .event-management-header {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  justify-content: flex-start;
+  align-items: center;
   gap: 18px;
-  padding: 32px;
-  background:
-    linear-gradient(135deg, rgba(79, 70, 229, 0.12), rgba(14, 165, 233, 0.08)),
-    var(--social-bg, #f8f7fc);
+  padding: 20px 32px;
   border-bottom: 1px solid var(--border, #eceaf3);
 }
 
@@ -83,7 +72,7 @@
 /* The big count number. */
 .event-management-count span {
   display: block;
-  color: var(--accent, #8f28e8);
+  color: var(--brand-700);
   font-size: 32px;
   font-weight: 800;
   line-height: 1;
@@ -184,6 +173,11 @@
   flex-wrap: wrap;
   gap: 12px;
   margin-top: 22px;
+}
+
+/* The "cancel edit" button takes a full row of its own. */
+.event-management-cancel-btn {
+  flex: 1 0 100%;
 }
 
 /* Shared base style for the form and row-action buttons. */
@@ -364,6 +358,157 @@
   background: rgba(239, 68, 68, 0.1);
   color: #dc2626;
   border-color: rgba(239, 68, 68, 0.25);
+}
+
+
+/* ---------- Events card grid (responsive, replaces the wide table) ---------- */
+
+/* Cards lay out in a responsive grid: several across on desktop, one on phone. */
+.event-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+/* One event card. */
+.event-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--border, #eceaf3);
+  border-radius: 16px;
+  background: var(--surface, #fff);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Header: name on one side, status badge on the other. */
+.event-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* Event name. */
+.event-card-name {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+/* Detail rows (label + value). */
+.event-card-details {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* One label/value row. */
+.event-card-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 14px;
+}
+
+/* Muted label. */
+.event-card-row dt {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+/* Value. */
+.event-card-row dd {
+  margin: 0;
+  color: var(--text);
+  text-align: left;
+}
+
+/* Actions sit at the bottom of the card and share the row evenly. */
+.event-card-actions {
+  margin-top: auto;
+}
+
+.event-card-actions button {
+  flex: 1;
+  min-width: 88px;
+  padding: 9px 12px;
+  font-size: 13.5px;
+}
+
+/* The empty-state note spans the full grid width. */
+.event-cards .event-management-empty {
+  grid-column: 1 / -1;
+}
+
+
+/* ---------- Events list modal (popup window) ---------- */
+
+/* Full-screen dimmed backdrop that centers the modal. */
+.event-management-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+/* The modal panel: scrollable and capped to the viewport. */
+.event-management-modal {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 1000px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #eceaf3);
+  border-radius: 20px;
+  box-shadow: var(--shadow-lg);
+}
+
+/* Sticky top bar holding the close button (stays visible while scrolling). */
+.event-management-modal-bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 12px 0;
+  background: var(--surface, #fff);
+}
+
+/* Round close (✕) button. */
+.event-management-modal-close {
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface-2, #f4f1f8);
+  color: var(--text, #333);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.event-management-modal-close:hover {
+  background: var(--border, #eceaf3);
+  transform: none;
+  box-shadow: none;
+}
+
+/* Inside the modal the list section needs no extra outer chrome. */
+.event-management-modal .event-management-list-section {
+  padding-top: 8px;
 }
 
 

@@ -52,7 +52,8 @@
 /* Responsive grid that lays out the chart cards. */
 .charts-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  /* Smaller min so the three donut cards fit on one row (instead of 2 + 1). */
+  grid-template-columns: repeat(auto-fit, minmax(255px, 1fr));
   gap: 16px;
 }
 

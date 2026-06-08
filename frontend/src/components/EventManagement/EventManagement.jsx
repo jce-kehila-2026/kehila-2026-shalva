@@ -158,6 +158,10 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false }
   // Search text used to filter the event table.
   const [searchTerm, setSearchTerm] = useState('')
 
+  // Whether the events list is revealed (admins open it with a button; it
+  // always shows for read-only viewers who have no add form).
+  const [showList, setShowList] = useState(false)
+
   // UI state for loading, saving, and Firestore errors.
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -358,6 +362,9 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false }
     setEditingEventId(eventToEdit.id)
     setForm(createFormFromEvent(eventToEdit))
 
+    // Close the list popup so the edit form is visible.
+    setShowList(false)
+
     // Scroll up to the form.
     window.scrollTo({
       top: 0,
@@ -405,29 +412,96 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false }
     window.alert('מסך פרטי אירוע יחובר בשלב הבא.')
   }
 
+  // The events list markup (search + responsive card grid). Reused both inline
+  // (read-only viewers) and inside the modal (admins open it with a button).
+  const eventListSection = (
+    <section className="event-management-list-section">
+
+      {/* Section title + search. */}
+      <div className="event-management-list-header">
+        <h2>רשימת אירועים</h2>
+
+        <input
+          type="search"
+          className="event-management-search"
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          placeholder="חיפוש לפי שם, מיקום, קבוצה או סטטוס"
+        />
+      </div>
+
+      {/* Loading message while fetching, otherwise the cards. */}
+      {loading ? (
+        <div className="event-management-loading">
+          טוען אירועים מ־Firebase...
+        </div>
+      ) : (
+        <div className="event-cards">
+          {/* A card per event, or an empty-state note. */}
+          {filteredEvents.length > 0 ? (
+            filteredEvents.map((eventItem) => (
+              <article className="event-card" key={eventItem.id}>
+
+                {/* Card header: name + status badge. */}
+                <div className="event-card-head">
+                  <h3 className="event-card-name">{eventItem.name}</h3>
+                  <span
+                    className={`event-management-status ${statusClass(computeEventStatus(eventItem))}`}
+                  >
+                    {computeEventStatus(eventItem)}
+                  </span>
+                </div>
+
+                {/* Key details (label + value rows). */}
+                <dl className="event-card-details">
+                  <div className="event-card-row">
+                    <dt>תאריך</dt>
+                    <dd>{eventItem.date || '—'}</dd>
+                  </div>
+                  <div className="event-card-row">
+                    <dt>מיקום</dt>
+                    <dd>{eventItem.location || '—'}</dd>
+                  </div>
+                  <div className="event-card-row">
+                    <dt>קבוצה</dt>
+                    <dd>{eventItem.assignedGroup || '—'}</dd>
+                  </div>
+                </dl>
+
+                {/* Actions: "פרטים" opens the detail screen; edit/delete for admins. */}
+                <div className="event-management-row-actions event-card-actions">
+                  <button type="button" onClick={() => handleOpenDetails(eventItem)}>
+                    פרטים
+                  </button>
+
+                  {!readOnly && (
+                    <>
+                      <button type="button" onClick={() => handleEdit(eventItem)}>
+                        עריכה
+                      </button>
+
+                      <button type="button" className="danger" onClick={() => handleDelete(eventItem.id)}>
+                        מחיקה
+                      </button>
+                    </>
+                  )}
+                </div>
+              </article>
+            ))
+          ) : (
+            <div className="event-management-empty">אין אירועים להצגה כרגע.</div>
+          )}
+        </div>
+      )}
+    </section>
+  )
+
   return (
     <main className="event-management-container" dir="rtl">
       <section className="event-management-card">
 
-        {/* Header: title, description and the event counter. */}
+        {/* Header: just the event counter (the sidebar labels the screen). */}
         <header className="event-management-header">
-          <div>
-            <div className="event-management-eyebrow">
-              ניהול
-            </div>
-
-            <h1 className="event-management-title">
-              ניהול אירועים
-            </h1>
-
-            <p className="event-management-subtitle">
-              {readOnly
-                ? 'צפייה ברשימת האירועים של הקהילה.'
-                : 'הוספה, עריכה, מחיקה ושיוך אירועים לקבוצות. הנתונים נשמרים ב־Firebase.'}
-            </p>
-          </div>
-
-          {/* Live count of events. */}
           <div className="event-management-count">
             <span>{events.length}</span>
             <small>אירועים</small>
@@ -581,7 +655,7 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false }
             />
           </label>
 
-          {/* Submit + cancel buttons. */}
+          {/* Submit + list-toggle + cancel buttons. */}
           <div className="event-management-actions">
             <button
               type="submit"
@@ -591,11 +665,20 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false }
               {getSubmitButtonText({ saving, isEditing })}
             </button>
 
-            {/* Cancel only appears while editing. */}
+            {/* Reveal / hide the events list (the card grid). */}
+            <button
+              type="button"
+              className="event-management-secondary-btn"
+              onClick={() => setShowList((show) => !show)}
+            >
+              {showList ? 'הסתר רשימת אירועים' : 'רשימת אירועים'}
+            </button>
+
+            {/* Cancel only appears while editing (spans the full row). */}
             {isEditing && (
               <button
                 type="button"
-                className="event-management-secondary-btn"
+                className="event-management-secondary-btn event-management-cancel-btn"
                 onClick={handleCancelEdit}
               >
                 ביטול עריכה
@@ -605,106 +688,34 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false }
         </form>
         )}
 
-        {/* Event list with its own search box. */}
-        <section className="event-management-list-section">
+        {/* Read-only viewers see the list inline; admins open it in a modal
+            window via the "רשימת אירועים" button. */}
+        {readOnly && eventListSection}
 
-          {/* Section title + search. */}
-          <div className="event-management-list-header">
-            <h2>רשימת אירועים</h2>
+        {!readOnly && showList && (
+          <div className="event-management-modal-overlay" onClick={() => setShowList(false)}>
+            <div
+              className="event-management-modal"
+              role="dialog"
+              aria-modal="true"
+              onClick={(event) => event.stopPropagation()}
+            >
+              {/* Sticky bar holding the close button. */}
+              <div className="event-management-modal-bar">
+                <button
+                  type="button"
+                  className="event-management-modal-close"
+                  onClick={() => setShowList(false)}
+                  aria-label="סגירה"
+                >
+                  ✕
+                </button>
+              </div>
 
-            <input
-              type="search"
-              className="event-management-search"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="חיפוש לפי שם, מיקום, קבוצה או סטטוס"
-            />
+              {eventListSection}
+            </div>
           </div>
-
-          {/* Loading message while fetching, otherwise the table. */}
-          {loading ? (
-            <div className="event-management-loading">
-              טוען אירועים מ־Firebase...
-            </div>
-          ) : (
-            <div className="event-management-table-wrap">
-              <table className="event-management-table">
-
-                {/* Column headers. */}
-                <thead>
-                  <tr>
-                    <th>שם</th>
-                    <th>תאריך</th>
-                    <th>מיקום</th>
-                    <th>קבוצה</th>
-                    <th>סטטוס</th>
-                    <th>פעולות</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {/* A row per event, or an empty-state row. */}
-                  {filteredEvents.length > 0 ? (
-                    filteredEvents.map((eventItem) => (
-                      <tr key={eventItem.id}>
-                        <td data-label="שם">{eventItem.name}</td>
-                        <td data-label="תאריך">{eventItem.date}</td>
-                        <td data-label="מיקום">{eventItem.location}</td>
-                        <td data-label="קבוצה">{eventItem.assignedGroup}</td>
-
-                        {/* Status badge — computed from the date (cancelled stays). */}
-                        <td data-label="סטטוס">
-                          <span
-                            className={`event-management-status ${statusClass(computeEventStatus(eventItem))}`}
-                          >
-                            {computeEventStatus(eventItem)}
-                          </span>
-                        </td>
-
-                        {/* Row action buttons. */}
-                        <td data-label="פעולות" className="event-management-actions-cell">
-                          <div className="event-management-row-actions">
-                            <button
-                              type="button"
-                              onClick={() => handleOpenDetails(eventItem)}
-                            >
-                              פרטים
-                            </button>
-
-                            {!readOnly && (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => handleEdit(eventItem)}
-                                >
-                                  עריכה
-                                </button>
-
-                                <button
-                                  type="button"
-                                  className="danger"
-                                  onClick={() => handleDelete(eventItem.id)}
-                                >
-                                  מחיקה
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="6" className="event-management-empty">
-                        אין אירועים להצגה כרגע.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
+        )}
       </section>
     </main>
   )

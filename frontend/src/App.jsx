@@ -26,6 +26,7 @@ import Login from './components/Login/Login';
 import MainScreen from './components/MainScreen/MainScreen';
 import RegistrationScreen from './components/RegistrationScreen/RegistrationScreen';
 import Reports from './components/Reports/Reports';
+import ResetPassword from './components/ResetPassword/ResetPassword';
 import UserList from './components/UserList/UserList';
 import VolunteerDetails from './components/VolunteerDetails/VolunteerDetails';
 
@@ -216,6 +217,23 @@ function App() {
     );
   };
 
+  // Firebase password-reset links arrive as ?mode=resetPassword&oobCode=...
+  // (Firebase's action URL is pointed at the app). Handle them with our own
+  // Hebrew, styled reset page before any of the normal app rendering.
+  const urlParams = new URLSearchParams(window.location.search);
+
+  if (urlParams.get('mode') === 'resetPassword' && urlParams.get('oobCode')) {
+    return (
+      <ResetPassword
+        oobCode={urlParams.get('oobCode')}
+        onDone={() => {
+          // Leave the reset flow: drop the query string and return to the app.
+          window.location.search = '';
+        }}
+      />
+    );
+  }
+
   // A shared registration-form link (?register=1) opens the public volunteer
   // form for anyone, regardless of sign-in. Admins send this link by WhatsApp
   // or email; once it is filled, the submission shows up in the admin screen.
@@ -251,34 +269,30 @@ function App() {
         // ----- Signed-in layout -----
         <div className="authenticated-layout">
 
-          {/* Shared top header: actions + greeting/role. */}
+          {/* Shared top header: greeting on the right, actions on the left.
+              (In RTL the first child sits on the right, so the greeting block
+              comes first.) Admin navigation now lives in the sidebar, so the
+              header only keeps the logout action. */}
           <header className="authenticated-header">
 
-            {/* Action buttons (admin menu shortcuts + logout). */}
+            {/* Greeting + role badge + logo (right side). */}
+            <div className="auth-user-block">
+              <img
+                src="https://www.shalva.org/wp-content/uploads/2025/02/Logo-Hebrew-1024x488-1.png"
+                alt="שלוה"
+                className="auth-logo"
+              />
+              <div className="auth-user">
+                <h2 className="auth-greeting">שלום, {user.firstName || user.displayName || user.email}</h2>
+                <span className="auth-role-badge">הרשאה: {ROLE_LABELS[user.role] || user.role || 'צופה'}</span>
+              </div>
+            </div>
+
+            {/* Action buttons (left side) — just logout. */}
             <div className="auth-actions">
-              {user.role === 'admin' && adminView === 'overview' && (
-                <button type="button" className="auth-btn" onClick={() => setAdminView('menu')}>
-                  ⚙️ מרכז ניהול
-                </button>
-              )}
-              {user.role === 'admin' && adminView !== 'overview' && (
-                <button
-                  type="button"
-                  className="auth-btn"
-                  onClick={() => setAdminView(adminView === 'menu' ? 'overview' : 'menu')}
-                >
-                  {adminView === 'menu' ? 'חזרה לדף הבית' : 'חזרה לתפריט'}
-                </button>
-              )}
               <button type="button" className="auth-btn auth-btn-danger" onClick={handleLogout}>
                 התנתקות
               </button>
-            </div>
-
-            {/* Greeting + role badge. */}
-            <div className="auth-user">
-              <h2 className="auth-greeting">שלום, {user.firstName || user.displayName || user.email}</h2>
-              <span className="auth-role-badge">הרשאה: {ROLE_LABELS[user.role] || user.role || 'צופה'}</span>
             </div>
           </header>
 

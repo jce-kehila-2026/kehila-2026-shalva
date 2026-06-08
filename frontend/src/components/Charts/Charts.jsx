@@ -83,6 +83,11 @@ function Donut({ segments }) {
   // Sum of all segment values (also shown in the center).
   const total = segments.reduce((sum, segment) => sum + segment.value, 0);
 
+  // No data: show a clean placeholder instead of an empty gray ring.
+  if (total <= 0) {
+    return <div className="chart-empty">אין נתונים להצגה</div>;
+  }
+
   // Geometry for the SVG ring.
   const size = 160;
   const stroke = 28;
@@ -328,13 +333,6 @@ function Charts() {
 
   return (
     <section className="charts-screen" dir="rtl" aria-label="תרשימים">
-
-      {/* Page heading. */}
-      <header className="charts-head">
-        <div className="charts-eyebrow">מרכז ניהול</div>
-        <h2 className="charts-title">תרשימים וסטטיסטיקות</h2>
-        <p className="charts-subtitle">תמונת מצב חזותית של הנתונים.</p>
-      </header>
 
       {/* Warning shown when some data failed to load. */}
       {hadError && (

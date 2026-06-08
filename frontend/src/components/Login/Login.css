@@ -5,14 +5,42 @@
 
 /* Form title. */
 .login-form h2 {
-  margin: 0 0 4px;
+  margin: 0 0 20px;
   color: var(--text);
 }
 
-/* Subtitle under the title. */
-.login-subtitle {
-  margin: 0 0 24px;
-  color: var(--text-muted);
+/* "Forgot password" link button (subtle, right-aligned). */
+.login-forgot {
+  align-self: flex-start;
+  margin: -6px 0 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: var(--brand-600);
+  font-weight: 700;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+/* Forgot link hover. */
+.login-forgot:hover {
+  background: transparent;
+  color: var(--brand-700);
+  transform: none;
+  box-shadow: none;
+  text-decoration: underline;
+}
+
+/* Success / info notice banner (e.g. reset email sent). */
+.login-notice {
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--success-bg);
+  border: 1px solid rgba(97, 206, 112, 0.35);
+  color: var(--success);
+  font-weight: 600;
+  font-size: 14px;
 }
 
 /* Stacked form layout. */

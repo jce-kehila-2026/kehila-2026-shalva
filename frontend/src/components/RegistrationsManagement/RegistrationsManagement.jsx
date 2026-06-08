@@ -5,8 +5,8 @@
 // React hooks for state and side effects.
 import { useEffect, useState } from 'react';
 
-// Firestore helpers for reading and deleting documents.
-import { collection, deleteDoc, doc, getDocs } from 'firebase/firestore';
+// Firestore helpers for reading, adding and deleting documents.
+import { addDoc, collection, deleteDoc, doc, getDocs } from 'firebase/firestore';
 
 // Our Firestore database instance.
 import { db } from '../../firebase';
@@ -76,6 +76,12 @@ function RegistrationsManagement() {
   // The loaded registrants.
   const [registrants, setRegistrants] = useState([]);
 
+  // The groups a registrant can be assigned to on approval.
+  const [groups, setGroups] = useState([]);
+
+  // The chosen group per registrant id (for the approve action).
+  const [groupChoice, setGroupChoice] = useState({});
+
   // True while loading; holds an error message on failure.
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -88,18 +94,22 @@ function RegistrationsManagement() {
     // Guards against state updates after unmount.
     let isMounted = true;
 
-    const loadRegistrants = async () => {
+    const loadData = async () => {
       try {
-        // Read the registrants collection.
-        const snapshot = await getDocs(collection(db, 'registrants'));
+        // Read the registrants + groups in parallel.
+        const [registrantsSnapshot, groupsSnapshot] = await Promise.all([
+          getDocs(collection(db, 'registrants')),
+          getDocs(collection(db, 'groups')),
+        ]);
         if (!isMounted) return;
 
         // Newest registrations first.
-        const list = snapshot.docs
+        const list = registrantsSnapshot.docs
           .map(toRecord)
           .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 
         setRegistrants(list);
+        setGroups(groupsSnapshot.docs.map(toRecord));
       } catch (loadError) {
         if (isMounted) setError(loadError.message);
       } finally {
@@ -107,7 +117,7 @@ function RegistrationsManagement() {
       }
     };
 
-    loadRegistrants();
+    loadData();
 
     // Cleanup: mark as unmounted.
     return () => {
@@ -136,6 +146,49 @@ function RegistrationsManagement() {
     }
   };
 
+  // Approve a registration: create a volunteer in the chosen group from the
+  // registrant's details, then remove the registration from the pending list.
+  const handleApprove = async (registrant) => {
+    // A group must be chosen first.
+    const groupId = groupChoice[registrant.id] || '';
+    if (!groupId) {
+      alert('בחרו קבוצה לשיוך לפני אישור ההרשמה.');
+      return;
+    }
+
+    // Resolve the chosen group's name.
+    const group = groups.find((item) => item.id === groupId);
+    const groupName = group ? (group.groupName || group.name || '') : '';
+
+    try {
+      // Create the volunteer from the registration details.
+      await addDoc(collection(db, 'volunteers'), {
+        name: getFullName(registrant),
+        firstName: registrant.firstName || '',
+        lastName: registrant.lastName || '',
+        email: registrant.email || '',
+        phone: registrant.phone || '',
+        birthDate: registrant.birthDate || '',
+        age: registrant.age ?? '',
+        address: registrant.address || '',
+        school: registrant.school || '',
+        experience: registrant.experience || '',
+        groupId,
+        groupName,
+        createdAt: new Date(),
+      });
+
+      // Remove the now-approved registration and drop it from the list.
+      await deleteDoc(doc(db, 'registrants', registrant.id));
+      setRegistrants((current) => current.filter((item) => item.id !== registrant.id));
+
+      alert(`${getFullName(registrant)} אושר/ה ושויך/ה לקבוצת "${groupName}".`);
+    } catch (approveError) {
+      console.error('שגיאה באישור ההרשמה:', approveError);
+      alert(`האישור נכשל: ${approveError.message}`);
+    }
+  };
+
   // Delete a registration after confirmation.
   const handleDelete = async (id, name) => {
     // Confirm first (irreversible).
@@ -155,14 +208,8 @@ function RegistrationsManagement() {
     <main className="mgmt-container" dir="rtl">
       <section className="mgmt-card">
 
-        {/* Header: title + registrations count. */}
+        {/* Header: just the registrations count (the sidebar labels the screen). */}
         <header className="mgmt-header">
-          <div>
-            <div className="mgmt-eyebrow">ניהול</div>
-            <h1 className="mgmt-title">הרשמות להתנדבות</h1>
-            <p className="mgmt-subtitle">שלחו את טופס ההרשמה למתנדבים פוטנציאליים, וצפו בכל ההרשמות שהתקבלו.</p>
-          </div>
-
           <div className="mgmt-count">
             <span>{registrants.length}</span>
             <small>הרשמות</small>
@@ -175,7 +222,7 @@ function RegistrationsManagement() {
           <p className="mgmt-subtitle-inline">
             שלחו את הקישור לטופס למי שתרצו. לאחר שהמועמד/ת ימלא וישלח — ההרשמה תופיע למטה עם כל הפרטים.
           </p>
-          <div className="mgmt-toolbar">
+          <div className="mgmt-toolbar mgmt-share-toolbar">
             <a className="mgmt-primary-btn" href={whatsappHref} target="_blank" rel="noreferrer">
               שליחה בוואטסאפ
             </a>
@@ -225,6 +272,33 @@ function RegistrationsManagement() {
                       </div>
                     ))}
                   </dl>
+
+                  {/* Approve: pick a group, then confirm → creates a volunteer. */}
+                  <div className="reg-card-approve">
+                    <select
+                      className="reg-group-select"
+                      value={groupChoice[registrant.id] || ''}
+                      onChange={(event) => setGroupChoice((current) => ({
+                        ...current,
+                        [registrant.id]: event.target.value,
+                      }))}
+                    >
+                      <option value="">בחרו קבוצה לשיוך...</option>
+                      {groups.map((group) => (
+                        <option key={group.id} value={group.id}>
+                          {group.groupName || group.name || group.id}
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      type="button"
+                      className="reg-approve-btn"
+                      onClick={() => handleApprove(registrant)}
+                    >
+                      ✓ אישור ושיוך לקבוצה
+                    </button>
+                  </div>
 
                   {/* Card actions: contact via WhatsApp/email, or delete. */}
                   <div className="reg-card-foot">

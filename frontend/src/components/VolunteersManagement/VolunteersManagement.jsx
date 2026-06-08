@@ -202,15 +202,12 @@ const VolunteersManagement = ({ initialGroup = null, onBack }) => {
     <main className="mgmt-container" dir="rtl">
       <section className="mgmt-card">
 
-        {/* Header: title (or group filter note) + back button + count. */}
+        {/* Header: optional group-filter note + back button + count.
+            The page title is omitted — the sidebar already labels the screen. */}
         <header className="mgmt-header">
           <div>
-            <div className="mgmt-eyebrow">ניהול</div>
-            <h1 className="mgmt-title">ניהול מתנדבים</h1>
-            {passedGroup ? (
+            {passedGroup && (
               <p className="mgmt-subtitle">מסונן עבור קבוצה: <strong>{passedGroup.groupName || getGroupName(passedGroup.id)}</strong></p>
-            ) : (
-              <p className="mgmt-subtitle">הוספה, עריכה, מחיקה ושיוך מתנדבים לקבוצות.</p>
             )}
           </div>
 

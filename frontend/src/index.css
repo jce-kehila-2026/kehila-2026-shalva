@@ -1,39 +1,44 @@
+/* Basic, reliable Hebrew web font (loads consistently on desktop, iOS and
+   Android via Google's CDN). We dropped the custom 'michal 3' brand font
+   because it rendered differently across devices. */
+@import url('https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;500;600;700;800&display=swap');
+
 /* Global design system: colours, typography, spacing and base elements.
    RTL-first, using logical properties so it works in Hebrew & English. */
 
 /* Design tokens + base document settings. */
 :root {
-  /* Brand (indigo) */
-  --brand-50: #eef2ff;
-  --brand-100: #e0e7ff;
-  --brand-200: #c7d2fe;
-  --brand-400: #818cf8;
-  --brand-500: #6366f1;
-  --brand-600: #4f46e5;
-  --brand-700: #4338ca;
+  /* Brand (Shalva Purple) */
+  --brand-50: #9e21880a;
+  --brand-100: #9e218818;
+  --brand-200: #f0ceea;
+  --brand-400: #d661bf;
+  --brand-500: #bd329f;
+  --brand-600: #9E2188;
+  --brand-700: #760963;
   --brand: var(--brand-600);
 
   /* Surfaces & neutrals */
-  --bg: #f1f5f9;
+  --bg: #ffffff;
   --surface: #ffffff;
-  --surface-2: #f8fafc;
-  --border: #e2e8f0;
-  --border-strong: #cbd5e1;
+  --surface-2: #fdfafc;
+  --border: #f2e9f1;
+  --border-strong: #e5cee3;
 
   /* Text */
-  --text: #0f172a;
-  --text-muted: #64748b;
-  --text-soft: #94a3b8;
+  --text: #081726;
+  --text-muted: #32373C;
+  --text-soft: #7A7A7A;
 
   /* Status */
-  --success: #16a34a;
-  --success-bg: #dcfce7;
-  --danger: #dc2626;
-  --danger-bg: #fee2e2;
-  --warning: #b45309;
-  --warning-bg: #fef3c7;
-  --info: #0ea5e9;
-  --info-bg: #e0f2fe;
+  --success: #61CE70;
+  --success-bg: #eefbf0;
+  --danger: #F2665E;
+  --danger-bg: #fff0ef;
+  --warning: #FFC709;
+  --warning-bg: #fffbeb;
+  --info: #52A7DD;
+  --info-bg: #e7f8ff;
 
   /* Radius */
   --radius-sm: 10px;
@@ -42,9 +47,9 @@
   --radius-pill: 999px;
 
   /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.08);
-  --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
-  --shadow-lg: 0 22px 48px rgba(15, 23, 42, 0.14);
+  --shadow-sm: 0 1px 2px rgba(158, 33, 136, 0.04), 0 1px 3px rgba(158, 33, 136, 0.06);
+  --shadow: 0 10px 30px rgba(158, 33, 136, 0.06);
+  --shadow-lg: 0 22px 48px rgba(158, 33, 136, 0.1);
 
   /* Spacing */
   --space-1: 4px;
@@ -56,8 +61,8 @@
   --space-8: 32px;
   --space-10: 40px;
 
-  /* Font + base document defaults. */
-  --font: 'Heebo', system-ui, 'Segoe UI', Roboto, Arial, sans-serif;
+  /* Font + base document defaults (basic, consistent across devices). */
+  --font: 'Assistant', system-ui, 'Segoe UI', Roboto, 'Heebo', Arial, sans-serif;
 
   color-scheme: light;
   font-family: var(--font);
@@ -88,8 +93,8 @@ body {
   min-height: 100vh;
   color: var(--text);
   background:
-    radial-gradient(1100px 560px at 100% -8%, var(--brand-50), transparent 60%),
-    radial-gradient(820px 460px at -8% 2%, #ecfeff, transparent 55%),
+    radial-gradient(1100px 560px at 100% -8%, rgba(158, 33, 136, 0.05), transparent 60%),
+    radial-gradient(820px 460px at -8% 2%, rgba(82, 167, 221, 0.06), transparent 55%),
     var(--bg);
   background-attachment: fixed;
 }
@@ -156,8 +161,8 @@ button {
   justify-content: center;
   gap: 8px;
   border: 1px solid transparent;
-  border-radius: 12px;
-  padding: 10px 18px;
+  border-radius: var(--radius-pill);
+  padding: 10px 22px;
   background: var(--brand-600);
   color: #fff;
   box-shadow: var(--shadow-sm);

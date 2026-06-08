@@ -25,6 +25,10 @@ const app = initializeApp(firebaseConfig);
 // Authentication service.
 export const auth = getAuth(app);
 
+// Send Firebase auth emails (e.g. the password-reset email) in Hebrew.
+// The reset link itself stays as Firebase's URL.
+auth.languageCode = 'he';
+
 // Firestore database service.
 export const db = getFirestore(app);
 

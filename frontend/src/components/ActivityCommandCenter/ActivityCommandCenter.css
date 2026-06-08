@@ -50,16 +50,19 @@
 }
 
 /* Alert cards grid (auto-fits to the available width). */
+/* The three stat cards always share one row (never 2 + 1 alone). */
 .acc-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: var(--space-4);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
 }
 
-/* A single alert card. */
+/* A single alert card (number + label centered). */
 .acc-card {
   display: flex;
   flex-direction: column;
+  align-items: center;
+  text-align: center;
   gap: var(--space-1);
   padding: var(--space-5);
   border: 1px solid var(--border);
@@ -68,24 +71,45 @@
   box-shadow: var(--shadow-sm);
 }
 
-/* Coloured top accent per card type. */
-.acc-card--reg {
-  border-top: 4px solid var(--brand-500);
+/* Coloured top accent per card type (brand-aligned status colours). */
+
+/* Pending-registrations accent (the clickable card on the admin home). */
+.acc-card--pending {
+  border-top: 4px solid var(--warning);
+}
+
+/* Make the pending count pop in its accent colour. */
+.acc-card--pending .acc-card-num {
+  color: var(--warning);
 }
 
 /* Today's events accent. */
 .acc-card--today {
-  border-top: 4px solid #0ea5e9;
+  border-top: 4px solid var(--info);
 }
 
 /* Missing attendance accent. */
 .acc-card--missing {
-  border-top: 4px solid #dc2626;
+  border-top: 4px solid var(--danger);
 }
 
 /* Birthdays accent. */
 .acc-card--bday {
-  border-top: 4px solid #b45309;
+  border-top: 4px solid var(--brand-500);
+}
+
+/* When a card is rendered as a button (the pending card), match the card look
+   and give it a clickable hover lift. */
+button.acc-card {
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+button.acc-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
 }
 
 /* Big counter number on a card. */
@@ -101,6 +125,78 @@
   font-size: 0.95rem;
 }
 
+/* ---------- Collapsible schedule card (today + tomorrow) ---------- */
+
+/* The card wrapping both day sections. */
+.acc-schedule {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+/* Clickable header that toggles the schedule. Resets the global button styles. */
+.acc-schedule-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-4);
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+  text-align: start;
+}
+
+/* Header hover just tints the row. */
+.acc-schedule-head:hover {
+  transform: none;
+  box-shadow: none;
+  background: var(--surface-2);
+}
+
+/* Title fills the row. */
+.acc-schedule-title {
+  flex: 1;
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: var(--text);
+}
+
+/* Total-events count badge. */
+.acc-schedule-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-50);
+  color: var(--brand-700);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+/* Expand / collapse chevron. */
+.acc-schedule-chevron {
+  flex: none;
+  color: var(--text-soft);
+  font-size: 0.8rem;
+}
+
+/* Body holding the two day sections (shown only when open). */
+.acc-schedule-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
 /* A day section (today / tomorrow). */
 .acc-day {
   display: flex;
@@ -108,11 +204,29 @@
   gap: var(--space-3);
 }
 
-/* Day section heading. */
+/* Day section heading (label + inline count badge). */
 .acc-day-title {
   margin: 0;
   font-size: 1.15rem;
   color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* The small count badge beside the day label. */
+.acc-day-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-50);
+  color: var(--brand-700);
+  font-size: 0.85rem;
+  font-weight: 800;
 }
 
 /* Stack of event cards within a day. */
@@ -136,7 +250,8 @@
   border-color: var(--brand-400);
 }
 
-/* Clickable event header (summary + counters). */
+/* Clickable event header (summary + counters). Resets the global button's
+   pill radius + shadow so no rounded "pill" outline bleeds into the card. */
 .acc-event-head {
   display: flex;
   align-items: center;
@@ -144,9 +259,17 @@
   width: 100%;
   padding: var(--space-4);
   border: none;
+  border-radius: 0;
   background: transparent;
+  box-shadow: none;
   text-align: start;
   cursor: pointer;
+}
+
+/* Don't lift / shadow the header on hover (it's a full-width row, not a pill). */
+.acc-event-head:hover {
+  transform: none;
+  box-shadow: none;
 }
 
 /* Event title + meta lines, taking the remaining width. */
@@ -218,7 +341,7 @@
   color: var(--text-soft);
 }
 
-/* Expanded roster panel under an event. */
+/* Expanded panel under an event (description + copy-message button). */
 .acc-roster {
   display: flex;
   flex-direction: column;
@@ -226,6 +349,21 @@
   padding: var(--space-4);
   border-top: 1px solid var(--border);
   background: var(--surface-2);
+}
+
+/* Event description block. */
+.acc-event-desc h4 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.acc-event-desc p {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.6;
+  white-space: pre-line;
 }
 
 /* Roster action row (copy message). */
@@ -356,8 +494,43 @@
 /* Stack the event header on small screens. */
 @media (max-width: 640px) {
 
-  /* Header wraps so counters drop below the title. */
+  /* Keep the stat cards in one tidy 3-up row (instead of 2 + 1 alone). */
+  .acc-cards {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  /* Compact the cards so all three fit a phone width. */
+  .acc-card {
+    padding: 12px 8px;
+    text-align: center;
+    align-items: center;
+  }
+
+  /* Smaller number + label on the compact cards. */
+  .acc-card-num {
+    font-size: 1.5rem;
+  }
+
+  .acc-card-label {
+    font-size: 0.72rem;
+    text-align: center;
+  }
+
+  /* Event card: name/date on the first line, counters + chevron on the next. */
   .acc-event-head {
     flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  /* Info takes the whole first line so the counters drop below it. */
+  .acc-event-info {
+    flex: 1 1 100%;
+  }
+
+  /* Counters fill the second line and wrap neatly. */
+  .acc-event-stats {
+    flex: 1 1 auto;
+    justify-content: flex-start;
   }
 }

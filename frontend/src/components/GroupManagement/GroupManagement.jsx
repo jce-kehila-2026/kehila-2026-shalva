@@ -40,7 +40,7 @@ const getGuideName = (guide) => {
 };
 
 
-const GroupManagement = ({ onOpenVolunteers }) => {
+const GroupManagement = () => {
   // The group currently opened in the details view (null = list view).
   const [selectedGroupId, setSelectedGroupId] = useState(null);
 
@@ -52,6 +52,7 @@ const GroupManagement = ({ onOpenVolunteers }) => {
   // "Add group" form fields + modal visibility.
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupTime, setNewGroupTime] = useState('');
+  const [newGroupDescription, setNewGroupDescription] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   // Search text for filtering the list.
@@ -65,7 +66,7 @@ const GroupManagement = ({ onOpenVolunteers }) => {
   // "Edit group" modal state.
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [groupToEdit, setGroupToEdit] = useState(null);
-  const [editForm, setEditForm] = useState({ groupName: '', time: '' });
+  const [editForm, setEditForm] = useState({ groupName: '', time: '', description: '' });
 
   // Load groups, volunteers and guides together.
   const fetchData = useCallback(async () => {
@@ -116,12 +117,14 @@ const GroupManagement = ({ onOpenVolunteers }) => {
         guideId: '',
         guideName: '',
         time: newGroupTime.trim(),
+        description: newGroupDescription.trim(),
         createdAt: new Date(),
       });
 
       // Reset the form and refresh the list.
       setNewGroupName('');
       setNewGroupTime('');
+      setNewGroupDescription('');
       setIsAddModalOpen(false);
       await fetchData();
     } catch (error) {
@@ -221,6 +224,7 @@ const GroupManagement = ({ onOpenVolunteers }) => {
     setEditForm({
       groupName: group.groupName || group.name || '',
       time: group.time || '',
+      description: group.description || '',
     });
     setIsEditModalOpen(true);
   };
@@ -237,12 +241,14 @@ const GroupManagement = ({ onOpenVolunteers }) => {
     if (!groupName) return;
 
     const time = editForm.time.trim();
+    const description = editForm.description.trim();
 
     try {
       // Update the group document.
       await updateDoc(doc(db, 'groups', groupToEdit.id), {
         groupName,
         time,
+        description,
       });
 
       // Keep the assigned guide's denormalized group name in sync.
@@ -261,13 +267,6 @@ const GroupManagement = ({ onOpenVolunteers }) => {
     } catch (error) {
       console.error('שגיאה בעדכון הקבוצה:', error);
       alert('אירעה שגיאה בעדכון הקבוצה');
-    }
-  };
-
-  // Jump to the volunteers screen (if a handler was provided).
-  const handleManageVolunteers = () => {
-    if (typeof onOpenVolunteers === 'function') {
-      onOpenVolunteers();
     }
   };
 
@@ -320,14 +319,8 @@ const GroupManagement = ({ onOpenVolunteers }) => {
     <main className="mgmt-container" dir="rtl">
       <section className="mgmt-card">
 
-        {/* Header: title + group count. */}
+        {/* Header: just the group count (the sidebar labels the screen). */}
         <header className="mgmt-header">
-          <div>
-            <div className="mgmt-eyebrow">ניהול</div>
-            <h1 className="mgmt-title">ניהול קבוצות</h1>
-            <p className="mgmt-subtitle">יצירה, עריכה ושיוך מדריכים לקבוצות. הנתונים נשמרים ב־Firebase.</p>
-          </div>
-
           <div className="mgmt-count">
             <span>{filteredGroups.length}</span>
             <small>קבוצות</small>
@@ -345,9 +338,6 @@ const GroupManagement = ({ onOpenVolunteers }) => {
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="🔍 חפש קבוצה לפי שם..."
             />
-            {typeof onOpenVolunteers === 'function' && (
-              <button className="mgmt-secondary-btn" onClick={handleManageVolunteers}>ניהול מתנדבים</button>
-            )}
           </div>
         </section>
 
@@ -365,7 +355,7 @@ const GroupManagement = ({ onOpenVolunteers }) => {
                 <tr>
                   <th>שם הקבוצה</th>
                   <th>מדריך משויך</th>
-                  <th>כמות מתנדבים</th>
+                  <th className="mgmt-col-num">כמות מתנדבים</th>
                   <th>פעולות</th>
                 </tr>
               </thead>
@@ -395,7 +385,7 @@ const GroupManagement = ({ onOpenVolunteers }) => {
                             : <span className="mgmt-badge muted">טרם שויך</span>}
                         </td>
 
-                        <td data-label="כמות מתנדבים">{getGroupVolunteersCount(group)}</td>
+                        <td data-label="כמות מתנדבים" className="mgmt-col-num">{getGroupVolunteersCount(group)}</td>
 
                         {/* Row actions: assign/remove guide, edit, details. */}
                         <td data-label="פעולות" className="mgmt-actions-cell">
@@ -451,6 +441,18 @@ const GroupManagement = ({ onOpenVolunteers }) => {
                   value={newGroupTime}
                   onChange={(event) => setNewGroupTime(event.target.value)}
                   placeholder="לדוגמה: יום ראשון 17:00"
+                />
+              </div>
+
+              {/* Group description (shown on the public home; admin-editable). */}
+              <div className="form-group">
+                <label>תיאור הקבוצה:</label>
+                <textarea
+                  className="styled-input full-width-input"
+                  value={newGroupDescription}
+                  onChange={(event) => setNewGroupDescription(event.target.value)}
+                  placeholder="תיאור קצר על הקבוצה (יוצג בעמוד הבית)"
+                  rows="3"
                 />
               </div>
 
@@ -524,6 +526,18 @@ const GroupManagement = ({ onOpenVolunteers }) => {
                   value={editForm.time}
                   onChange={(event) => setEditForm({ ...editForm, time: event.target.value })}
                   placeholder="לדוגמה: יום ראשון 17:00"
+                />
+              </div>
+
+              {/* Group description (shown on the public home; admin-editable). */}
+              <div className="form-group">
+                <label>תיאור הקבוצה:</label>
+                <textarea
+                  className="styled-input full-width-input"
+                  value={editForm.description}
+                  onChange={(event) => setEditForm({ ...editForm, description: event.target.value })}
+                  placeholder="תיאור קצר על הקבוצה (יוצג בעמוד הבית)"
+                  rows="3"
                 />
               </div>
 
