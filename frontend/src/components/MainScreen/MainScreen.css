@@ -52,11 +52,12 @@
   text-decoration: none;
 }
 
-/* Group of header buttons. */
+/* Group of header buttons (wraps if the row gets tight). */
 .header-buttons {
   display: flex;
   gap: 12px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 /* Pill shape buttons. */
@@ -279,15 +280,17 @@
 }
 
 @media (max-width: 760px) {
+  /* On phones the header flows normally (not fixed), so no overlap math. */
   .main-container {
-    padding-top: 165px; /* Adjust wrapper spacing for double-row header */
+    padding-top: 24px;
   }
 
   .main-header {
+    position: static;
     flex-direction: column;
     height: auto;
-    padding: 16px 20px;
-    gap: 12px;
+    padding: 14px 16px;
+    gap: 10px;
   }
 
   .main-nav {
@@ -295,4 +298,147 @@
     justify-content: center;
     gap: 12px 18px;
   }
+
+  /* Buttons fill the row and stay side by side (no wrapping). */
+  .header-buttons {
+    width: 100%;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: nowrap;
+  }
+
+  /* Each button takes an equal half of the row with centered text, so the
+     filled "register" and outline "login" look like a matched pair instead
+     of two different widths. */
+  .btn-register,
+  .btn-login {
+    flex: 1 1 0;
+    justify-content: center;
+    text-align: center;
+    padding: 11px 12px;
+    font-size: 14px;
+  }
+
+  /* Stack the hero CTA buttons full-width. */
+  .hero-cta {
+    width: 100%;
+  }
+
+  .hero-cta .btn-register-lg,
+  .hero-cta .btn-login-ghost {
+    flex: 1 1 100%;
+    justify-content: center;
+    text-align: center;
+  }
+}
+
+
+/* ---------- Volunteer signup button (header + hero CTA) ---------- */
+
+/* Filled brand button used for the "register to volunteer" action. */
+.btn-register {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1.5px solid var(--brand-600);
+  border-radius: var(--radius-pill);
+  padding: 9px 22px;
+  font-weight: 700;
+  font-size: 14.5px;
+  cursor: pointer;
+  background: var(--brand-600);
+  color: #ffffff;
+  text-decoration: none;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+/* Register hover: deepen the brand colour. */
+.btn-register:hover {
+  background: var(--brand-700);
+  border-color: var(--brand-700);
+  color: #ffffff;
+  text-decoration: none;
+}
+
+/* Larger variant used as the hero's primary call to action. */
+.btn-register-lg {
+  padding: 13px 28px;
+  font-size: 16px;
+  box-shadow: var(--shadow);
+}
+
+/* Lift the large CTA on hover. */
+.btn-register-lg:hover {
+  transform: translateY(-2px);
+}
+
+/* Ghost login button shown beside the hero CTA. */
+.btn-login-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--brand-700);
+}
+
+
+/* ---------- Hero call-to-action row ---------- */
+
+/* The buttons under the hero text. */
+.hero-cta {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 26px;
+}
+
+
+/* ---------- Groups card grid ---------- */
+
+/* Short description under the groups heading. */
+.groups-intro {
+  margin: -6px 0 24px;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1.6;
+  max-width: 720px;
+}
+
+/* Responsive grid of group cards. */
+.groups-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 18px;
+}
+
+/* A single group card. */
+.group-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 22px;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+/* Lift a card on hover. */
+.group-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow);
+  border-color: var(--brand-200);
+}
+
+/* Card title. */
+.group-card-name {
+  margin: 0 0 14px;
+  color: var(--brand-700);
+  font-size: 19px;
+  font-weight: 800;
+}
+
+/* Group description text on the card. */
+.group-card-desc {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--text-muted);
 }

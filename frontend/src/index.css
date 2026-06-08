@@ -1,22 +1,7 @@
+/* Basic, reliable Hebrew web font (loads consistently on desktop, iOS and
+   Android via Google's CDN). We dropped the custom 'michal 3' brand font
+   because it rendered differently across devices. */
 @import url('https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;500;600;700;800&display=swap');
-
-@font-face {
-  font-family: 'michal 3';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('https://www.shalva.org/wp-content/uploads/2025/07/LiaMichal-Kasov-Regular-1.woff2') format('woff2'),
-       url('https://www.shalva.org/wp-content/uploads/2025/07/LiaMichal-Kasov-Regular-1.woff') format('woff');
-}
-
-@font-face {
-  font-family: 'michal 3';
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url('https://www.shalva.org/wp-content/uploads/2025/07/LiaMichal-Kasov-Bold-1.woff2') format('woff2'),
-       url('https://www.shalva.org/wp-content/uploads/2025/07/LiaMichal-Kasov-Bold-1.woff') format('woff');
-}
 
 /* Global design system: colours, typography, spacing and base elements.
    RTL-first, using logical properties so it works in Hebrew & English. */
@@ -76,8 +61,8 @@
   --space-8: 32px;
   --space-10: 40px;
 
-  /* Font + base document defaults. */
-  --font: 'michal 3', 'Assistant', 'Heebo', system-ui, 'Segoe UI', Roboto, Arial, sans-serif;
+  /* Font + base document defaults (basic, consistent across devices). */
+  --font: 'Assistant', system-ui, 'Segoe UI', Roboto, 'Heebo', Arial, sans-serif;
 
   color-scheme: light;
   font-family: var(--font);

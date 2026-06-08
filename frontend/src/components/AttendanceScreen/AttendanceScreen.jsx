@@ -176,7 +176,6 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
         <div className="attendance-header-row">
           <div>
             <h1>סימון נוכחות</h1>
-            <p>בחרו קבוצה וסמנו נוכחות למתנדבים.</p>
           </div>
           {typeof onBack === 'function' && (
             <button className="attendance-back-button" onClick={onBack}>חזרה</button>

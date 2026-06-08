@@ -1,24 +1,24 @@
 /* Full-page wrapper that centers the card on a soft decorative background. */
 .event-details-container {
+  /* Map this screen's old theme variables onto the Shalva brand palette so it
+     matches the rest of the app (it was the only screen still using indigo). */
+  --accent: var(--brand-600);
+  --accent-bg: var(--brand-50);
+  --accent-border: var(--brand-200);
+  --social-bg: var(--surface-2);
+  --text-h: var(--text);
+
+  /* A plain full-width block — it's embedded in the dashboard, not a full page
+     (no min-height / decorative background / centered card chrome). */
   direction: rtl;
   width: 100%;
-  min-height: 100vh;
-  margin: 0 auto;
-  padding: 48px 20px;
   box-sizing: border-box;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  font-family: var(--heading, system-ui, sans-serif);
-  background:
-    radial-gradient(circle at top right, rgba(79, 70, 229, 0.12), transparent 32%),
-    radial-gradient(circle at bottom left, rgba(14, 165, 233, 0.1), transparent 28%);
+  font-family: var(--font);
 }
 
 /* The single card that holds all event details. */
 .event-details-card {
   width: 100%;
-  max-width: 980px;
   overflow: hidden;
   background: var(--bg, #fff);
   border: 1px solid var(--border, #eceaf3);
@@ -35,7 +35,7 @@
   gap: 18px;
   padding: 32px;
   background:
-    linear-gradient(135deg, rgba(79, 70, 229, 0.12), rgba(14, 165, 233, 0.08)),
+    linear-gradient(135deg, rgba(158, 33, 136, 0.12), rgba(82, 167, 221, 0.08)),
     var(--social-bg, #f8f7fc);
   border-bottom: 1px solid var(--border, #eceaf3);
 }
@@ -53,8 +53,8 @@
   width: fit-content;
   padding: 6px 12px;
   border-radius: 999px;
-  background: rgba(79, 70, 229, 0.1);
-  color: var(--accent, #8f28e8);
+  background: var(--brand-50);
+  color: var(--brand-700);
   font-size: 13px;
   font-weight: 700;
 }
@@ -142,8 +142,8 @@
   bottom: 18px;
   width: 4px;
   border-radius: 999px;
-  background: linear-gradient(180deg, var(--accent, #aa3bff), #0ea5e9);
-  opacity: 0.75;
+  background: linear-gradient(180deg, var(--brand-500), var(--brand-700));
+  opacity: 0.85;
 }
 
 /* Lift the card on hover. */
@@ -223,7 +223,7 @@
   margin: 20px 32px 28px;
   padding: 24px;
   background:
-    linear-gradient(135deg, rgba(79, 70, 229, 0.08), rgba(255, 255, 255, 0.4)),
+    linear-gradient(135deg, rgba(158, 33, 136, 0.08), rgba(255, 255, 255, 0.4)),
     var(--social-bg, #faf9fd);
   border: 1px solid var(--border, #eeeaf6);
   border-radius: 20px;
@@ -262,11 +262,11 @@
   padding: 12px 26px;
   border-radius: 14px;
   border: 1px solid transparent;
-  background: linear-gradient(135deg, var(--accent, #aa3bff), #0ea5e9);
+  background: linear-gradient(135deg, var(--brand-600), var(--brand-500));
   color: #fff;
   cursor: pointer;
   font-size: 15px;
-  box-shadow: 0 12px 24px rgba(79, 70, 229, 0.2);
+  box-shadow: 0 12px 24px rgba(158, 33, 136, 0.2);
   transition:
     transform 0.2s ease,
     box-shadow 0.2s ease,
@@ -276,7 +276,7 @@
 /* Lift the Back button on hover. */
 .event-details-back-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 16px 30px rgba(79, 70, 229, 0.28);
+  box-shadow: 0 16px 30px rgba(158, 33, 136, 0.28);
 }
 
 /* Press effect while clicking. */

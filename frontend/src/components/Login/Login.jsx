@@ -1,8 +1,8 @@
 // React state hook.
 import { useState } from 'react';
 
-// Firebase email/password sign-in.
-import { signInWithEmailAndPassword } from 'firebase/auth';
+// Firebase email/password sign-in + password-reset email.
+import { sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
 
 // Our Firebase auth instance.
 import { auth } from '../../firebase';
@@ -30,6 +30,9 @@ const Login = () => {
   // The current error message (empty when none).
   const [error, setError] = useState('');
 
+  // A success/info notice (e.g. after sending a reset email).
+  const [notice, setNotice] = useState('');
+
   // True while the sign-in request is in flight.
   const [loading, setLoading] = useState(false);
 
@@ -38,8 +41,9 @@ const Login = () => {
     // Don't let the form reload the page.
     event.preventDefault();
 
-    // Reset to the loading state.
+    // Reset to the loading state (clear any previous messages).
     setError('');
+    setNotice('');
     setLoading(true);
 
     try {
@@ -55,12 +59,33 @@ const Login = () => {
     }
   };
 
+  // Email a password-reset link to the address in the email field.
+  const handleForgotPassword = async () => {
+    // We need an email address to send the reset link to.
+    if (!email.trim()) {
+      setNotice('');
+      setError('יש להזין כתובת אימייל כדי לאפס סיסמה.');
+      return;
+    }
+
+    try {
+      // Ask Firebase to send the reset email.
+      await sendPasswordResetEmail(auth, email.trim());
+      setError('');
+      setNotice('שלחנו קישור לאיפוס סיסמה לאימייל שלך. בדקו גם בתיבת ה"ספאם".');
+    } catch (err) {
+      // Show a friendly message for the returned error code.
+      console.error('Error sending reset email:', err.code, err.message);
+      setNotice('');
+      setError(ERROR_MESSAGES[err.code] || 'שליחת איפוס הסיסמה נכשלה. נסו שוב.');
+    }
+  };
+
   return (
     <div className="login-form" dir="rtl">
 
-      {/* Title + subtitle. */}
+      {/* Title. */}
       <h2>כניסה למערכת</h2>
-      <p className="login-subtitle">הזינו את פרטי ההתחברות שלכם.</p>
 
       <form onSubmit={handleSubmit}>
 
@@ -91,6 +116,14 @@ const Login = () => {
             required
           />
         </div>
+
+        {/* Forgot-password link: emails a reset link to the address above. */}
+        <button type="button" className="login-forgot" onClick={handleForgotPassword}>
+          שכחתי סיסמה
+        </button>
+
+        {/* Success / info notice (e.g. reset email sent). */}
+        {notice && <div className="login-notice" role="status">{notice}</div>}
 
         {/* Error message (only when there is one). */}
         {error && <div className="login-error" role="alert">{error}</div>}

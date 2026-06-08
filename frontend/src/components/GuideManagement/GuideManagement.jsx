@@ -307,14 +307,8 @@ function GuideManagement() {
     <main className="mgmt-container" dir="rtl">
       <section className="mgmt-card">
 
-        {/* Header: title + guide count. */}
+        {/* Header: just the guide count (the sidebar labels the screen). */}
         <header className="mgmt-header">
-          <div>
-            <div className="mgmt-eyebrow">ניהול</div>
-            <h1 className="mgmt-title">ניהול מדריכים</h1>
-            <p className="mgmt-subtitle">הוספה, עריכה והסרה של מדריכי המערכת.</p>
-          </div>
-
           <div className="mgmt-count">
             <span>{filteredGuides.length}</span>
             <small>מדריכים</small>

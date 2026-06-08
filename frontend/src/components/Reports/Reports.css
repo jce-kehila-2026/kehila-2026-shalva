@@ -1,23 +1,15 @@
 /* Full-page wrapper that centers the reports card on a soft gradient. */
+/* Plain full-width block — embedded in the dashboard, not a full page. */
 .reports-container {
   direction: rtl;
   width: 100%;
-  min-height: 100vh;
-  padding: 48px 20px;
   box-sizing: border-box;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  font-family: var(--heading, system-ui, sans-serif);
-  background:
-    radial-gradient(circle at top right, rgba(79, 70, 229, 0.12), transparent 32%),
-    radial-gradient(circle at bottom left, rgba(14, 165, 233, 0.1), transparent 28%);
+  font-family: var(--font);
 }
 
 /* The single card that holds the whole reports screen. */
 .reports-card {
   width: 100%;
-  max-width: 1120px;
   overflow: hidden;
   background: var(--bg, #fff);
   border: 1px solid var(--border, #eceaf3);
@@ -74,7 +66,7 @@
   flex-wrap: wrap;
   justify-content: flex-start;
   gap: 10px;
-  min-width: 280px;
+  padding: 14px 32px 0;
 }
 
 /* Shared base style for header buttons and report tabs. */
@@ -121,6 +113,68 @@
 /* The list of individual error messages. */
 .reports-error ul {
   margin: 10px 20px 0 0;
+}
+
+
+/* ---------- Date-range filter bar ---------- */
+
+/* Row holding the from/to date fields and the clear button. */
+.reports-filterbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 18px 32px 0;
+}
+
+/* One labelled date field (label stacked above the input). */
+.reports-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Field label. */
+.reports-filter-field label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+/* The date input. */
+.reports-filter-field input {
+  padding: 8px 12px;
+  font-size: 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  outline: none;
+}
+
+/* Date input focus ring. */
+.reports-filter-field input:focus {
+  border-color: var(--brand-500);
+  box-shadow: 0 0 0 3px var(--brand-50);
+}
+
+/* "Clear range" text button. */
+.reports-filter-clear {
+  padding: 8px 16px;
+  font-size: 13.5px;
+  font-weight: 700;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  box-shadow: none;
+}
+
+/* Clear button hover. */
+.reports-filter-clear:hover {
+  background: var(--surface-2);
+  color: var(--text);
 }
 
 
@@ -227,11 +281,12 @@
   margin-bottom: 18px;
 }
 
-/* Wrapper around the tab buttons. */
+/* Wrapper around the tab buttons (report names) — sits at the top of the card. */
 .reports-tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  padding: 26px 32px 0;
 }
 
 /* The currently selected tab. */
@@ -320,7 +375,7 @@
 }
 
 
-/* Tablet: stack the header rows and use two-column grids. */
+/* Tablet: stack the header rows and use a two-column summary. */
 @media (max-width: 900px) {
   .reports-header,
   .reports-panel-header {
@@ -328,19 +383,21 @@
     align-items: stretch;
   }
 
-  .reports-summary-grid,
-  .reports-status-grid {
+  .reports-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .reports-actions,
-  .reports-tabs {
-    justify-content: stretch;
+  /* Buttons flow naturally and keep their label on a single line (no wrap). */
+  .reports-tabs,
+  .reports-actions {
+    flex-wrap: wrap;
   }
 
-  .reports-actions button,
-  .reports-tabs button {
-    flex: 1;
+  .reports-tabs button,
+  .reports-actions button {
+    white-space: nowrap;
+    padding: 9px 14px;
+    font-size: 13.5px;
   }
 
   .reports-search {
@@ -348,27 +405,15 @@
   }
 }
 
-/* Mobile: tighter padding and single-column grids. */
+/* Mobile: tighter horizontal padding (keep the 2-up summary). */
 @media (max-width: 600px) {
-  .reports-container {
-    padding: 24px 12px;
-  }
-
-  .reports-header,
-  .reports-panel,
-  .reports-summary-grid {
-    padding-left: 20px;
-    padding-right: 20px;
-  }
-
+  .reports-tabs,
+  .reports-actions,
+  .reports-filterbar,
   .reports-summary-grid,
-  .reports-status-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .reports-status-section {
-    margin-left: 20px;
-    margin-right: 20px;
+  .reports-panel {
+    padding-left: 16px;
+    padding-right: 16px;
   }
 }
 
@@ -468,6 +513,7 @@
   .reports-actions,
   .reports-tabs,
   .reports-search,
+  .reports-filterbar,
   .reports-panel-header,
   .reports-header,
   .reports-summary-grid,

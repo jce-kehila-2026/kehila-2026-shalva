@@ -1,5 +1,5 @@
 // React hooks for state, effects, memoization and stable callbacks.
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 // Firestore helpers for reading collections.
 import { collection, getDocs } from 'firebase/firestore'
@@ -42,13 +42,6 @@ const REPORT_LABELS = {
   [REPORT_TYPES.EVENTS]: 'דוח אירועים',
 }
 
-// Event statuses used for the event status summary section.
-const EVENT_STATUSES = [
-  'מתוכנן',
-  'פעיל',
-  'הסתיים',
-  'בוטל',
-]
 
 // Fallback text for empty values, and the BOM that makes Excel read Hebrew CSV.
 const DEFAULT_TEXT = 'לא צוין'
@@ -482,6 +475,72 @@ function downloadCsv(rows) {
 }
 
 
+// Convert a date-ish value (string / Timestamp / Date / { seconds }) into a
+// real Date for range comparisons, or null when it can't be parsed.
+function toComparableDate(value) {
+  // Nothing to parse.
+  if (!value) {
+    return null
+  }
+
+  // Plain string date (e.g. "2026-05-31").
+  if (typeof value === 'string') {
+    const parsed = new Date(value)
+    return Number.isNaN(parsed.getTime()) ? null : parsed
+  }
+
+  // Firestore Timestamp.
+  if (typeof value.toDate === 'function') {
+    return value.toDate()
+  }
+
+  // Native Date.
+  if (value instanceof Date) {
+    return value
+  }
+
+  // Plain { seconds } object.
+  if (typeof value.seconds === 'number') {
+    return new Date(value.seconds * 1000)
+  }
+
+  // Unrecognised shape.
+  return null
+}
+
+
+// Is `value`'s date inside the inclusive [fromDate, toDate] range? Empty bounds
+// are open-ended; an unparseable date only passes when there's no range at all.
+function isWithinRange(value, fromDate, toDate) {
+  const date = toComparableDate(value)
+
+  // No usable date: keep it only when no range is set.
+  if (!date) {
+    return !fromDate && !toDate
+  }
+
+  // Lower bound: start of the "from" day.
+  if (fromDate) {
+    const from = new Date(fromDate)
+    from.setHours(0, 0, 0, 0)
+    if (date < from) {
+      return false
+    }
+  }
+
+  // Upper bound: end of the "to" day.
+  if (toDate) {
+    const to = new Date(toDate)
+    to.setHours(23, 59, 59, 999)
+    if (date > to) {
+      return false
+    }
+  }
+
+  return true
+}
+
+
 // Reports screen: attendance, group and event reports with PDF / Excel export.
 export default function Reports() {
   // Firebase data used by all reports.
@@ -493,20 +552,10 @@ export default function Reports() {
   const [activeReport, setActiveReport] = useState(REPORT_TYPES.EVENTS)
   const [searchTerm, setSearchTerm] = useState('')
 
-  // Reload reports data manually when the user clicks refresh.
-  const loadReportsData = useCallback(async () => {
-    // Reset to the loading state.
-    setLoading(true)
-    setErrors([])
+  // Date-range filter (inclusive). Empty strings mean "no bound on that side".
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
 
-    // Fetch everything again.
-    const reportsState = await loadReportsCollections()
-
-    // Store the fresh data and any errors.
-    setData(reportsState.data)
-    setErrors(reportsState.errors)
-    setLoading(false)
-  }, [])
 
   // Load report data once when the screen opens.
   useEffect(() => {
@@ -535,10 +584,32 @@ export default function Reports() {
     }
   }, [])
 
-  // Totals for the attendance summary cards.
+  // Events that fall within the selected date range (drives every event-based
+  // report so the whole screen reflects the chosen period).
+  const dateFilteredEvents = useMemo(
+    () => data.events.filter((event) => isWithinRange(event.date, fromDate, toDate)),
+    [data.events, fromDate, toDate],
+  )
+
+  // Attendance records that fall within the selected date range.
+  const dateFilteredAttendance = useMemo(
+    () => data.attendance.filter((item) => isWithinRange(item.date ?? item.createdAt, fromDate, toDate)),
+    [data.attendance, fromDate, toDate],
+  )
+
+  // True when the user has set either side of the range.
+  const hasDateFilter = Boolean(fromDate || toDate)
+
+  // Clear both ends of the date range.
+  const clearDateRange = () => {
+    setFromDate('')
+    setToDate('')
+  }
+
+  // Totals for the attendance summary cards (within the date range).
   const attendanceStats = useMemo(
-    () => calculateAttendanceStats(data.attendance),
-    [data.attendance],
+    () => calculateAttendanceStats(dateFilteredAttendance),
+    [dateFilteredAttendance],
   )
 
   // Grand total of all attendance records.
@@ -553,40 +624,30 @@ export default function Reports() {
       ? Math.round((attendanceStats.present / attendanceTotal) * 100)
       : 0
 
-  // How many events exist for each status.
-  const eventStatusCounts = useMemo(() => {
-    return EVENT_STATUSES.reduce((summary, status) => {
-      return {
-        ...summary,
-        [status]: data.events.filter((event) => computeEventStatus(event) === status).length,
-      }
-    }, {})
-  }, [data.events])
-
-  // Group report rows, derived from all the data.
+  // Group report rows, derived from the (date-filtered) data.
   const groupRows = useMemo(
-    () => buildGroupRows(data.volunteers, data.events, data.attendance),
-    [data.volunteers, data.events, data.attendance],
+    () => buildGroupRows(data.volunteers, dateFilteredEvents, dateFilteredAttendance),
+    [data.volunteers, dateFilteredEvents, dateFilteredAttendance],
   )
 
-  // Attendance rows, collapsed to one row per meeting.
+  // Attendance rows, collapsed to one row per meeting (within the date range).
   const attendanceRows = useMemo(
-    () => buildAttendanceRows(data.attendance),
-    [data.attendance],
+    () => buildAttendanceRows(dateFilteredAttendance),
+    [dateFilteredAttendance],
   )
 
-  // Event rows filtered by the search box.
+  // Event rows filtered by the search box (on top of the date range).
   const filteredEvents = useMemo(() => {
     // Normalize the search text.
     const search = searchTerm.trim().toLowerCase()
 
-    // No search: show everything.
+    // No search: show everything in the date range.
     if (!search) {
-      return data.events
+      return dateFilteredEvents
     }
 
     // Match the search against the event's combined text.
-    return data.events.filter((event) => {
+    return dateFilteredEvents.filter((event) => {
       const text = [
         event.name,
         event.date,
@@ -599,7 +660,7 @@ export default function Reports() {
 
       return text.includes(search)
     })
-  }, [data.events, searchTerm])
+  }, [dateFilteredEvents, searchTerm])
 
   // Group rows filtered by group name.
   const filteredGroups = useMemo(() => {
@@ -654,8 +715,8 @@ export default function Reports() {
         'הערות',
       ],
 
-      // Event rows.
-      ...data.events.map((event) => [
+      // Event rows (within the selected date range).
+      ...dateFilteredEvents.map((event) => [
         'דוח אירועים',
         safeText(event.name),
         safeText(event.date),
@@ -833,38 +894,6 @@ export default function Reports() {
     <main className="reports-container" dir="rtl">
       <section className="reports-card">
 
-        {/* Header: title, description and the export actions. */}
-        <header className="reports-header">
-          <div>
-            <div className="reports-eyebrow">
-              סקירה כללית
-            </div>
-
-            <h1 className="reports-title">
-              דוחות
-            </h1>
-
-            <p className="reports-subtitle">
-              צפייה בדוחות נוכחות, קבוצות ואירועים עם אפשרות ייצוא ל־PDF או Excel.
-            </p>
-          </div>
-
-          {/* Refresh / export buttons. */}
-          <div className="reports-actions">
-            <button type="button" onClick={loadReportsData}>
-              רענון נתונים
-            </button>
-
-            <button type="button" onClick={handleExportPdf}>
-              ייצוא PDF
-            </button>
-
-            <button type="button" onClick={handleExportExcel}>
-              ייצוא Excel
-            </button>
-          </div>
-        </header>
-
         {/* Error banner listing any collections that failed to load. */}
         {errors.length > 0 && (
           <div className="reports-error">
@@ -880,7 +909,88 @@ export default function Reports() {
           </div>
         )}
 
-        {/* Four headline summary cards. */}
+        {/* Report names (tabs) at the top — pick which report to view. */}
+        <div className="reports-tabs">
+          <button
+            type="button"
+            className={activeReport === REPORT_TYPES.EVENTS ? 'active' : ''}
+            onClick={() => setActiveReport(REPORT_TYPES.EVENTS)}
+          >
+            דוח אירועים
+          </button>
+
+          <button
+            type="button"
+            className={activeReport === REPORT_TYPES.GROUPS ? 'active' : ''}
+            onClick={() => setActiveReport(REPORT_TYPES.GROUPS)}
+          >
+            דוח קבוצות
+          </button>
+
+          <button
+            type="button"
+            className={activeReport === REPORT_TYPES.ATTENDANCE ? 'active' : ''}
+            onClick={() => setActiveReport(REPORT_TYPES.ATTENDANCE)}
+          >
+            דוח נוכחות
+          </button>
+        </div>
+
+        {/* Export actions — directly below the report names. */}
+        <div className="reports-actions">
+          <button type="button" onClick={handleExportPdf}>
+            🖨️ ייצוא PDF
+          </button>
+
+          <button type="button" onClick={handleExportExcel}>
+            📊 ייצוא Excel
+          </button>
+        </div>
+
+        {/* Filters: a date range (a period, or a single day = same from/to)
+            plus a free-text search of the current report. */}
+        <div className="reports-filterbar">
+
+          {/* From date. */}
+          <div className="reports-filter-field">
+            <label htmlFor="reports-from">מתאריך</label>
+            <input
+              id="reports-from"
+              type="date"
+              value={fromDate}
+              onChange={(event) => setFromDate(event.target.value)}
+            />
+          </div>
+
+          {/* To date. */}
+          <div className="reports-filter-field">
+            <label htmlFor="reports-to">עד תאריך</label>
+            <input
+              id="reports-to"
+              type="date"
+              value={toDate}
+              onChange={(event) => setToDate(event.target.value)}
+            />
+          </div>
+
+          {/* Clear button, shown only when a range is set. */}
+          {hasDateFilter && (
+            <button type="button" className="reports-filter-clear" onClick={clearDateRange}>
+              ניקוי טווח
+            </button>
+          )}
+
+          {/* Search within the current report. */}
+          <input
+            type="search"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="חיפוש בדוח הנוכחי"
+            className="reports-search"
+          />
+        </div>
+
+        {/* Headline summary cards. */}
         <div className="reports-summary-grid">
           <article className="reports-summary-card">
             <span>{data.volunteers.length}</span>
@@ -893,7 +1003,7 @@ export default function Reports() {
           </article>
 
           <article className="reports-summary-card">
-            <span>{data.events.length}</span>
+            <span>{dateFilteredEvents.length}</span>
             <p>אירועים</p>
           </article>
 
@@ -903,62 +1013,9 @@ export default function Reports() {
           </article>
         </div>
 
-        {/* Event counts broken down by status. */}
-        <section className="reports-status-section">
-          <h2>סיכום אירועים לפי סטטוס</h2>
-
-          <div className="reports-status-grid">
-            {EVENT_STATUSES.map((status) => (
-              <div key={status} className="reports-status-item">
-                <strong>{eventStatusCounts[status] || 0}</strong>
-                <span>{status}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* The main report panel: tabs, search and the active table. */}
+        {/* The active report table (the heading shows on the printed PDF). */}
         <section className="reports-panel">
-
-          {/* Heading shown only on the printed page. */}
           <h2 className="reports-print-title">{REPORT_LABELS[activeReport]}</h2>
-
-          {/* Tab buttons + search box. */}
-          <div className="reports-panel-header">
-            <div className="reports-tabs">
-              <button
-                type="button"
-                className={activeReport === REPORT_TYPES.EVENTS ? 'active' : ''}
-                onClick={() => setActiveReport(REPORT_TYPES.EVENTS)}
-              >
-                דוח אירועים
-              </button>
-
-              <button
-                type="button"
-                className={activeReport === REPORT_TYPES.GROUPS ? 'active' : ''}
-                onClick={() => setActiveReport(REPORT_TYPES.GROUPS)}
-              >
-                דוח קבוצות
-              </button>
-
-              <button
-                type="button"
-                className={activeReport === REPORT_TYPES.ATTENDANCE ? 'active' : ''}
-                onClick={() => setActiveReport(REPORT_TYPES.ATTENDANCE)}
-              >
-                דוח נוכחות
-              </button>
-            </div>
-
-            <input
-              type="search"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="חיפוש בדוח הנוכחי"
-              className="reports-search"
-            />
-          </div>
 
           {/* Loading message while fetching, otherwise the active report. */}
           {loading ? (

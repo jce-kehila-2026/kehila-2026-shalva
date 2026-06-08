@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 // Firestore helpers for reading collections and writing attendance.
-import { collection, doc, getDocs, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 
 // Our Firestore database instance.
 import { db } from '../../firebase';
@@ -13,9 +13,8 @@ import { db } from '../../firebase';
 // Shared event-date helper (local "YYYY-MM-DD" parsing).
 import { parseEventDate } from '../../utils/eventStatus';
 
-// WhatsApp message template + the one-tap button.
+// WhatsApp message template (used for the copy-to-group message).
 import { eventReminderMessage } from '../../utils/whatsapp';
-import WhatsAppButton from '../shared/WhatsAppButton/WhatsAppButton';
 
 // Styles for this screen.
 import './ActivityCommandCenter.css';
@@ -31,9 +30,6 @@ const STATUS = {
 // Label used when an event has no assigned group.
 const NO_GROUP = 'ללא שיוך';
 
-// The status registrants start with (used to count "new" ones).
-const PENDING_STATUS = 'ממתין לאישור';
-
 // Field names that might hold a birth date across the collections.
 const BIRTH_DATE_FIELDS = ['birthDate', 'birthday', 'dob', 'dateOfBirth', 'birth_date'];
 
@@ -44,16 +40,6 @@ const DAY_MS = 86400000;
 // Midnight of a date, so day comparisons ignore the time of day.
 function startOfDay(date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
-
-// Best available display name, with graceful fallbacks.
-function getName(person) {
-  return (
-    person.name ||
-    [person.firstName, person.lastName].filter(Boolean).join(' ').trim() ||
-    person.email ||
-    'חבר/ת קהילה'
-  );
 }
 
 // Parse a birth date from any supported field name / value shape.
@@ -107,14 +93,16 @@ function formatHebrewDate(value) {
 
 // `groupFilter` ({ id, name }) scopes the view to one group (guides); admins
 // pass nothing. `onBack` renders a back button (guide flow) when provided.
-function ActivityCommandCenter({ groupFilter = null, onBack }) {
+// `leadingCard` is an optional node shown as the first alert card (the admin
+// home uses it for the "pending registrations" card). `onNavigate(view)` lets
+// the other stat cards jump to their related admin screen.
+function ActivityCommandCenter({ groupFilter = null, onBack, leadingCard = null, onNavigate }) {
   // Raw collections (each degrades to [] if its read is blocked).
   const [events, setEvents] = useState([]);
   const [groups, setGroups] = useState([]);
   const [volunteers, setVolunteers] = useState([]);
   const [users, setUsers] = useState([]);
   const [attendance, setAttendance] = useState([]);
-  const [registrants, setRegistrants] = useState([]);
 
   // True while the first load runs.
   const [loading, setLoading] = useState(true);
@@ -122,8 +110,9 @@ function ActivityCommandCenter({ groupFilter = null, onBack }) {
   // The event expanded into the attendance panel (null when none).
   const [selectedEventId, setSelectedEventId] = useState(null);
 
-  // Per-volunteer note drafts, keyed by `${eventId}_${volunteerId}`.
-  const [noteDrafts, setNoteDrafts] = useState({});
+  // Whether the today/tomorrow schedule card is expanded (starts collapsed).
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+
 
   // True for ~2s after the group message is copied.
   const [copied, setCopied] = useState(false);
@@ -145,14 +134,13 @@ function ActivityCommandCenter({ groupFilter = null, onBack }) {
 
     // Load all collections in parallel and publish them to state.
     const load = async () => {
-      const [eventsRaw, groupsRaw, volunteersRaw, usersRaw, attendanceRaw, registrantsRaw] =
+      const [eventsRaw, groupsRaw, volunteersRaw, usersRaw, attendanceRaw] =
         await Promise.all([
           fetchDocs('events'),
           fetchDocs('groups'),
           fetchDocs('volunteers'),
           fetchDocs('users'),
           fetchDocs('attendance'),
-          fetchDocs('registrants'),
         ]);
 
       if (!isMounted) return;
@@ -162,7 +150,6 @@ function ActivityCommandCenter({ groupFilter = null, onBack }) {
       setVolunteers(volunteersRaw);
       setUsers(usersRaw);
       setAttendance(attendanceRaw);
-      setRegistrants(registrantsRaw);
       setLoading(false);
     };
 
@@ -270,11 +257,6 @@ function ActivityCommandCenter({ groupFilter = null, onBack }) {
     return { today, tomorrow };
   }, [events, groupByName, volunteersByGroup, attendanceByKey, groupFilter, todayTime, tomorrowTime]);
 
-  // Pending registrations (status defaults to "ממתין לאישור").
-  const pendingRegistrations = useMemo(
-    () => registrants.filter((registrant) => (registrant.status || PENDING_STATUS) === PENDING_STATUS).length,
-    [registrants],
-  );
 
   // People (volunteers + active guides) with a birthday in the next 7 days.
   const birthdaysThisWeek = useMemo(() => {
@@ -289,71 +271,21 @@ function ActivityCommandCenter({ groupFilter = null, onBack }) {
     [upcoming],
   );
 
-  // Update a volunteer's note draft for the selected event.
-  const updateNote = (key, value) => {
-    setNoteDrafts((current) => ({ ...current, [key]: value }));
-  };
 
-  // Mark one volunteer's attendance for an event (idempotent keyed write).
-  const markAttendance = async (event, volunteer, status) => {
-    const key = `${event.id}_${volunteer.id}`;
-    const note = noteDrafts[key] ?? attendanceByKey.get(key)?.note ?? '';
-
-    // The record we write (deterministic id → re-marking updates in place).
-    const record = {
-      eventId: event.id,
-      eventName: event.name || '',
-      volunteerId: volunteer.id,
-      volunteerName: getName(volunteer),
-      groupId: event.groupId || volunteer.groupId || '',
-      group: event.assignedGroup,
-      groupName: event.assignedGroup,
-      date: event.date || '',
-      status,
-      note,
-      updatedAt: serverTimestamp(),
-    };
-
-    // Update local state first so the UI responds immediately.
-    setAttendance((current) => {
-      const without = current.filter(
-        (item) => !(item.eventId === event.id && item.volunteerId === volunteer.id),
-      );
-      return [...without, { id: key, ...record }];
-    });
-
-    // Persist to Firestore.
-    try {
-      await setDoc(doc(db, 'attendance', key), record, { merge: true });
-    } catch (error) {
-      console.error('שגיאה בשמירת נוכחות:', error);
-      window.alert('שמירת הנוכחות נכשלה. נסה/י שוב.');
-    }
-  };
-
-  // Persist a note edit (keeps the current status; waits for a first mark).
-  const saveNote = async (event, volunteer) => {
-    const key = `${event.id}_${volunteer.id}`;
-    const existing = attendanceByKey.get(key);
-
-    // No status yet: the note will save together with the first status click.
-    if (!existing) return;
-
-    // Skip when the note didn't actually change.
-    const note = noteDrafts[key] ?? existing.note ?? '';
-    if (note === (existing.note ?? '')) return;
-
-    await markAttendance(event, volunteer, existing.status);
-  };
-
-  // Copy a ready-to-paste broadcast message for the event's group.
+  // Copy a ready-to-paste broadcast message for the event's group, with all
+  // the details (name, when, location) plus the event description.
   const copyGroupMessage = async (event) => {
-    const message = eventReminderMessage({
+    let message = eventReminderMessage({
       eventName: event.name,
       date: formatHebrewDate(event.date),
       time: event.time,
       location: event.location,
     });
+
+    // Append the description when there is one.
+    if (event.description) {
+      message += `\nפרטים: ${event.description}`;
+    }
 
     try {
       await navigator.clipboard.writeText(message);
@@ -364,101 +296,29 @@ function ActivityCommandCenter({ groupFilter = null, onBack }) {
     }
   };
 
-  // Render one volunteer row: status buttons, note and WhatsApp reminder.
-  const renderVolunteerRow = (event, volunteer) => {
-    const key = `${event.id}_${volunteer.id}`;
-    const record = attendanceByKey.get(key);
-    const status = record?.status || '';
-    const note = noteDrafts[key] ?? record?.note ?? '';
-    const name = getName(volunteer);
+  // Render the opened event's panel: its description + a button that copies a
+  // ready-to-send group message (with all the details) to the clipboard.
+  const renderRosterPanel = (event) => (
+    <div className="acc-roster">
 
-    // The pre-filled reminder for this volunteer.
-    const reminder = eventReminderMessage({
-      name,
-      eventName: event.name,
-      date: formatHebrewDate(event.date),
-      time: event.time,
-      location: event.location,
-    });
-
-    return (
-      <li className="acc-vol" key={volunteer.id}>
-
-        {/* Name + phone. */}
-        <div className="acc-vol-id">
-          <span className="acc-vol-name">{name}</span>
-          {volunteer.phone && <span className="acc-vol-phone" dir="ltr">{volunteer.phone}</span>}
+      {/* Event description (or a friendly note when there is none). */}
+      {event.description ? (
+        <div className="acc-event-desc">
+          <h4>תיאור האירוע</h4>
+          <p>{event.description}</p>
         </div>
+      ) : (
+        <div className="acc-empty-inline">אין תיאור לאירוע.</div>
+      )}
 
-        {/* Three attendance buttons (the active one is highlighted). */}
-        <div className="acc-vol-status">
-          <button
-            type="button"
-            className={`acc-pill acc-pill--present ${status === STATUS.present ? 'is-active' : ''}`}
-            onClick={() => markAttendance(event, volunteer, STATUS.present)}
-          >
-            הגיע
-          </button>
-          <button
-            type="button"
-            className={`acc-pill acc-pill--late ${status === STATUS.late ? 'is-active' : ''}`}
-            onClick={() => markAttendance(event, volunteer, STATUS.late)}
-          >
-            איחר
-          </button>
-          <button
-            type="button"
-            className={`acc-pill acc-pill--absent ${status === STATUS.absent ? 'is-active' : ''}`}
-            onClick={() => markAttendance(event, volunteer, STATUS.absent)}
-          >
-            לא הגיע
-          </button>
-        </div>
-
-        {/* Short free-text note (saved on blur once a status exists). */}
-        <input
-          type="text"
-          className="acc-vol-note"
-          value={note}
-          placeholder="הערה קצרה"
-          onChange={(changeEvent) => updateNote(key, changeEvent.target.value)}
-          onBlur={() => saveNote(event, volunteer)}
-        />
-
-        {/* One-tap WhatsApp reminder. */}
-        <WhatsAppButton phone={volunteer.phone} message={reminder} label="תזכורת" compact />
-      </li>
-    );
-  };
-
-  // Render the roster + quick-mark controls for the opened event.
-  const renderRosterPanel = (event) => {
-    // No group / empty roster: show a friendly note.
-    if (event.assignedGroup === NO_GROUP || event.roster.length === 0) {
-      return (
-        <div className="acc-roster">
-          <div className="acc-empty-inline">אין מתנדבים משויכים לאירוע הזה.</div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="acc-roster">
-
-        {/* Copy a group broadcast message to the clipboard. */}
-        <div className="acc-roster-actions">
-          <button type="button" className="acc-copy-btn" onClick={() => copyGroupMessage(event)}>
-            {copied ? 'ההודעה הועתקה ✓' : 'העתק הודעה לקבוצה'}
-          </button>
-        </div>
-
-        {/* One row per volunteer. */}
-        <ul className="acc-vol-list">
-          {event.roster.map((volunteer) => renderVolunteerRow(event, volunteer))}
-        </ul>
+      {/* Copy a group broadcast message (with all the details) to the clipboard. */}
+      <div className="acc-roster-actions">
+        <button type="button" className="acc-copy-btn" onClick={() => copyGroupMessage(event)}>
+          {copied ? 'ההודעה הועתקה ✓' : 'העתקת הודעה לקבוצה'}
+        </button>
       </div>
-    );
-  };
+    </div>
+  );
 
   // Render one event card (summary header + counters; opens the roster panel).
   const renderEventCard = (event) => {
@@ -485,13 +345,6 @@ function ActivityCommandCenter({ groupFilter = null, onBack }) {
             </span>
           </span>
 
-          {/* Attendance counters. */}
-          <span className="acc-event-stats">
-            <span className="acc-stat acc-stat--expected">{event.expected} צפויים</span>
-            <span className="acc-stat acc-stat--present">{event.arrived} הגיעו</span>
-            <span className="acc-stat acc-stat--missing">{event.unmarked} טרם סומנו</span>
-          </span>
-
           {/* Open/closed chevron. */}
           <span className="acc-event-chevron" aria-hidden="true">{isOpen ? '▲' : '▼'}</span>
         </button>
@@ -505,7 +358,11 @@ function ActivityCommandCenter({ groupFilter = null, onBack }) {
   // Render a day section (today / tomorrow) with its events or an empty note.
   const renderDay = (title, list, emptyText) => (
     <div className="acc-day">
-      <h3 className="acc-day-title">{title}</h3>
+      {/* Day header with an inline event count (replaces the old "today" card). */}
+      <h3 className="acc-day-title">
+        <span>{title}</span>
+        <span className="acc-day-count">{list.length}</span>
+      </h3>
       {list.length > 0
         ? <div className="acc-events">{list.map(renderEventCard)}</div>
         : <div className="acc-empty-inline">{emptyText}</div>}
@@ -515,46 +372,71 @@ function ActivityCommandCenter({ groupFilter = null, onBack }) {
   return (
     <section className="acc" dir="rtl" aria-label="חמ״ל פעילות">
 
-      {/* Header: optional back button, title and subtitle. */}
-      <header className="acc-head">
-        {typeof onBack === 'function' && (
+      {/* Optional back button (only when used as a standalone screen). No
+          title/subtitle — the admin home embeds this without a heading. */}
+      {typeof onBack === 'function' && (
+        <header className="acc-head">
           <button type="button" className="acc-back" onClick={onBack}>חזרה</button>
-        )}
-        <div className="acc-head-text">
-          <span className="acc-eyebrow">🎖️ חמ״ל</span>
-          <h2 className="acc-title">חמ״ל פעילות</h2>
-          <p className="acc-subtitle">אירועי היום ומחר, נוכחות מהירה ותזכורות וואטסאפ — במקום אחד.</p>
-        </div>
-      </header>
+        </header>
+      )}
 
       {/* Loading placeholder, otherwise the alert cards + event lists. */}
       {loading ? (
         <div className="acc-empty">טוען נתונים...</div>
       ) : (
         <>
-          {/* Alert cards: quick at-a-glance counters. */}
+          {/* Alert cards: quick at-a-glance counters. The optional leading card
+              (pending registrations, from the admin home) sits first. */}
           <div className="acc-cards">
-            <article className="acc-card acc-card--reg">
-              <span className="acc-card-num">{pendingRegistrations}</span>
-              <span className="acc-card-label">הרשמות חדשות</span>
-            </article>
-            <article className="acc-card acc-card--today">
-              <span className="acc-card-num">{upcoming.today.length}</span>
-              <span className="acc-card-label">אירועים היום</span>
-            </article>
-            <article className="acc-card acc-card--missing">
+            {leadingCard}
+
+            {/* Missing-attendance count — opens the attendance tracking screen. */}
+            <button
+              type="button"
+              className="acc-card acc-card--missing"
+              onClick={() => onNavigate && onNavigate('attendance')}
+            >
               <span className="acc-card-num">{unmarkedToday}</span>
               <span className="acc-card-label">חסרים בנוכחות</span>
-            </article>
-            <article className="acc-card acc-card--bday">
+            </button>
+
+            {/* Birthdays this week — opens the birthdays screen. */}
+            <button
+              type="button"
+              className="acc-card acc-card--bday"
+              onClick={() => onNavigate && onNavigate('birthdays')}
+            >
               <span className="acc-card-num">{birthdaysThisWeek}</span>
               <span className="acc-card-label">ימי הולדת השבוע</span>
-            </article>
+            </button>
           </div>
 
-          {/* Today's and tomorrow's events. */}
-          {renderDay('היום', upcoming.today, 'אין אירועים היום')}
-          {renderDay('מחר', upcoming.tomorrow, 'אין אירועים מחר')}
+          {/* Today's + tomorrow's events grouped in one collapsible card
+              (starts hidden; click the header to show / hide). */}
+          <div className={`acc-schedule ${scheduleOpen ? 'is-open' : ''}`}>
+
+            {/* Header toggles the whole schedule open / closed. */}
+            <button
+              type="button"
+              className="acc-schedule-head"
+              onClick={() => setScheduleOpen((open) => !open)}
+              aria-expanded={scheduleOpen}
+            >
+              <span className="acc-schedule-title">אירועי היום ומחר</span>
+              <span className="acc-schedule-count">
+                {upcoming.today.length + upcoming.tomorrow.length}
+              </span>
+              <span className="acc-schedule-chevron" aria-hidden="true">{scheduleOpen ? '▲' : '▼'}</span>
+            </button>
+
+            {/* Both day sections live inside the card (only when open). */}
+            {scheduleOpen && (
+              <div className="acc-schedule-body">
+                {renderDay('היום', upcoming.today, 'אין אירועים היום')}
+                {renderDay('מחר', upcoming.tomorrow, 'אין אירועים מחר')}
+              </div>
+            )}
+          </div>
         </>
       )}
     </section>

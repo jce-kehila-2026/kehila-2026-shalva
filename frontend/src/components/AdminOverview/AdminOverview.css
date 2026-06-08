@@ -165,27 +165,41 @@
   direction: ltr;
 }
 
-/* A single round arrow button. */
+/* Prev/next arrows: soft frosted rounded-square buttons on the gradient header. */
 .ao-cal-arrows button {
-  width: 40px;
-  height: 40px;
+  width: 38px;
+  height: 38px;
   display: grid;
   place-items: center;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
   background: rgba(255, 255, 255, 0.16);
-  color: #fff;
-  font-size: 22px;
-  font-weight: 800;
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 700;
   line-height: 1;
   cursor: pointer;
-  transition: background 0.15s ease, transform 0.15s ease;
+  transition: background 0.15s ease;
 }
 
-/* Arrow hover. */
+/* Hover: lighten the frosted fill. */
 .ao-cal-arrows button:hover {
-  background: rgba(255, 255, 255, 0.32);
-  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.3);
+  transform: none;
+}
+
+/* The "+" is the primary action — solid white with the brand colour. */
+.ao-cal-arrows .ao-cal-add {
+  background: #ffffff;
+  border-color: #ffffff;
+  color: var(--brand-700);
+  font-size: 22px;
+}
+
+/* Keep the "+" filled on hover (just a subtle dim). */
+.ao-cal-arrows .ao-cal-add:hover {
+  background: #ffffff;
+  opacity: 0.92;
 }
 
 /* Padded body that holds the day grid. */
@@ -981,10 +995,10 @@
     font-size: 20px;
   }
 
-  .ao-cal-arrows button {
-    width: 36px;
-    height: 36px;
-    font-size: 20px;
+  /* Keep the arrows/plus identical to desktop (which looks good) so their
+     glyphs stay centred; just nudge the group to align nicely on phones. */
+  .ao-cal-arrows {
+    align-items: center;
   }
 
   .ao-cal-body {
@@ -1063,7 +1077,9 @@
   }
 }
 
-/* Quick management grid dashboard */
+/* ---------- Quick management dashboard ---------- */
+
+/* Responsive grid that lays out the quick-management cards. */
 .ao-quick-mgmt {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
@@ -1072,6 +1088,7 @@
   margin-bottom: 24px;
 }
 
+/* One management card (volunteers / groups). */
 .ao-quick-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -1083,6 +1100,7 @@
   gap: 16px;
 }
 
+/* Card header row: title on one side, add button on the other. */
 .ao-quick-card-header {
   display: flex;
   justify-content: space-between;
@@ -1091,6 +1109,7 @@
   flex-wrap: wrap;
 }
 
+/* Card title text. */
 .ao-quick-card-header h3 {
   margin: 0;
   font-size: 18px;
@@ -1098,6 +1117,7 @@
   font-weight: 800;
 }
 
+/* Small "+ add" pill button in the card header. */
 .ao-quick-add-btn {
   background: var(--brand-50);
   color: var(--brand-700);
@@ -1110,16 +1130,19 @@
   transition: all 0.2s ease;
 }
 
+/* Add button hover: fill with the brand colour. */
 .ao-quick-add-btn:hover {
   background: var(--brand-600);
   color: #ffffff;
   border-color: var(--brand-600);
 }
 
+/* Row that holds the search input. */
 .ao-quick-filter-row {
   width: 100%;
 }
 
+/* The search input itself. */
 .ao-quick-search {
   width: 100%;
   padding: 8px 12px;
@@ -1131,11 +1154,13 @@
   color: var(--text);
 }
 
+/* Search input focus ring. */
 .ao-quick-search:focus {
   border-color: var(--brand-500);
   box-shadow: 0 0 0 3px var(--brand-50);
 }
 
+/* Scrollable wrapper around the results list. */
 .ao-quick-list-wrapper {
   max-height: 250px;
   overflow-y: auto;
@@ -1145,6 +1170,7 @@
   background: var(--surface-2);
 }
 
+/* The results list (stacked rows). */
 .ao-quick-list {
   list-style: none;
   margin: 0;
@@ -1154,6 +1180,7 @@
   gap: 8px;
 }
 
+/* A single result row: info on one side, actions on the other. */
 .ao-quick-row {
   display: flex;
   justify-content: space-between;
@@ -1166,6 +1193,7 @@
   box-shadow: var(--shadow-sm);
 }
 
+/* Left side of a row: name + sub-text stacked. */
 .ao-quick-row-info {
   display: flex;
   flex-direction: column;
@@ -1173,6 +1201,7 @@
   min-width: 0;
 }
 
+/* The bold name, truncated with an ellipsis if too long. */
 .ao-quick-row-info strong {
   font-size: 14.5px;
   color: var(--text);
@@ -1181,6 +1210,7 @@
   white-space: nowrap;
 }
 
+/* Small pill tag (e.g. the volunteer's group). */
 .ao-quick-row-tag {
   align-self: flex-start;
   font-size: 11px;
@@ -1192,11 +1222,13 @@
   border: 1px solid var(--brand-200);
 }
 
+/* Muted sub-line under the name. */
 .ao-quick-row-sub {
   font-size: 12px;
   color: var(--text-muted);
 }
 
+/* Right side of a row: the action buttons. */
 .ao-quick-row-actions {
   display: flex;
   align-items: center;
@@ -1204,6 +1236,7 @@
   flex-shrink: 0;
 }
 
+/* Round icon buttons inside a row. */
 .ao-quick-row-actions button {
   padding: 6px;
   width: 30px;
@@ -1219,21 +1252,25 @@
   transition: all 0.15s ease;
 }
 
+/* Icon button hover: tint with the brand colour. */
 .ao-quick-row-actions button:hover {
   background: var(--brand-50);
   border-color: var(--brand-400);
 }
 
+/* Delete button gets a danger-coloured border. */
 .ao-quick-row-actions button.btn-delete-small {
   border-color: var(--danger-bg);
 }
 
+/* Delete button hover: turn fully danger-coloured. */
 .ao-quick-row-actions button.btn-delete-small:hover {
   background: var(--danger-bg);
   color: var(--danger);
   border-color: var(--danger);
 }
 
+/* "No results" placeholder inside a card. */
 .ao-quick-empty {
   text-align: center;
   padding: 24px;
@@ -1241,7 +1278,9 @@
   font-size: 14px;
 }
 
-/* Modals layout rules */
+/* ---------- Modals ---------- */
+
+/* Full-screen dimmed backdrop that centres the modal. */
 .ao-modal-overlay {
   position: fixed;
   inset: 0;
@@ -1253,6 +1292,8 @@
   padding: 20px;
 }
 
+/* The modal panel itself. Capped to the viewport height and scrollable so the
+   whole form is reachable on small screens. */
 .ao-modal-content {
   background: var(--surface);
   border-radius: var(--radius-lg);
@@ -1260,12 +1301,23 @@
   border: 1px solid var(--border);
   width: 100%;
   max-width: 580px;
+  max-height: 90vh;
+  overflow-y: auto;
   padding: 28px;
   direction: rtl;
   text-align: right;
   animation: ao-fade 0.22s ease-out;
 }
 
+/* Tighter padding on phones so the form uses the width well. */
+@media (max-width: 560px) {
+  .ao-modal-content {
+    padding: 20px;
+    max-height: 92vh;
+  }
+}
+
+/* Modal title row with an underline. */
 .ao-modal-header {
   font-size: 20px;
   font-weight: 800;
@@ -1275,30 +1327,35 @@
   margin-bottom: 18px;
 }
 
+/* Two-column form grid inside the modal. */
 .ao-modal-form {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
 }
 
+/* Collapse the form to a single column on small screens. */
 @media (max-width: 500px) {
   .ao-modal-form {
     grid-template-columns: 1fr;
   }
 }
 
+/* One label + field pair, stacked vertically. */
 .ao-form-group {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
+/* Field label. */
 .ao-form-group label {
   font-weight: 700;
   font-size: 13.5px;
   color: var(--text);
 }
 
+/* Text inputs and selects share the same look. */
 .ao-form-group input,
 .ao-form-group select {
   width: 100%;
@@ -1311,12 +1368,14 @@
   color: var(--text);
 }
 
+/* Field focus ring. */
 .ao-form-group input:focus,
 .ao-form-group select:focus {
   border-color: var(--brand-500);
   box-shadow: 0 0 0 3px var(--brand-50);
 }
 
+/* Footer row holding the modal's buttons, right-aligned. */
 .ao-modal-actions {
   grid-column: 1 / -1;
   display: flex;
@@ -1325,6 +1384,7 @@
   margin-top: 14px;
 }
 
+/* Secondary "cancel" button (outlined). */
 .ao-btn-outline {
   background: var(--surface);
   color: var(--text-muted);
@@ -1335,10 +1395,12 @@
   cursor: pointer;
 }
 
+/* Cancel button hover. */
 .ao-btn-outline:hover {
   background: var(--surface-2);
 }
 
+/* Primary "save" button (filled brand colour). */
 .ao-btn-success {
   background: var(--brand-600);
   color: #ffffff;
@@ -1350,11 +1412,14 @@
   box-shadow: var(--shadow-sm);
 }
 
+/* Save button hover. */
 .ao-btn-success:hover {
   background: var(--brand-700);
 }
 
-/* Actions positioning in Overview header */
+/* ---------- Overview header actions ---------- */
+
+/* Row that groups the header action buttons. */
 .ao-head-actions {
   display: flex;
   gap: 12px;
@@ -1362,6 +1427,7 @@
   flex-wrap: wrap;
 }
 
+/* Prominent "+ add event" button in the header. */
 .ao-add-event-btn {
   background: var(--brand-600);
   color: #ffffff;
@@ -1375,8 +1441,116 @@
   transition: all 0.2s ease;
 }
 
+/* Add-event button hover: lift slightly and deepen the shadow. */
 .ao-add-event-btn:hover {
   background: var(--brand-700);
   transform: translateY(-1px);
   box-shadow: var(--shadow);
+}
+
+/* ---------- Admin home layout (חמ״ל main + calendar/birthdays aside) ---------- */
+
+/* Single centered column on every screen (the same clean, stacked look as the
+   phone): calendar, then חמ״ל, then birthdays — never side by side. */
+.ao-home {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin: 18px auto 0;
+  max-width: 860px;
+}
+
+/* Calendar + חמ״ל stacked (one above the other). */
+.ao-home-top {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* The חמ״ל block. */
+.ao-home-acc {
+  min-width: 0;
+}
+
+/* Let the embedded חמ״ל fill the column instead of centering at 960px. */
+.ao-home-acc .acc {
+  max-width: none;
+  padding: 0;
+}
+
+/* ---------- Pending-volunteers chip ---------- */
+
+/* Clickable chip showing how many registrants await approval. */
+.ao-pending-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  background: var(--warning-bg);
+  color: var(--warning);
+  border: 1px solid var(--warning);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: none;
+  transition: all 0.15s ease;
+}
+
+/* Hover: deepen slightly and lift with a small shadow. */
+.ao-pending-chip:hover {
+  filter: brightness(0.97);
+  transform: none;
+  box-shadow: var(--shadow-sm);
+}
+
+/* The bold count number. */
+.ao-pending-count {
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+/* The descriptive label. */
+.ao-pending-label {
+  font-weight: 700;
+}
+
+/* ---------- Compact calendar (side column) ---------- */
+
+/* Tighter padding when the calendar sits in the aside. */
+.ao-cal-compact {
+  padding: 14px;
+}
+
+/* Smaller selected-day event list (name + status badge). */
+.ao-cal-event-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* One event row in the compact list. */
+.ao-cal-event-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+/* Event name (truncates if long). */
+.ao-cal-event-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
