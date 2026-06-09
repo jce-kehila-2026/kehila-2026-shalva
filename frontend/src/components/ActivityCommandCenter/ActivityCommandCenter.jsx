@@ -1,5 +1,6 @@
 // ActivityCommandCenter — daily operations hub: today's & tomorrow's events,
-// fast attendance marking, WhatsApp reminders and smart alert cards.
+// an attendance summary (it links to the attendance screen, where marking
+// actually happens), WhatsApp reminders and smart alert cards.
 
 // React hooks for state, effects and memoization.
 import { useEffect, useMemo, useState } from 'react';
@@ -13,6 +14,9 @@ import { db } from '../../firebase';
 // Shared event-date helper (local "YYYY-MM-DD" parsing).
 import { parseEventDate } from '../../utils/eventStatus';
 
+// Shared birth-date parsing (kept in one place across screens).
+import { parseBirthDate } from '../../utils/people';
+
 // WhatsApp message template (used for the copy-to-group message).
 import { eventReminderMessage } from '../../utils/whatsapp';
 
@@ -20,7 +24,7 @@ import { eventReminderMessage } from '../../utils/whatsapp';
 import './ActivityCommandCenter.css';
 
 
-// The three attendance states stored on each record.
+// The three attendance states a record's status may use (older Hebrew strings).
 const STATUS = {
   present: 'נוכח',
   late: 'איחר',
@@ -29,9 +33,6 @@ const STATUS = {
 
 // Label used when an event has no assigned group.
 const NO_GROUP = 'ללא שיוך';
-
-// Field names that might hold a birth date across the collections.
-const BIRTH_DATE_FIELDS = ['birthDate', 'birthday', 'dob', 'dateOfBirth', 'birth_date'];
 
 // One day in milliseconds.
 const DAY_MS = 86400000;
@@ -42,29 +43,25 @@ function startOfDay(date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
-// Parse a birth date from any supported field name / value shape.
-function parseBirthDate(person) {
-  for (const field of BIRTH_DATE_FIELDS) {
-    const value = person[field];
-    if (!value) continue;
+// A day-level key (YYYY-MM-DD) from any shape: a Date, a Firestore Timestamp,
+// a { seconds } object, or a date string. Used to line attendance records
+// (stored per group + day) up with the day an event falls on.
+function toDateKey(value) {
+  if (!value) return '';
 
-    let date = null;
+  let date = null;
+  if (value instanceof Date) date = value;
+  else if (typeof value.toDate === 'function') date = value.toDate();
+  else if (typeof value.seconds === 'number') date = new Date(value.seconds * 1000);
+  else if (typeof value === 'string') date = parseEventDate(value);
 
-    if (typeof value === 'string') {
-      const parsed = new Date(value);
-      if (!Number.isNaN(parsed.getTime())) date = parsed;
-    } else if (typeof value.toDate === 'function') {
-      date = value.toDate();
-    } else if (value instanceof Date) {
-      date = value;
-    } else if (typeof value.seconds === 'number') {
-      date = new Date(value.seconds * 1000);
-    }
+  if (!date || Number.isNaN(date.getTime())) return '';
 
-    if (date && !Number.isNaN(date.getTime())) return date;
-  }
-
-  return null;
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
 }
 
 // True when the person's birthday falls within the next `days` days.
@@ -96,7 +93,7 @@ function formatHebrewDate(value) {
 // `leadingCard` is an optional node shown as the first alert card (the admin
 // home uses it for the "pending registrations" card). `onNavigate(view)` lets
 // the other stat cards jump to their related admin screen.
-function ActivityCommandCenter({ groupFilter = null, onBack, leadingCard = null, onNavigate }) {
+function ActivityCommandCenter({ groupFilter = null, onBack, leadingCard = null, onNavigate, reloadToken = 0 }) {
   // Raw collections (each degrades to [] if its read is blocked).
   const [events, setEvents] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -158,7 +155,8 @@ function ActivityCommandCenter({ groupFilter = null, onBack, leadingCard = null,
     return () => {
       isMounted = false;
     };
-  }, []);
+    // Reloads when the parent bumps reloadToken (e.g. after adding an event).
+  }, [reloadToken]);
 
   // Index groups by name (events reference their group by name, not id).
   const groupByName = useMemo(() => {
@@ -182,12 +180,15 @@ function ActivityCommandCenter({ groupFilter = null, onBack, leadingCard = null,
     return map;
   }, [volunteers]);
 
-  // Index event-scoped attendance by `${eventId}_${volunteerId}`.
+  // Index attendance by `${dateKey}_${volunteerId}`. The attendance screen
+  // saves one record per volunteer, per group, per DAY (not per event), so we
+  // match on the day an event falls on rather than an event id.
   const attendanceByKey = useMemo(() => {
     const map = new Map();
     attendance.forEach((record) => {
-      if (record.eventId && record.volunteerId) {
-        map.set(`${record.eventId}_${record.volunteerId}`, record);
+      const dateKey = record.dateKey || toDateKey(record.date);
+      if (dateKey && record.volunteerId) {
+        map.set(`${dateKey}_${record.volunteerId}`, record);
       }
     });
     return map;
@@ -205,20 +206,26 @@ function ActivityCommandCenter({ groupFilter = null, onBack, leadingCard = null,
       const group = groupByName.get(assignedGroup) || null;
       const roster = volunteersByGroup.get(assignedGroup) || [];
 
-      // Tally the three attendance states for this event.
+      // A volunteer is "marked" if attendance for their group was saved on the
+      // day this event falls on. `status === true` means they were present.
+      const eventDateKey = toDateKey(event.date);
       let present = 0;
-      let late = 0;
       let absent = 0;
+      let marked = 0;
       roster.forEach((volunteer) => {
-        const record = attendanceByKey.get(`${event.id}_${volunteer.id}`);
+        const record = attendanceByKey.get(`${eventDateKey}_${volunteer.id}`);
         if (!record) return;
-        if (record.status === STATUS.present) present += 1;
-        else if (record.status === STATUS.late) late += 1;
-        else if (record.status === STATUS.absent) absent += 1;
+        marked += 1;
+        // Accept the boolean model the attendance screen writes, and tolerate
+        // the older Hebrew string statuses too.
+        if (record.status === true || record.status === STATUS.present || record.status === STATUS.late) {
+          present += 1;
+        } else {
+          absent += 1;
+        }
       });
 
       const expected = roster.length;
-      const marked = present + late + absent;
 
       return {
         ...event,
@@ -229,9 +236,8 @@ function ActivityCommandCenter({ groupFilter = null, onBack, leadingCard = null,
         roster,
         expected,
         present,
-        late,
         absent,
-        arrived: present + late,
+        arrived: present,
         unmarked: Math.max(expected - marked, 0),
       };
     };

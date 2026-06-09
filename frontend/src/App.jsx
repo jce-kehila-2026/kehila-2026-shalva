@@ -129,6 +129,17 @@ function App() {
     }
   };
 
+  // Return to the signed-in "home" view for the current role (admin overview /
+  // guide menu / viewer list). Wired to the header logo, and it also closes any
+  // open event / volunteer detail view.
+  const handleNavigateHome = () => {
+    setSelectedEvent(null);
+    setSelectedVolunteer(null);
+    setActiveScreen('users');
+    setAdminView('overview');
+    setGuideView('menu');
+  };
+
   // Render the active viewer screen (or an opened event / volunteer).
   const renderViewerScreens = () => {
     // An opened event takes over the view.
@@ -245,6 +256,16 @@ function App() {
     return (
       <div className="app-shell" dir="rtl">
         <div className="public-layout">
+
+          {/* Logo at the top — clicking it leaves the form and returns to the
+              public home page (the site root clears the ?register=1 link). */}
+          <a href="/" className="public-home-logo" aria-label="חזרה לדף הבית">
+            <img
+              src="https://www.shalva.org/wp-content/uploads/2025/02/Logo-Hebrew-1024x488-1.png"
+              alt="שלוה"
+            />
+          </a>
+
           <section className="public-card public-card-wide" aria-label="הרשמה להתנדבות">
             <RegistrationScreen />
           </section>
@@ -277,11 +298,19 @@ function App() {
 
             {/* Greeting + role badge + logo (right side). */}
             <div className="auth-user-block">
-              <img
-                src="https://www.shalva.org/wp-content/uploads/2025/02/Logo-Hebrew-1024x488-1.png"
-                alt="שלוה"
-                className="auth-logo"
-              />
+              {/* Clicking the logo returns to the dashboard home view. */}
+              <button
+                type="button"
+                className="auth-logo-btn"
+                onClick={handleNavigateHome}
+                aria-label="חזרה לדף הבית"
+              >
+                <img
+                  src="https://www.shalva.org/wp-content/uploads/2025/02/Logo-Hebrew-1024x488-1.png"
+                  alt="שלוה"
+                  className="auth-logo"
+                />
+              </button>
               <div className="auth-user">
                 <h2 className="auth-greeting">שלום, {user.firstName || user.displayName || user.email}</h2>
                 <span className="auth-role-badge">הרשאה: {ROLE_LABELS[user.role] || user.role || 'צופה'}</span>

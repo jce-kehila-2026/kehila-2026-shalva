@@ -10,17 +10,15 @@ import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
 // Our Firestore database instance.
 import { db } from '../../firebase';
 
+// Shared display-name helper.
+import { getDisplayName } from '../../utils/people';
+
 // Shares the group management styles.
 import './GroupManagement.css';
 
 
-// Best available display name for a person, with graceful fallbacks.
-const getPersonName = (person) => (
-  person?.name ||
-  [person?.firstName, person?.lastName].filter(Boolean).join(' ').trim() ||
-  person?.email ||
-  'לא הוזן שם'
-);
+// A person's display name (this screen's fallback wording).
+const getPersonName = (person) => getDisplayName(person, 'לא הוזן שם');
 
 
 const GroupDetails = ({ groupId, onBack }) => {
@@ -136,7 +134,7 @@ const GroupDetails = ({ groupId, onBack }) => {
 
         {/* Assigned guide card. */}
         <div className="table-container details-card">
-          <h3>👨‍🏫 מדריך אחראי</h3>
+          <h3>מדריך אחראי</h3>
           {guide ? (
             <div className="details-list">
               <p><strong>שם:</strong> {getPersonName(guide)}</p>
@@ -154,7 +152,7 @@ const GroupDetails = ({ groupId, onBack }) => {
 
         {/* Attendance summary placeholder. */}
         <div className="table-container details-card dashed-card">
-          <h3>✅ סיכום נוכחות</h3>
+          <h3>סיכום נוכחות</h3>
           <div className="empty-state">
             סימון הנוכחות זמין מלוח המדריך וממסך ניהול הנוכחות.
           </div>
@@ -162,7 +160,7 @@ const GroupDetails = ({ groupId, onBack }) => {
 
         {/* Group members table. */}
         <div className="table-container details-card full-grid-row">
-          <h3>🤝 חברי הקבוצה - {volunteers.length} רשומים</h3>
+          <h3>חברי הקבוצה - {volunteers.length} רשומים</h3>
           {volunteers.length > 0 ? (
             <table className="styled-table details-table">
               <thead>
@@ -191,7 +189,7 @@ const GroupDetails = ({ groupId, onBack }) => {
 
         {/* Group events placeholder. */}
         <div className="table-container details-card dashed-card full-grid-row">
-          <h3>📅 אירועי הקבוצה</h3>
+          <h3>אירועי הקבוצה</h3>
           <div className="empty-state">אירועים מנוהלים במסך ניהול האירועים.</div>
         </div>
       </div>

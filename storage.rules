@@ -1,10 +1,35 @@
 rules_version = '2';
 
 // Cloud Storage rules for Kehila Hub.
-// The app doesn't upload or read any files yet, so everything is denied by
-// default. Open up specific paths here only when a storage feature is added.
 service firebase.storage {
   match /b/{bucket}/o {
+
+    // The signed-in user's Firestore profile (role / disabled live there).
+    function profile() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // An active (non-disabled) admin — the only role allowed to upload.
+    // Mirrors the isAdmin() check in firestore.rules so the UI restriction is
+    // actually enforced on the server, not just hidden in the interface.
+    function isActiveAdmin() {
+      return request.auth != null
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+        && profile().get('role', '') == 'admin'
+        && profile().get('disabled', false) != true;
+    }
+
+    // Group cover images. Anyone may read them (the public showcase shows
+    // them), but only an active admin may upload — and only an image file up
+    // to 5MB.
+    match /groups/{groupId}/{fileName} {
+      allow read: if true;
+      allow write: if isActiveAdmin()
+                   && request.resource.size <= 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/(jpeg|png|webp)');
+    }
+
+    // Everything else stays denied by default.
     match /{allPaths=**} {
       allow read, write: if false;
     }

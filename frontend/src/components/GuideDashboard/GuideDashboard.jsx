@@ -20,7 +20,14 @@ import GroupDetails from '../GroupManagement/GroupDetails';
 import './GuideDashboard.css';
 
 
-const GuideDashboard = ({ user, onLogout, currentView, setCurrentView }) => {
+// First character of a name, for the avatar circle.
+const getInitial = (name) => {
+  const trimmed = (name || '').trim();
+  return trimmed ? trimmed[0].toUpperCase() : '';
+};
+
+
+const GuideDashboard = ({ user, currentView, setCurrentView }) => {
   // The loaded guide profile (null until fetched).
   const [guideData, setGuideData] = useState(null);
 
@@ -141,32 +148,46 @@ const GuideDashboard = ({ user, onLogout, currentView, setCurrentView }) => {
   }
 
   // Default view: the action menu.
+  const guideName = guideData?.firstName || guideData?.email || 'מדריך';
+
   return (
     <div className="guide-dashboard-container" dir="rtl">
 
-      {/* Greeting + assigned group. */}
-      <header className="guide-header">
-        <h1>לוח בקרה - מדריך</h1>
-        <p>
-          ברוך הבא {guideData?.firstName || guideData?.email || 'מדריך'}.
-        </p>
-        <p className="guide-group-label">
-          קבוצה משויכת: <strong>{guideGroup.groupName || 'טרם שויכה קבוצה'}</strong>
-        </p>
+      {/* Hero header: avatar + greeting + the assigned group as a pill. */}
+      <header className="guide-hero">
+        <span className="guide-hero-glow guide-hero-glow-1" aria-hidden="true" />
+        <span className="guide-hero-glow guide-hero-glow-2" aria-hidden="true" />
+
+        <div className="guide-hero-content">
+          <span className="guide-avatar">{getInitial(guideName)}</span>
+          <div className="guide-hero-text">
+            <span className="guide-role-badge">מדריך/ה</span>
+            <h1 className="guide-hello">שלום, {guideName}</h1>
+            <p className="guide-group-pill">
+              {guideGroup.groupName
+                ? <>הקבוצה שלך: <strong>{guideGroup.groupName}</strong></>
+                : 'טרם שויכה לך קבוצה'}
+            </p>
+          </div>
+        </div>
       </header>
 
-      {/* The guide's action buttons (group details + attendance marking). */}
+      {/* Action cards (group details + attendance marking). */}
       <main className="guide-actions">
-        <button className="action-button secondary" onClick={() => updateActiveView('group')}>👤 הקבוצה שלי</button>
-        <button className="action-button primary" onClick={() => updateActiveView('attendance')}>📝 סימון נוכחות</button>
-      </main>
+        <button className="guide-action-card" onClick={() => updateActiveView('group')}>
+          <span className="guide-action-text">
+            <span className="guide-action-title">הקבוצה שלי</span>
+            <span className="guide-action-sub">פרטי הקבוצה ורשימת המתנדבים</span>
+          </span>
+        </button>
 
-      {/* Optional logout footer. */}
-      {typeof onLogout === 'function' && (
-        <footer className="guide-footer">
-          <button className="logout-button" onClick={onLogout}>התנתקות</button>
-        </footer>
-      )}
+        <button className="guide-action-card guide-action-card--primary" onClick={() => updateActiveView('attendance')}>
+          <span className="guide-action-text">
+            <span className="guide-action-title">סימון נוכחות</span>
+            <span className="guide-action-sub">מי הגיע/ה היום למפגש</span>
+          </span>
+        </button>
+      </main>
     </div>
   );
 };

@@ -280,9 +280,29 @@
 }
 
 @media (max-width: 760px) {
-  /* On phones the header flows normally (not fixed), so no overlap math. */
+  /* On phones the header flows normally (not fixed), so no overlap math.
+     Zero outer padding makes the page full-bleed: the header and the sections
+     below stretch the entire screen width with no gap on the sides or top. */
   .main-container {
-    padding-top: 24px;
+    padding: 0 0 32px;
+  }
+
+  /* Header sits flush at the very top, edge to edge, like an app's top bar. */
+  .main-header {
+    border-radius: 0;
+  }
+
+  /* The hero band: flush under the header, full width, clean square edges. */
+  .main-hero {
+    margin-top: 0;
+    margin-bottom: 16px;
+    border-radius: 0;
+  }
+
+  /* Groups panel fills the width too; trim its padding for the big showcase. */
+  .groups-section {
+    padding: 20px 12px;
+    border-radius: 0;
   }
 
   .main-header {

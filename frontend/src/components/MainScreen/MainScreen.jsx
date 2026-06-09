@@ -11,6 +11,9 @@ import { collection, getDocs } from 'firebase/firestore';
 // Our Firestore database instance.
 import { db } from '../../firebase';
 
+// The cinematic, auto-playing presentation of the groups.
+import GroupShowcase from './GroupShowcase/GroupShowcase';
+
 // Styles for this screen.
 import './MainScreen.css';
 
@@ -49,11 +52,14 @@ function MainScreen({ onNavigateLogin }) {
 
       {/* Top header: logo + login / signup actions. */}
       <header className="main-header">
-        <img
-          src="https://www.shalva.org/wp-content/uploads/2025/02/Logo-Hebrew-1024x488-1.png"
-          alt="שלוה"
-          className="main-logo"
-        />
+        {/* Clicking the logo returns to the home page (the site root). */}
+        <a href="/" className="main-logo-link" aria-label="לדף הבית">
+          <img
+            src="https://www.shalva.org/wp-content/uploads/2025/02/Logo-Hebrew-1024x488-1.png"
+            alt="שלוה"
+            className="main-logo"
+          />
+        </a>
 
         <div className="header-buttons">
           {/* Volunteer signup opens the public registration form (?register=1). */}
@@ -98,29 +104,13 @@ function MainScreen({ onNavigateLogin }) {
           בחרו את הקבוצה שמתאימה לכם והצטרפו אלינו.
         </p>
 
-        {/* Loading, empty, or the grid of group cards. */}
+        {/* Loading, empty, or the cinematic group showcase. */}
         {loading ? (
           <p>טוען קבוצות...</p>
         ) : groups.length === 0 ? (
           <p>כרגע אין קבוצות פעילות להצגה.</p>
         ) : (
-          <div className="groups-grid">
-            {/* One card per group. */}
-            {groups.map((group) => (
-              <article className="group-card" key={group.id}>
-
-                {/* Group name. */}
-                <h3 className="group-card-name">
-                  {group.groupName || group.name || 'קבוצה ללא שם'}
-                </h3>
-
-                {/* Short description of the group (the admin can edit it). */}
-                <p className="group-card-desc">
-                  {group.description || 'אין תיאור עדיין.'}
-                </p>
-              </article>
-            ))}
-          </div>
+          <GroupShowcase groups={groups} />
         )}
       </section>
     </div>

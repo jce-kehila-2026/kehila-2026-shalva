@@ -13,6 +13,9 @@ import './Charts.css';
 // Shared event date + status helpers.
 import { computeEventStatus, parseEventDate } from '../../utils/eventStatus';
 
+// Shared attendance normalization (so charts match the reports screen).
+import { normalizeAttendanceStatus, getRecordStatus } from '../../utils/attendance';
+
 
 // Short Hebrew month labels for the "events per month" bar chart.
 const MONTHS_SHORT = ['ינו', 'פבר', 'מרץ', 'אפר', 'מאי', 'יונ', 'יול', 'אוג', 'ספט', 'אוק', 'נוב', 'דצמ'];
@@ -273,9 +276,18 @@ function Charts() {
 
   // ----- Attendance (present vs absent) -----
 
-  // Count present and absent attendance records.
-  const present = data.attendance.filter((record) => record.status === true).length;
-  const absent = data.attendance.filter((record) => record.status === false).length;
+  // Count present and absent attendance records, normalizing every status
+  // shape (boolean, or Hebrew / English strings) the same way reports do.
+  let present = 0;
+  let absent = 0;
+  data.attendance.forEach((record) => {
+    const status = normalizeAttendanceStatus(getRecordStatus(record));
+    if (status === 'present') {
+      present += 1;
+    } else if (status === 'absent') {
+      absent += 1;
+    }
+  });
 
   // Two donut segments: present vs absent.
   const attendanceSegments = [

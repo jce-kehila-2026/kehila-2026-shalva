@@ -6,13 +6,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 // Firestore helpers for reading and writing documents.
-import { addDoc, collection, doc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
+import { collection, doc, getDocs, query, setDoc, where, writeBatch } from 'firebase/firestore';
 
-// Our Firestore database instance.
-import { db } from '../../firebase';
+// Storage helpers for uploading a group's cover image.
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+
+// Our Firestore database + Storage instances.
+import { db, storage } from '../../firebase';
 
 // The per-group details view.
 import GroupDetails from './GroupDetails';
+
+// The styled cover-image picker used in the create / edit modals.
+import CoverImageField from './CoverImageField';
 
 // Shared management-screen styles + this screen's own styles.
 import '../shared/ManagementScreen.css';
@@ -24,6 +30,38 @@ const toRecord = (documentSnapshot) => ({
   id: documentSnapshot.id,
   ...documentSnapshot.data(),
 });
+
+
+// Image types we allow uploading (kept in sync with storage.rules).
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+// Basic client-side check before uploading a cover image. Returns true when
+// the file is an allowed image type and small enough; otherwise warns.
+const isValidImage = (file) => {
+  if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+    alert('יש לבחור תמונה מסוג JPG, PNG או WEBP.');
+    return false;
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    alert('התמונה גדולה מדי (מקסימום 5MB).');
+    return false;
+  }
+
+  return true;
+};
+
+
+// Upload a cover image to Storage under the group's own folder and return its
+// public download URL. The timestamp in the name avoids stale-cache issues
+// when an image is replaced.
+const uploadCoverImage = async (file, groupId) => {
+  const extension = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const storageRef = ref(storage, `groups/${groupId}/cover-${Date.now()}.${extension}`);
+
+  await uploadBytes(storageRef, file);
+  return getDownloadURL(storageRef);
+};
 
 
 // Best available display name for a guide, with graceful fallbacks.
@@ -55,6 +93,12 @@ const GroupManagement = () => {
   const [newGroupDescription, setNewGroupDescription] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
+  // The new group's id is generated up front so its cover image can be uploaded
+  // (to groups/{id}/...) before the document itself is created on submit.
+  const [newGroupId, setNewGroupId] = useState('');
+  const [newGroupImageUrl, setNewGroupImageUrl] = useState('');
+  const [uploadingNewImage, setUploadingNewImage] = useState(false);
+
   // Search text for filtering the list.
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -66,7 +110,10 @@ const GroupManagement = () => {
   // "Edit group" modal state.
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [groupToEdit, setGroupToEdit] = useState(null);
-  const [editForm, setEditForm] = useState({ groupName: '', time: '', description: '' });
+  const [editForm, setEditForm] = useState({ groupName: '', time: '', description: '', imageUrl: '' });
+
+  // True while a cover image is uploading to Storage.
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   // Load groups, volunteers and guides together.
   const fetchData = useCallback(async () => {
@@ -95,14 +142,19 @@ const GroupManagement = () => {
     fetchData();
   }, [fetchData]);
 
-  // Open the "add group" modal with empty fields.
+  // Open the "add group" modal with empty fields. We pre-generate the new
+  // group's id so its cover image can be uploaded before the group is created.
   const openAddModal = () => {
     setNewGroupName('');
     setNewGroupTime('');
+    setNewGroupDescription('');
+    setNewGroupImageUrl('');
+    setNewGroupId(doc(collection(db, 'groups')).id);
     setIsAddModalOpen(true);
   };
 
-  // Create a new group document.
+  // Create a new group document (at the pre-generated id, so it matches any
+  // image already uploaded to that id's folder).
   const handleCreateGroup = async (event) => {
     event.preventDefault();
 
@@ -111,13 +163,14 @@ const GroupManagement = () => {
     if (!groupName) return;
 
     try {
-      // Add the group (no guide assigned yet).
-      await addDoc(collection(db, 'groups'), {
+      // Create the group (no guide assigned yet), cover image included.
+      await setDoc(doc(db, 'groups', newGroupId), {
         groupName,
         guideId: '',
         guideName: '',
         time: newGroupTime.trim(),
         description: newGroupDescription.trim(),
+        imageUrl: newGroupImageUrl,
         createdAt: new Date(),
       });
 
@@ -125,6 +178,7 @@ const GroupManagement = () => {
       setNewGroupName('');
       setNewGroupTime('');
       setNewGroupDescription('');
+      setNewGroupImageUrl('');
       setIsAddModalOpen(false);
       await fetchData();
     } catch (error) {
@@ -151,23 +205,38 @@ const GroupManagement = () => {
     const groupName = groupToAssign.groupName || groupToAssign.name || '';
 
     try {
+      // All the related writes go in one atomic batch, so a group and a guide
+      // mapping never disagree about who leads what.
+      const batch = writeBatch(db);
+
       // Free any other group this guide already leads (a guide leads one group
       // at a time), so the same guide never shows up in two groups at once.
       const previousGroups = await getDocs(query(collection(db, 'groups'), where('guideId', '==', selectedGuideId)));
-      for (const previousGroup of previousGroups.docs) {
+      previousGroups.docs.forEach((previousGroup) => {
         if (previousGroup.id !== groupToAssign.id) {
-          await updateDoc(doc(db, 'groups', previousGroup.id), { guideId: '', guideName: '' });
+          batch.update(doc(db, 'groups', previousGroup.id), { guideId: '', guideName: '' });
         }
+      });
+
+      // If THIS group already had a (different) guide, clear that old guide's
+      // mapping too — otherwise the old guide keeps seeing the group in their
+      // dashboard (which reads guides/{uid}).
+      if (groupToAssign.guideId && groupToAssign.guideId !== selectedGuideId) {
+        batch.set(
+          doc(db, 'guides', groupToAssign.guideId),
+          { groupId: '', groupName: 'Unassigned' },
+          { merge: true },
+        );
       }
 
       // Record the guide on the group document.
-      await updateDoc(doc(db, 'groups', groupToAssign.id), {
+      batch.update(doc(db, 'groups', groupToAssign.id), {
         guideId: selectedGuideId,
         guideName,
       });
 
       // Record the group on the guide's mapping document.
-      await setDoc(
+      batch.set(
         doc(db, 'guides', selectedGuideId),
         {
           groupId: groupToAssign.id,
@@ -175,6 +244,8 @@ const GroupManagement = () => {
         },
         { merge: true },
       );
+
+      await batch.commit();
 
       // Close the modal and refresh.
       setIsAssignModalOpen(false);
@@ -193,15 +264,18 @@ const GroupManagement = () => {
     if (!window.confirm('האם להסיר את המדריך מהקבוצה?')) return;
 
     try {
+      // Clear both sides in one atomic batch.
+      const batch = writeBatch(db);
+
       // Clear the guide on the group document.
-      await updateDoc(doc(db, 'groups', group.id), {
+      batch.update(doc(db, 'groups', group.id), {
         guideId: '',
         guideName: '',
       });
 
       // Clear the group on the guide's mapping document.
       if (group.guideId) {
-        await setDoc(
+        batch.set(
           doc(db, 'guides', group.guideId),
           {
             groupId: '',
@@ -211,6 +285,7 @@ const GroupManagement = () => {
         );
       }
 
+      await batch.commit();
       await fetchData();
     } catch (error) {
       console.error('שגיאה בהסרת מדריך:', error);
@@ -225,8 +300,66 @@ const GroupManagement = () => {
       groupName: group.groupName || group.name || '',
       time: group.time || '',
       description: group.description || '',
+      imageUrl: group.imageUrl || '',
     });
     setIsEditModalOpen(true);
+  };
+
+  // Upload a chosen image for the group being EDITED. The URL is kept on the
+  // form and written to Firestore when the admin saves.
+  const handleImageUpload = async (event) => {
+    const file = event.target.files && event.target.files[0];
+    if (!file || !groupToEdit || !isValidImage(file)) {
+      event.target.value = '';
+      return;
+    }
+
+    setUploadingImage(true);
+
+    try {
+      const downloadUrl = await uploadCoverImage(file, groupToEdit.id);
+      setEditForm((previous) => ({ ...previous, imageUrl: downloadUrl }));
+    } catch (error) {
+      console.error('שגיאה בהעלאת התמונה:', error);
+      alert('אירעה שגיאה בהעלאת התמונה. ודא/י שחוקי ה-Storage נפרסו.');
+    } finally {
+      setUploadingImage(false);
+
+      // Reset the input so the same file can be re-selected if needed.
+      event.target.value = '';
+    }
+  };
+
+  // Clear the edited group's image (takes effect when the form is saved).
+  const handleRemoveImage = () => {
+    setEditForm((previous) => ({ ...previous, imageUrl: '' }));
+  };
+
+  // Upload a chosen image for the NEW group (to its pre-generated id folder).
+  const handleNewImageUpload = async (event) => {
+    const file = event.target.files && event.target.files[0];
+    if (!file || !newGroupId || !isValidImage(file)) {
+      event.target.value = '';
+      return;
+    }
+
+    setUploadingNewImage(true);
+
+    try {
+      const downloadUrl = await uploadCoverImage(file, newGroupId);
+      setNewGroupImageUrl(downloadUrl);
+    } catch (error) {
+      console.error('שגיאה בהעלאת התמונה:', error);
+      alert('אירעה שגיאה בהעלאת התמונה. ודא/י שחוקי ה-Storage נפרסו.');
+    } finally {
+      setUploadingNewImage(false);
+      event.target.value = '';
+    }
+  };
+
+  // Clear the new group's chosen image.
+  const handleRemoveNewImage = () => {
+    setNewGroupImageUrl('');
   };
 
   // Save edits to a group's name and time.
@@ -242,23 +375,30 @@ const GroupManagement = () => {
 
     const time = editForm.time.trim();
     const description = editForm.description.trim();
+    const imageUrl = editForm.imageUrl || '';
 
     try {
-      // Update the group document.
-      await updateDoc(doc(db, 'groups', groupToEdit.id), {
+      // Update the group and the guide's denormalized name together (atomic).
+      const batch = writeBatch(db);
+
+      // Update the group document (the cover image included).
+      batch.update(doc(db, 'groups', groupToEdit.id), {
         groupName,
         time,
         description,
+        imageUrl,
       });
 
       // Keep the assigned guide's denormalized group name in sync.
       if (groupToEdit.guideId) {
-        await setDoc(
+        batch.set(
           doc(db, 'guides', groupToEdit.guideId),
           { groupName },
           { merge: true },
         );
       }
+
+      await batch.commit();
 
       // Close the modal and refresh.
       setIsEditModalOpen(false);
@@ -267,6 +407,55 @@ const GroupManagement = () => {
     } catch (error) {
       console.error('שגיאה בעדכון הקבוצה:', error);
       alert('אירעה שגיאה בעדכון הקבוצה');
+    }
+  };
+
+  // Delete the group entirely: remove the group document, free its assigned
+  // guide, and detach its volunteers (they stay in the system, just with no
+  // group). Everything happens in one atomic batch.
+  const handleDeleteGroup = async () => {
+    if (!groupToEdit) return;
+
+    const groupName = groupToEdit.groupName || groupToEdit.name || 'קבוצה ללא שם';
+
+    // The volunteers that belong to this group (matched like the list count).
+    const groupVolunteers = volunteers.filter((volunteer) => (
+      volunteer.groupId === groupToEdit.id ||
+      volunteer.groupName === groupToEdit.groupName ||
+      volunteer.groupName === groupToEdit.name
+    ));
+
+    // Confirm, spelling out exactly what will happen.
+    const message = groupVolunteers.length > 0
+      ? `למחוק את הקבוצה "${groupName}"?\n${groupVolunteers.length} מתנדבים ינותקו מהקבוצה (יישארו במערכת ללא שיוך).\nהפעולה אינה הפיכה.`
+      : `למחוק את הקבוצה "${groupName}"? הפעולה אינה הפיכה.`;
+    if (!window.confirm(message)) return;
+
+    try {
+      const batch = writeBatch(db);
+
+      // Remove the group document.
+      batch.delete(doc(db, 'groups', groupToEdit.id));
+
+      // Free the assigned guide, if any.
+      if (groupToEdit.guideId) {
+        batch.set(doc(db, 'guides', groupToEdit.guideId), { groupId: '', groupName: 'Unassigned' }, { merge: true });
+      }
+
+      // Detach the group's volunteers (keep them, clear their group fields).
+      groupVolunteers.forEach((volunteer) => {
+        batch.update(doc(db, 'volunteers', volunteer.id), { groupId: '', groupName: '', group: '' });
+      });
+
+      await batch.commit();
+
+      // Close the modal and refresh.
+      setIsEditModalOpen(false);
+      setGroupToEdit(null);
+      await fetchData();
+    } catch (error) {
+      console.error('שגיאה במחיקת הקבוצה:', error);
+      alert('אירעה שגיאה במחיקת הקבוצה');
     }
   };
 
@@ -456,10 +645,19 @@ const GroupManagement = () => {
                 />
               </div>
 
+              {/* Cover image for the new group. */}
+              <CoverImageField
+                label="תמונת הקבוצה:"
+                imageUrl={newGroupImageUrl}
+                uploading={uploadingNewImage}
+                onSelect={handleNewImageUpload}
+                onRemove={handleRemoveNewImage}
+              />
+
               {/* Cancel / create. */}
               <div className="modal-actions">
                 <button type="button" className="btn btn-outline" onClick={() => setIsAddModalOpen(false)}>ביטול</button>
-                <button type="submit" className="btn btn-success" disabled={!newGroupName.trim()}>צור קבוצה</button>
+                <button type="submit" className="btn btn-success" disabled={!newGroupName.trim() || uploadingNewImage}>צור קבוצה</button>
               </div>
             </form>
           </div>
@@ -541,10 +739,26 @@ const GroupManagement = () => {
                 />
               </div>
 
-              {/* Cancel / save. */}
+              {/* Cover image — uploaded to Storage, shown on the public showcase. */}
+              <CoverImageField
+                label="תמונת הקבוצה:"
+                imageUrl={editForm.imageUrl}
+                uploading={uploadingImage}
+                onSelect={handleImageUpload}
+                onRemove={handleRemoveImage}
+              />
+
+              {/* Delete (pushed to the far side) · Cancel / save. */}
               <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn btn-danger group-delete-btn"
+                  onClick={handleDeleteGroup}
+                >
+                  מחיקת קבוצה
+                </button>
                 <button type="button" className="btn btn-outline" onClick={() => setIsEditModalOpen(false)}>ביטול</button>
-                <button type="submit" className="btn btn-success" disabled={!editForm.groupName.trim()}>שמור שינויים</button>
+                <button type="submit" className="btn btn-success" disabled={!editForm.groupName.trim() || uploadingImage}>שמור שינויים</button>
               </div>
             </form>
           </div>

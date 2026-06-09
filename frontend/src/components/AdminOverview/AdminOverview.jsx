@@ -18,6 +18,9 @@ import './AdminOverview.css';
 // Shared event date + status helpers.
 import { computeEventStatus, parseEventDate } from '../../utils/eventStatus';
 
+// Shared people helpers (display name, birth-date parsing, age).
+import { getDisplayName, parseBirthDate, computeAge } from '../../utils/people';
+
 // The activity command center, embedded as the home's main content.
 import ActivityCommandCenter from '../ActivityCommandCenter/ActivityCommandCenter';
 
@@ -31,71 +34,8 @@ const HEBREW_MONTHS = [
 // Sunday-first weekday initials (the week starts on Sunday in Hebrew).
 const WEEKDAYS = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
 
-// Field names that might hold a birth date across the different collections.
-const BIRTH_DATE_FIELDS = ['birthDate', 'birthday', 'dob', 'dateOfBirth', 'birth_date'];
-
 // The status a registrant starts with (counted as "pending").
 const PENDING_STATUS = 'ממתין לאישור';
-
-
-// Best available display name, with graceful fallbacks.
-function getName(person) {
-  return (
-    person.name ||
-    [person.firstName, person.lastName].filter(Boolean).join(' ').trim() ||
-    person.email ||
-    'חבר/ת קהילה'
-  );
-}
-
-
-// Parse a birth date from any of the supported field names / value shapes.
-function parseBirthDate(person) {
-  // Try each possible field name in order.
-  for (const field of BIRTH_DATE_FIELDS) {
-    const value = person[field];
-
-    // Skip empty fields.
-    if (!value) continue;
-
-    // Resolve the value into a Date depending on its shape.
-    let date = null;
-
-    if (typeof value === 'string') {
-      // Text date string.
-      const parsed = new Date(value);
-      if (!Number.isNaN(parsed.getTime())) date = parsed;
-    } else if (typeof value.toDate === 'function') {
-      // Firestore Timestamp.
-      date = value.toDate();
-    } else if (value instanceof Date) {
-      // Native Date.
-      date = value;
-    } else if (typeof value.seconds === 'number') {
-      // Plain { seconds } shape.
-      date = new Date(value.seconds * 1000);
-    }
-
-    // Return the first valid date we manage to build.
-    if (date && !Number.isNaN(date.getTime())) return date;
-  }
-
-  // No usable birth date.
-  return null;
-}
-
-
-// Current age in whole years, accounting for whether the birthday already passed.
-function computeAge(birthDate, today) {
-  // Rough age from the year difference.
-  let age = today.getFullYear() - birthDate.getFullYear();
-
-  // Subtract one if this year's birthday hasn't happened yet.
-  const monthDiff = today.getMonth() - birthDate.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age -= 1;
-
-  return age;
-}
 
 
 // Event status -> CSS class (used to colour the small status badge).
@@ -135,6 +75,12 @@ function AdminOverview({ onNavigate }) {
 
   // "Add event" quick action: modal visibility + form fields.
   const [isAddEventOpen, setIsAddEventOpen] = useState(false);
+
+  // True while an event is being saved (guards against double-submit).
+  const [savingEvent, setSavingEvent] = useState(false);
+
+  // Bumped after adding an event, to make the embedded command center reload.
+  const [accReloadToken, setAccReloadToken] = useState(0);
   const [eventForm, setEventForm] = useState({
     name: '',
     date: '',
@@ -183,7 +129,7 @@ function AdminOverview({ onNavigate }) {
       // Shape the volunteers (keep the raw doc for birthday parsing).
       const volunteers = (volunteersRaw || []).map((person) => ({
         id: person.id,
-        name: getName(person),
+        name: getDisplayName(person),
         raw: person,
       }));
 
@@ -196,7 +142,7 @@ function AdminOverview({ onNavigate }) {
       // Guides are users whose role is "guide" (removed/disabled ones excluded).
       const guides = (usersRaw || [])
         .filter((person) => person.role === 'guide' && !person.disabled)
-        .map((person) => ({ id: person.id, name: getName(person), raw: person }));
+        .map((person) => ({ id: person.id, name: getDisplayName(person), raw: person }));
 
       // Shape the events (status derived from the date).
       const events = (eventsRaw || []).map((event) => ({
@@ -260,15 +206,22 @@ function AdminOverview({ onNavigate }) {
     // Don't let the form reload the page.
     e.preventDefault();
 
+    // Ignore extra clicks while a save is already running.
+    if (savingEvent) {
+      return;
+    }
+
     // Require the three essential fields before saving.
     if (!eventForm.name.trim() || !eventForm.date || !eventForm.location.trim()) {
       alert('נא למלא שם אירוע, תאריך ומיקום.');
       return;
     }
 
+    setSavingEvent(true);
+
     try {
-      // Add the event document to the "events" collection.
-      await addDoc(collection(db, 'events'), {
+      // The event document to save.
+      const payload = {
         name: eventForm.name.trim(),
         date: eventForm.date,
         location: eventForm.location.trim(),
@@ -282,7 +235,10 @@ function AdminOverview({ onNavigate }) {
         },
         createdAt: new Date(),
         updatedAt: new Date(),
-      });
+      };
+
+      // Add the event document to the "events" collection.
+      const docRef = await addDoc(collection(db, 'events'), payload);
 
       // Close the modal and reset the form.
       setIsAddEventOpen(false);
@@ -298,12 +254,32 @@ function AdminOverview({ onNavigate }) {
         contactEmail: '',
       });
 
-      // Reflect the new event in the calendar by reloading the page data.
-      window.location.reload();
+      // Reflect the new event in the calendar by updating state in place —
+      // no jarring full-page reload (which used to throw away all view state).
+      setData((current) => (current
+        ? {
+            ...current,
+            events: [
+              ...current.events,
+              {
+                id: docRef.id,
+                name: payload.name,
+                date: payload.date,
+                status: computeEventStatus(payload),
+                location: payload.location,
+              },
+            ],
+          }
+        : current));
+
+      // Tell the embedded command center to reload so it sees the new event.
+      setAccReloadToken((token) => token + 1);
     } catch (err) {
       // Surface failures to the user and log the details.
       console.error('Error saving event:', err);
       alert('אירעה שגיאה בשמירת האירוע.');
+    } finally {
+      setSavingEvent(false);
     }
   };
 
@@ -463,6 +439,7 @@ function AdminOverview({ onNavigate }) {
               count is passed in as the first stat card with the other counters. */}
           <div className="ao-home-acc">
             <ActivityCommandCenter
+              reloadToken={accReloadToken}
               leadingCard={(
                 <button
                   type="button"
@@ -614,7 +591,7 @@ function AdminOverview({ onNavigate }) {
               {/* Modal actions. */}
               <div className="ao-modal-actions" style={{ gridColumn: '1 / -1' }}>
                 <button type="button" className="ao-btn-outline" onClick={() => setIsAddEventOpen(false)}>ביטול</button>
-                <button type="submit" className="ao-btn-success">הוסף אירוע</button>
+                <button type="submit" className="ao-btn-success" disabled={savingEvent}>{savingEvent ? 'שומר...' : 'הוסף אירוע'}</button>
               </div>
             </form>
           </div>

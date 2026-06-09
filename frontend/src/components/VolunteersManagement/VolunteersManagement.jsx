@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 // Firestore helpers for reading and writing documents.
-import { addDoc, collection, deleteDoc, doc, getDocs, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, doc, getDocs, query, updateDoc, where, writeBatch } from 'firebase/firestore';
 
 // Our Firestore database instance.
 import { db } from '../../firebase';
@@ -55,6 +55,9 @@ const VolunteersManagement = ({ initialGroup = null, onBack }) => {
   // Modal visibility + which volunteer is being edited (null = adding).
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingVolunteer, setEditingVolunteer] = useState(null);
+
+  // True while a save is in flight (guards against double-submit).
+  const [saving, setSaving] = useState(false);
 
   // The add/edit form fields.
   const [formData, setFormData] = useState({
@@ -142,6 +145,9 @@ const VolunteersManagement = ({ initialGroup = null, onBack }) => {
   const handleSave = async (event) => {
     event.preventDefault();
 
+    // Ignore extra submits while a save is already running (no duplicates).
+    if (saving) return;
+
     // Name is required.
     const name = formData.name.trim();
     if (!name) return;
@@ -163,6 +169,8 @@ const VolunteersManagement = ({ initialGroup = null, onBack }) => {
       groupName: selectedGroup?.groupName || selectedGroup?.name || passedGroup?.groupName || '',
     };
 
+    setSaving(true);
+
     try {
       // Update the existing volunteer, or add a new one.
       if (editingVolunteer) {
@@ -180,17 +188,30 @@ const VolunteersManagement = ({ initialGroup = null, onBack }) => {
     } catch (error) {
       console.error('שגיאה בשמירת מתנדב:', error);
       alert('אירעה שגיאה בשמירת המתנדב');
+    } finally {
+      setSaving(false);
     }
   };
 
-  // Delete a volunteer after confirmation.
+  // Delete a volunteer after confirmation — together with their attendance
+  // history, so reports / charts aren't left with orphaned records.
   const handleDelete = async (volunteerId) => {
     // Confirm first.
-    if (!window.confirm('האם אתה בטוח שברצונך למחוק מתנדב זה?')) return;
+    if (!window.confirm('למחוק מתנדב זה? גם היסטוריית הנוכחות שלו תימחק. הפעולה אינה הפיכה.')) return;
 
     try {
-      // Remove the document and refresh.
-      await deleteDoc(doc(db, 'volunteers', volunteerId));
+      const batch = writeBatch(db);
+
+      // Remove every attendance record that points at this volunteer.
+      const attendanceSnap = await getDocs(
+        query(collection(db, 'attendance'), where('volunteerId', '==', volunteerId)),
+      );
+      attendanceSnap.docs.forEach((attendanceDoc) => batch.delete(attendanceDoc.ref));
+
+      // Remove the volunteer document itself.
+      batch.delete(doc(db, 'volunteers', volunteerId));
+
+      await batch.commit();
       await fetchData();
     } catch (error) {
       console.error('שגיאה במחיקת מתנדב:', error);
@@ -359,7 +380,7 @@ const VolunteersManagement = ({ initialGroup = null, onBack }) => {
               {/* Cancel / save. */}
               <div className="modal-actions">
                 <button type="button" className="btn btn-outline" onClick={() => setIsModalOpen(false)}>ביטול</button>
-                <button type="submit" className="btn btn-success">{editingVolunteer ? 'שמור שינויים' : 'הוסף מתנדב'}</button>
+                <button type="submit" className="btn btn-success" disabled={saving}>{saving ? 'שומר...' : editingVolunteer ? 'שמור שינויים' : 'הוסף מתנדב'}</button>
               </div>
             </form>
           </div>

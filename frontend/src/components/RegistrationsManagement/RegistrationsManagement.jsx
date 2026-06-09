@@ -5,11 +5,15 @@
 // React hooks for state and side effects.
 import { useEffect, useState } from 'react';
 
-// Firestore helpers for reading, adding and deleting documents.
-import { addDoc, collection, deleteDoc, doc, getDocs } from 'firebase/firestore';
+// Firestore helpers. A writeBatch makes "approve" atomic — the new volunteer
+// and the registration removal succeed or fail together.
+import { collection, deleteDoc, doc, getDocs, writeBatch } from 'firebase/firestore';
 
 // Our Firestore database instance.
 import { db } from '../../firebase';
+
+// Shared display-name helper.
+import { getDisplayName } from '../../utils/people';
 
 // Shared management-screen styles + this screen's own styles.
 import '../shared/ManagementScreen.css';
@@ -23,12 +27,8 @@ const toRecord = (documentSnapshot) => ({
 });
 
 
-// Best available display name for a registrant, with graceful fallbacks.
-const getFullName = (registrant) =>
-  registrant.name ||
-  [registrant.firstName, registrant.lastName].filter(Boolean).join(' ').trim() ||
-  registrant.email ||
-  'מתנדב/ת';
+// A registrant's display name (this screen's fallback wording).
+const getFullName = (registrant) => getDisplayName(registrant, 'מתנדב/ת');
 
 
 // Format the Firestore creation time into a readable Hebrew date + time.
@@ -88,6 +88,9 @@ function RegistrationsManagement() {
 
   // Whether the "link copied" confirmation is showing.
   const [copied, setCopied] = useState(false);
+
+  // The registrant currently being approved (guards against double-clicks).
+  const [approvingId, setApprovingId] = useState(null);
 
   // Load the registrants once on mount.
   useEffect(() => {
@@ -149,6 +152,11 @@ function RegistrationsManagement() {
   // Approve a registration: create a volunteer in the chosen group from the
   // registrant's details, then remove the registration from the pending list.
   const handleApprove = async (registrant) => {
+    // Ignore extra clicks while an approval is already running.
+    if (approvingId) {
+      return;
+    }
+
     // A group must be chosen first.
     const groupId = groupChoice[registrant.id] || '';
     if (!groupId) {
@@ -160,9 +168,18 @@ function RegistrationsManagement() {
     const group = groups.find((item) => item.id === groupId);
     const groupName = group ? (group.groupName || group.name || '') : '';
 
+    setApprovingId(registrant.id);
+
     try {
-      // Create the volunteer from the registration details.
-      await addDoc(collection(db, 'volunteers'), {
+      // Do both writes in one batch so we never end up with a volunteer
+      // created but the registration left behind (or vice versa).
+      const batch = writeBatch(db);
+
+      // Create the volunteer using the registrant's id as the document id, so
+      // a fast double-click can't create the same volunteer twice (the second
+      // write just overwrites the same document).
+      const volunteerRef = doc(db, 'volunteers', registrant.id);
+      batch.set(volunteerRef, {
         name: getFullName(registrant),
         firstName: registrant.firstName || '',
         lastName: registrant.lastName || '',
@@ -178,14 +195,20 @@ function RegistrationsManagement() {
         createdAt: new Date(),
       });
 
-      // Remove the now-approved registration and drop it from the list.
-      await deleteDoc(doc(db, 'registrants', registrant.id));
+      // Remove the now-approved registration in the same atomic batch.
+      batch.delete(doc(db, 'registrants', registrant.id));
+
+      await batch.commit();
+
+      // Drop it from the visible list.
       setRegistrants((current) => current.filter((item) => item.id !== registrant.id));
 
       alert(`${getFullName(registrant)} אושר/ה ושויך/ה לקבוצת "${groupName}".`);
     } catch (approveError) {
       console.error('שגיאה באישור ההרשמה:', approveError);
       alert(`האישור נכשל: ${approveError.message}`);
+    } finally {
+      setApprovingId(null);
     }
   };
 
@@ -295,8 +318,9 @@ function RegistrationsManagement() {
                       type="button"
                       className="reg-approve-btn"
                       onClick={() => handleApprove(registrant)}
+                      disabled={approvingId !== null}
                     >
-                      ✓ אישור ושיוך לקבוצה
+                      {approvingId === registrant.id ? 'מאשר...' : '✓ אישור ושיוך לקבוצה'}
                     </button>
                   </div>
 

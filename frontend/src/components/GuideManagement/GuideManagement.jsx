@@ -8,11 +8,13 @@ import { useState, useEffect, useMemo } from 'react';
 // Secondary Firebase app helpers (used to create/delete guide auth accounts).
 import { initializeApp, deleteApp } from 'firebase/app';
 
-// Auth helpers for creating a guide's account (on a secondary app).
-import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
+// Auth helpers for creating (and, on failure, cleaning up) a guide's account
+// on a secondary app.
+import { getAuth, createUserWithEmailAndPassword, deleteUser } from 'firebase/auth';
 
-// Firestore helpers for reading and writing documents.
-import { collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+// Firestore helpers for reading and writing documents (writeBatch keeps the
+// multi-document guide operations atomic).
+import { collection, query, where, getDocs, doc, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
 
 // Our Firestore database instance.
 import { db } from '../../firebase';
@@ -113,9 +115,18 @@ function GuideManagement() {
       }
     } else {
       // Mode 2: create a new guide account + documents.
+      // Declared out here so the finally block can always tear it down — even
+      // if account creation or the writes throw (otherwise the leftover app
+      // also breaks the NEXT attempt with an "already exists" error).
+      let secondaryApp = null;
+      // The just-created Auth user — tracked so we can remove it if the
+      // following Firestore writes fail (otherwise an orphan account is left
+      // that has no users/{uid} doc and blocks re-using that email).
+      let createdUser = null;
+
       try {
         // Use a secondary app so creating the user doesn't sign the admin out.
-        const secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
+        secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
         const secondaryAuth = getAuth(secondaryApp);
 
         // Create the auth account.
@@ -125,27 +136,26 @@ function GuideManagement() {
           newGuide.password
         );
 
-        const newGuideUid = userCredential.user.uid;
+        createdUser = userCredential.user;
+        const newGuideUid = createdUser.uid;
 
-        // Write the user profile (role = guide). The password is NOT stored —
-        // Firebase Authentication already keeps it securely (hashed). Removing a
-        // guide just deletes this record; the app's access gate then blocks the
-        // leftover login.
-        await setDoc(doc(db, 'users', newGuideUid), {
+        // Write the user profile (role = guide) and the group mapping together,
+        // atomically. The password is NOT stored — Firebase Authentication keeps
+        // it securely (hashed). Removing a guide just disables this record; the
+        // app's access gate then blocks the leftover login.
+        const batch = writeBatch(db);
+        batch.set(doc(db, 'users', newGuideUid), {
           firstName: newGuide.firstName,
           lastName: newGuide.lastName,
           email: newGuide.email,
           birthDate: newGuide.birthDate,
           role: 'guide',
         });
-
-        // Write the guide mapping (unassigned until a group is given).
-        await setDoc(doc(db, 'guides', newGuideUid), {
+        batch.set(doc(db, 'guides', newGuideUid), {
           groupName: 'Unassigned',
         });
+        await batch.commit();
 
-        // Tear down the secondary app and refresh the table.
-        await deleteApp(secondaryApp);
         await fetchAllGuidesData();
 
         alert('המדריך נוסף בהצלחה!');
@@ -155,9 +165,24 @@ function GuideManagement() {
         setShowAddForm(false);
 
       } catch (error) {
+        // If the Auth account was created but the Firestore writes failed,
+        // delete the orphan account (best-effort) so it doesn't linger.
+        if (createdUser) {
+          try {
+            await deleteUser(createdUser);
+          } catch (cleanupError) {
+            console.error('Failed to remove orphan auth account:', cleanupError);
+          }
+        }
+
         console.error("Database initialization fault:", error);
         alert(`ההוספה נכשלה: ${error.message}`);
       } finally {
+        // Always tear down the secondary app, success or failure. (Runs after
+        // the catch, so any orphan-user cleanup above still had a live app.)
+        if (secondaryApp) {
+          await deleteApp(secondaryApp);
+        }
         setLoading(false);
       }
     }
@@ -249,17 +274,22 @@ function GuideManagement() {
     try {
       setTableLoading(true);
 
+      // Disable + free groups + clear mapping, all in one atomic batch.
+      const batch = writeBatch(db);
+
       // Disable the account (blocks login via the app gate).
-      await updateDoc(doc(db, 'users', guideId), { disabled: true });
+      batch.update(doc(db, 'users', guideId), { disabled: true });
 
       // Free any group this guide was assigned to.
       const assignedGroups = await getDocs(query(collection(db, 'groups'), where('guideId', '==', guideId)));
-      for (const groupDoc of assignedGroups.docs) {
-        await updateDoc(doc(db, 'groups', groupDoc.id), { guideId: '', guideName: '' });
-      }
+      assignedGroups.docs.forEach((groupDoc) => {
+        batch.update(doc(db, 'groups', groupDoc.id), { guideId: '', guideName: '' });
+      });
 
       // Clear the guide's own group mapping.
-      await setDoc(doc(db, 'guides', guideId), { groupId: '', groupName: 'Unassigned' }, { merge: true });
+      batch.set(doc(db, 'guides', guideId), { groupId: '', groupName: 'Unassigned' }, { merge: true });
+
+      await batch.commit();
 
       alert('המדריך הוסר. אפשר להחזיר אותו בכל עת דרך "שחזר".');
       await fetchAllGuidesData();

@@ -46,6 +46,28 @@ service cloud.firestore {
       return hasRole('admin') || hasRole('guide');
     }
 
+    // The group id assigned to the signed-in guide (from guides/{uid}), or ''.
+    function guideGroupId() {
+      return get(/databases/$(database)/documents/guides/$(request.auth.uid)).data.get('groupId', '');
+    }
+
+    // A guide writing an attendance record for THEIR OWN group only:
+    //  - the record's groupId equals the guide's assigned group,
+    //  - the record only carries the known attendance fields,
+    //  - the volunteer it points at also belongs to the guide's group.
+    function guideAttendanceWrite(data) {
+      return hasRole('guide')
+        && exists(/databases/$(database)/documents/guides/$(request.auth.uid))
+        && guideGroupId() != ''
+        && data.get('groupId', '') == guideGroupId()
+        && data.keys().hasOnly([
+             'groupId', 'group', 'groupName', 'date', 'dateKey',
+             'status', 'volunteerId', 'volunteerName'
+           ])
+        && exists(/databases/$(database)/documents/volunteers/$(data.volunteerId))
+        && get(/databases/$(database)/documents/volunteers/$(data.volunteerId)).data.get('groupId', '') == guideGroupId();
+    }
+
 
     // Active community groups — shown on the public home page, so anyone may
     // read them; only an admin may change them.
@@ -61,28 +83,52 @@ service cloud.firestore {
             'firstName', 'lastName', 'email', 'phone', 'status',
             'age', 'birthDate', 'experience', 'address', 'school', 'createdAt'
           ])
-        && request.resource.data.keys().hasAll(['firstName', 'lastName', 'email', 'phone', 'createdAt'])
+        && request.resource.data.keys().hasAll(['firstName', 'lastName', 'email', 'phone', 'age', 'status', 'createdAt'])
+        // Required text fields, with sane length caps (it's a public endpoint).
         && request.resource.data.firstName is string
+        && request.resource.data.firstName.size() > 0 && request.resource.data.firstName.size() <= 60
         && request.resource.data.lastName is string
+        && request.resource.data.lastName.size() > 0 && request.resource.data.lastName.size() <= 60
         && request.resource.data.email is string
+        && request.resource.data.email.size() <= 120
+        && request.resource.data.email.matches('.+@.+[.].+')
         && request.resource.data.phone is string
-        && request.resource.data.status is string
-        && request.resource.data.birthDate is string
+        && request.resource.data.phone.size() >= 6 && request.resource.data.phone.size() <= 25
+        // A new registration is always "pending"; no other status allowed.
+        && request.resource.data.status == 'ממתין לאישור'
+        // A plausible age + a short birth-date string.
         && request.resource.data.age is number
+        && request.resource.data.age >= 0 && request.resource.data.age <= 120
+        && request.resource.data.birthDate is string && request.resource.data.birthDate.size() <= 20
         && request.resource.data.createdAt is timestamp;
       allow read, update, delete: if isAdmin();
     }
 
-    // Volunteers: active users may read; admin and guides may write.
+    // Volunteers: active users may read (the guide screens read the whole list
+    // and filter client-side). Only an admin may write — guides never edit
+    // volunteers in the app, so this stays admin-only on the server too.
     match /volunteers/{id} {
       allow read: if isActiveUser();
-      allow write: if isStaff();
+      allow write: if isAdmin();
     }
 
-    // Attendance: active users may read; admin and guides may write.
+    // Attendance: active users may read. Admins manage everything; a guide may
+    // only write attendance for THEIR OWN group (matched against
+    // guides/{uid}.groupId), enforced here and not just hidden in the UI.
     match /attendance/{id} {
       allow read: if isActiveUser();
-      allow write: if isStaff();
+
+      // Create: admin, or a guide writing a record for their own group.
+      allow create: if isAdmin() || guideAttendanceWrite(request.resource.data);
+
+      // Update: same as create, but the EXISTING document must also belong to
+      // the guide's group — otherwise a guide could grab another group's record
+      // and rewrite its groupId to their own.
+      allow update: if isAdmin()
+        || (guideAttendanceWrite(request.resource.data)
+            && resource.data.get('groupId', '') == guideGroupId());
+
+      allow delete: if isAdmin();
     }
 
     // Events: active users may read; only an admin may write.

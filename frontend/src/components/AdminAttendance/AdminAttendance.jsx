@@ -12,6 +12,9 @@ import { collection, getDocs } from 'firebase/firestore';
 // Our Firestore database instance.
 import { db } from '../../firebase';
 
+// Shared attendance normalization (one definition across all screens).
+import { normalizeAttendanceStatus, getRecordStatus } from '../../utils/attendance';
+
 // Styles for this screen.
 import './AdminAttendance.css';
 
@@ -59,15 +62,10 @@ function parseDay(value) {
 }
 
 
-// Was this volunteer marked present? The guide's marking stores a boolean,
-// but stay lenient and accept Hebrew / English text forms too.
+// Was this volunteer marked present? Uses the shared normalization so it
+// agrees with the reports / charts on every status shape.
 function isPresent(record) {
-  const value = record.status ?? record.present ?? record.isPresent;
-
-  if (value === true) return true;
-  if (value === false) return false;
-
-  return ['present', 'true', '1', 'נוכח', 'כן'].includes(String(value || '').trim().toLowerCase());
+  return normalizeAttendanceStatus(getRecordStatus(record)) === 'present';
 }
 
 

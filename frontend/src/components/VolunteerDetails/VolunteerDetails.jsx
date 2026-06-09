@@ -7,6 +7,9 @@ import { collection, getDocs } from 'firebase/firestore'
 // Our Firestore database instance.
 import { db } from '../../firebase'
 
+// Shared attendance normalization (one definition across all screens).
+import { normalizeAttendanceStatus, getRecordStatus } from '../../utils/attendance'
+
 // Styles for this screen.
 import './VolunteerDetails.css'
 
@@ -105,33 +108,8 @@ function normalizeDocument(documentSnapshot) {
 }
 
 
-// Normalize the many possible attendance values into one consistent status.
-function normalizeAttendanceStatus(value) {
-  // Booleans map directly.
-  if (value === true) {
-    return ATTENDANCE_STATUS.PRESENT
-  }
-
-  if (value === false) {
-    return ATTENDANCE_STATUS.ABSENT
-  }
-
-  // Otherwise compare a lower-cased text form.
-  const text = String(value || '').trim().toLowerCase()
-
-  // Words that mean "present".
-  if (['present', 'yes', 'true', '1', 'נוכח', 'כן'].includes(text)) {
-    return ATTENDANCE_STATUS.PRESENT
-  }
-
-  // Words that mean "absent".
-  if (['absent', 'no', 'false', '0', 'נעדר', 'לא'].includes(text)) {
-    return ATTENDANCE_STATUS.ABSENT
-  }
-
-  // Anything else is unknown.
-  return ATTENDANCE_STATUS.UNKNOWN
-}
+// (normalizeAttendanceStatus now comes from utils/attendance — its
+// 'present' / 'absent' / 'unknown' values match ATTENDANCE_STATUS.)
 
 
 // Internal status -> Hebrew display text.
@@ -267,7 +245,14 @@ function valueMatchesCandidate(value, candidates) {
 
 
 // Does one attendance record belong to the selected volunteer?
-function recordMatchesVolunteer(attendanceItem, candidates) {
+function recordMatchesVolunteer(attendanceItem, candidates, volunteerId) {
+  // Modern records carry an exact volunteerId — match ONLY on that, so two
+  // volunteers who share a first/last name never inherit each other's history.
+  if (attendanceItem.volunteerId) {
+    return attendanceItem.volunteerId === volunteerId;
+  }
+
+  // Legacy records (no volunteerId): fall back to fuzzy name / phone matching.
   // Direct fields that might hold the volunteer's id / name.
   const directFields = [
     attendanceItem.volunteerId,
@@ -309,12 +294,8 @@ function recordMatchesVolunteer(attendanceItem, candidates) {
 
 // Find the selected volunteer's status inside direct or nested attendance data.
 function getNestedAttendanceStatus(attendanceItem, candidates) {
-  // First try the record's own status field.
-  const directStatus = normalizeAttendanceStatus(
-    attendanceItem.status ??
-      attendanceItem.attendance ??
-      attendanceItem.isPresent,
-  )
+  // First try the record's own status field (via the shared reader).
+  const directStatus = normalizeAttendanceStatus(getRecordStatus(attendanceItem))
 
   if (directStatus !== ATTENDANCE_STATUS.UNKNOWN) {
     return directStatus
@@ -377,7 +358,7 @@ function buildAttendanceRows(attendanceRecords, volunteer) {
   // Keep only this volunteer's records and shape them for the table.
   return attendanceRecords
     .filter((attendanceItem) =>
-      recordMatchesVolunteer(attendanceItem, candidates),
+      recordMatchesVolunteer(attendanceItem, candidates, volunteer.id),
     )
     .map((attendanceItem) => ({
       id: attendanceItem.id,

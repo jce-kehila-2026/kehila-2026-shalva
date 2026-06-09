@@ -13,6 +13,9 @@ import './Reports.css'
 // Shared event status helper (so reports match the other screens).
 import { computeEventStatus } from '../../utils/eventStatus'
 
+// Shared attendance normalization (kept in one place across screens).
+import { normalizeAttendanceStatus, getRecordStatus } from '../../utils/attendance'
+
 
 // Firestore collection names used by the reports screen.
 const COLLECTION_NAMES = {
@@ -150,45 +153,7 @@ function getAttendanceGroup(attendanceItem) {
 }
 
 
-// Normalize the many possible attendance values into 'present' / 'absent' / 'unknown'.
-function normalizeAttendanceStatus(value) {
-  // Booleans map directly.
-  if (value === true) {
-    return 'present'
-  }
-
-  if (value === false) {
-    return 'absent'
-  }
-
-  // Otherwise compare a lower-cased text form.
-  const text = String(value || '').trim().toLowerCase()
-
-  // Words that mean "present".
-  if (['present', 'yes', 'true', '1', 'נוכח', 'כן'].includes(text)) {
-    return 'present'
-  }
-
-  // Words that mean "absent".
-  if (['absent', 'no', 'false', '0', 'נעדר', 'לא'].includes(text)) {
-    return 'absent'
-  }
-
-  // Anything else is unknown.
-  return 'unknown'
-}
-
-
-// Read the status field from an attendance item, trying several field names.
-function getRecordStatus(record) {
-  return (
-    record.status ??
-    record.attendance ??
-    record.present ??
-    record.isPresent ??
-    record.value
-  )
-}
+// (normalizeAttendanceStatus + getRecordStatus now live in utils/attendance.)
 
 
 // Count present / absent / unknown across a nested list of attendance records.
