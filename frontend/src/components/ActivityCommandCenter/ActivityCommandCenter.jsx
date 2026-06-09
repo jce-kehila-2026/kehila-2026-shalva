@@ -23,12 +23,15 @@ import { eventReminderMessage } from '../../utils/whatsapp';
 // Styles for this screen.
 import './ActivityCommandCenter.css';
 
+// Shared attendance normalization helpers.
+import { normalizeAttendanceStatus, getRecordStatus } from '../../utils/attendance';
+
 
 // The three attendance states a record's status may use (older Hebrew strings).
 const STATUS = {
   present: 'נוכח',
   late: 'איחר',
-  absent: 'נעדר',
+  absent: 'חסר',
 };
 
 // Label used when an event has no assigned group.
@@ -271,11 +274,18 @@ function ActivityCommandCenter({ groupFilter = null, onBack, leadingCard = null,
     return [...volunteers, ...guideUsers].filter((person) => birthdaySoon(person, today, 7)).length;
   }, [volunteers, users]);
 
-  // Total volunteers not yet marked across today's events (alert card).
-  const unmarkedToday = useMemo(
-    () => upcoming.today.reduce((sum, event) => sum + event.unmarked, 0),
-    [upcoming],
-  );
+
+
+  // Total volunteers marked absent today across all attendance records.
+  const absentTodayCount = useMemo(() => {
+    const todayKey = toDateKey(new Date());
+    return attendance.filter((rec) => {
+      const dateKey = rec.dateKey || toDateKey(rec.date);
+      const isToday = dateKey === todayKey;
+      const isAbsent = normalizeAttendanceStatus(getRecordStatus(rec)) === 'absent';
+      return isToday && isAbsent;
+    }).length;
+  }, [attendance]);
 
 
   // Copy a ready-to-paste broadcast message for the event's group, with all
@@ -396,13 +406,13 @@ function ActivityCommandCenter({ groupFilter = null, onBack, leadingCard = null,
           <div className="acc-cards">
             {leadingCard}
 
-            {/* Missing-attendance count — opens the attendance tracking screen. */}
+            {/* Absent-attendance count — opens the attendance tracking screen. */}
             <button
               type="button"
               className="acc-card acc-card--missing"
               onClick={() => onNavigate && onNavigate('attendance')}
             >
-              <span className="acc-card-num">{unmarkedToday}</span>
+              <span className="acc-card-num">{absentTodayCount}</span>
               <span className="acc-card-label">חסרים בנוכחות</span>
             </button>
 

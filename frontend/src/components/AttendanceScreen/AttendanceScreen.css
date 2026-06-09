@@ -8,55 +8,55 @@
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: clamp(16px, 4vw, 40px) clamp(12px, 4vw, 20px);
+  padding: 24px;
+  width: 100%;
 }
 
-/* The single card that holds the whole screen. */
+/* The single card that holds the whole screen. Now full-width. */
 .attendance-card {
   width: 100%;
-  max-width: 640px;
+  max-width: 100%;
   background: var(--surface);
   border: 1px solid var(--border);
-  padding: clamp(18px, 4vw, 30px);
+  padding: 30px;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
 }
 
 
 /* ---------- Header ---------- */
-
 .attendance-header-row {
   display: flex;
   justify-content: space-between;
   gap: 14px;
   align-items: flex-start;
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
 
 .attendance-title-block h1 {
   color: var(--text);
-  font-size: clamp(22px, 4vw, 30px);
+  font-size: clamp(26px, 4vw, 36px);
   font-weight: 800;
   margin: 0;
 }
 
 /* Group name + date line under the title. */
 .attendance-sub {
-  margin: 4px 0 0;
+  margin: 6px 0 0;
   color: var(--brand-600);
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 600;
 }
 
 /* Back button (pill, outline). */
 .attendance-back-button {
   flex: none;
-  padding: 9px 16px;
+  padding: 10px 20px;
   background: var(--surface);
   color: var(--brand-700);
   border: 1.5px solid var(--border-strong);
   border-radius: var(--radius-pill);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   cursor: pointer;
   transition: background 0.2s ease, border-color 0.2s ease;
@@ -69,14 +69,13 @@
 
 
 /* ---------- Group selector ---------- */
-
 .att-select {
   width: 100%;
-  padding: 12px 14px;
+  padding: 14px;
   border: 1.5px solid var(--border-strong);
   border-radius: var(--radius);
-  font-size: 16px;
-  margin-bottom: 16px;
+  font-size: 17px;
+  margin-bottom: 18px;
   background: var(--surface);
 }
 
@@ -85,20 +84,21 @@
   background: linear-gradient(135deg, var(--brand-50), rgba(82, 167, 221, 0.06));
   border: 1px solid var(--brand-200);
   color: var(--brand-700);
-  padding: 12px 16px;
+  padding: 14px 18px;
   border-radius: var(--radius);
-  margin-bottom: 16px;
+  margin-bottom: 18px;
   font-weight: 600;
+  font-size: 17px;
 }
 
 
 /* ---------- Notes ---------- */
-
 .att-note {
   color: var(--text-muted);
   text-align: center;
-  padding: 18px 0;
+  padding: 20px 0;
   margin: 0;
+  font-size: 16px;
 }
 
 /* "Loaded today's marks" banner (edit mode). */
@@ -107,19 +107,18 @@
   color: #0b5e86;
   border: 1px solid rgba(82, 167, 221, 0.35);
   border-radius: var(--radius);
-  padding: 10px 14px;
-  font-size: 14px;
+  padding: 12px 16px;
+  font-size: 15px;
   font-weight: 600;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
 }
 
 
 /* ---------- Summary bar ---------- */
-
 .att-summary {
   display: flex;
-  gap: 10px;
-  margin-bottom: 16px;
+  gap: 12px;
+  margin-bottom: 18px;
 }
 
 /* One stat tile (present / absent / total). */
@@ -128,21 +127,21 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 12px 6px;
+  gap: 4px;
+  padding: 14px 8px;
   border-radius: var(--radius);
   border: 1px solid var(--border);
   background: var(--surface-2);
 }
 
 .att-stat-num {
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 800;
   line-height: 1;
 }
 
 .att-stat-label {
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--text-muted);
 }
@@ -164,130 +163,272 @@
   color: #b91c1c;
 }
 
-.att-stat-total .att-stat-num {
-  color: var(--brand-700);
+.att-stat-unmarked {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+}
+.att-stat-unmarked .att-stat-num {
+  color: var(--text-soft);
 }
 
 
-/* ---------- Quick actions ---------- */
-
-.att-quick {
+/* ---------- Week Navigation ---------- */
+.week-nav {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  padding: 12px 18px;
+  border-radius: var(--radius);
+  margin-bottom: 22px;
   gap: 10px;
-  margin-bottom: 14px;
+  flex-wrap: wrap;
 }
 
-.att-quick-btn {
-  flex: 1;
-  padding: 9px 10px;
-  border: 1.5px solid var(--border-strong);
-  border-radius: var(--radius-pill);
+.week-nav-btn {
+  padding: 10px 18px;
   background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
   color: var(--brand-700);
-  font-size: 13.5px;
   font-weight: 700;
+  font-size: 14.5px;
   cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease;
+  transition: all 0.2s ease;
 }
 
-.att-quick-btn:hover {
+.week-nav-btn:hover {
   background: var(--brand-50);
   border-color: var(--brand-200);
 }
 
-
-/* ---------- Roster list ---------- */
-
-.attendance-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-/* A single volunteer row — the whole thing is a big tap target that toggles. */
-.att-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  text-align: right;
-  padding: 12px 14px;
-  border-radius: var(--radius);
-  border: 1.5px solid var(--border);
-  background: var(--surface-2);
+.week-nav-today-btn {
+  padding: 10px 18px;
+  background: var(--brand-600);
+  border: none;
+  border-radius: var(--radius-pill);
+  color: white;
+  font-weight: 700;
+  font-size: 14.5px;
   cursor: pointer;
-  transition: border-color 0.18s ease, background 0.18s ease, transform 0.08s ease;
+  transition: background 0.2s ease;
 }
 
-.att-row:active {
-  transform: scale(0.99);
+.week-nav-today-btn:hover {
+  background: var(--brand-700);
 }
 
-/* Round avatar with the volunteer's initial. */
-.att-avatar {
-  flex: none;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: var(--brand-100);
-  color: var(--brand-700);
-  font-weight: 800;
+.week-label {
   font-size: 17px;
-}
-
-/* Name fills the middle. */
-.att-name {
-  flex: 1;
-  font-size: 16px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text);
 }
 
-/* Status pill on the side. */
-.att-status-pill {
-  flex: none;
-  padding: 6px 13px;
-  border-radius: var(--radius-pill);
-  font-size: 13px;
-  font-weight: 700;
+
+/* ---------- Weekly Table ---------- */
+.attendance-table-container {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  margin-bottom: 22px;
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.02);
 }
 
-/* Present row: green accents. */
-.att-row.is-present {
-  background: #f0fdf4;
+.attendance-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 650px;
+  text-align: right;
+}
+
+.attendance-table th,
+.attendance-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.attendance-table tr:hover {
+  background: rgba(82, 167, 221, 0.02);
+}
+
+.sticky-col {
+  position: sticky;
+  right: 0; /* RTL page: stick column to the right side */
+  background: var(--surface);
+  z-index: 2;
+  border-left: 2px solid var(--border-strong) !important;
+  min-width: 160px;
+}
+
+.attendance-table th.sticky-col {
+  background: var(--surface-2);
+}
+
+.attendance-table tr:hover td.sticky-col {
+  background: var(--surface-2);
+}
+
+.attendance-table th {
+  background: var(--surface-2);
+  color: var(--text-soft);
+  font-weight: 700;
+  font-size: 14px;
+  border-bottom: 2px solid var(--border-strong);
+}
+
+.attendance-table th.is-today {
+  background: var(--brand-50);
+  color: var(--brand-700);
+}
+
+.th-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.day-name {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.day-date {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.day-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.day-action-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.15s ease;
+}
+
+.day-action-btn.present {
+  color: #16a34a;
   border-color: #86efac;
 }
-.att-row.is-present .att-avatar {
+
+.day-action-btn.present:hover {
   background: #dcfce7;
-  color: #15803d;
-}
-.att-row.is-present .att-status-pill {
-  background: #16a34a;
-  color: #ffffff;
 }
 
-/* Not-present row: quiet neutral, with a muted pill. */
-.att-row.is-absent .att-status-pill {
-  background: var(--surface);
+.day-action-btn.absent {
+  color: #dc2626;
+  border-color: #fca5a5;
+}
+
+.day-action-btn.absent:hover {
+  background: #fee2e2;
+}
+
+.day-action-btn.unmarked {
   color: var(--text-soft);
+  border-color: var(--border-strong);
+}
+
+.day-action-btn.unmarked:hover {
+  background: var(--surface-2);
+}
+
+.volunteer-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.volunteer-name {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 16px;
+}
+
+
+/* ---------- Cell Toggle Buttons ---------- */
+.attendance-cell {
+  text-align: center;
+}
+
+.att-cell-actions {
+  display: inline-flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
+
+.att-action-toggle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
   border: 1px solid var(--border-strong);
+  background: var(--surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  color: var(--text-soft);
+}
+
+.att-action-toggle.present:hover {
+  background: #f0fdf4;
+  border-color: #86efac;
+  color: #15803d;
+}
+
+.att-action-toggle.absent:hover {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.att-action-toggle.present.is-active {
+  background: #16a34a;
+  border-color: #16a34a;
+  color: white;
+  box-shadow: 0 0 8px rgba(22, 163, 74, 0.4);
+}
+
+.att-action-toggle.absent.is-active {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: white;
+  box-shadow: 0 0 8px rgba(220, 38, 38, 0.4);
 }
 
 
 /* ---------- Save button ---------- */
-
 .att-save {
   width: 100%;
-  margin-top: 20px;
-  padding: 15px;
+  margin-top: 24px;
+  padding: 16px;
   background: var(--brand-600);
   color: #fff;
   border: none;
   border-radius: var(--radius);
-  font-size: 16.5px;
+  font-size: 18px;
   font-weight: 800;
   cursor: pointer;
   transition: background 0.2s ease;
@@ -303,7 +444,35 @@
 }
 
 
+/* ---------- Round Avatar ---------- */
+.att-avatar {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--brand-100);
+  color: var(--brand-700);
+  font-weight: 800;
+  font-size: 15px;
+}
+
+
 /* ---------- Phone tweaks ---------- */
+@media (max-width: 600px) {
+  /* No tweaks needed for the action toggles as they are already round and compact */
+  .week-nav {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+  .week-nav-btn,
+  .week-nav-today-btn {
+    width: 100%;
+  }
+}
 
 @media (max-width: 480px) {
   .attendance-header-row {
@@ -318,10 +487,5 @@
   /* Numbers stay readable but a touch smaller on tiny screens. */
   .att-stat-num {
     font-size: 23px;
-  }
-
-  .att-status-pill {
-    padding: 6px 11px;
-    font-size: 12.5px;
   }
 }

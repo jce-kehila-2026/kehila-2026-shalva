@@ -27,15 +27,55 @@ import './AttendanceScreen.css';
 const getVolunteerName = (volunteer) => getDisplayName(volunteer, 'מתנדב ללא שם');
 
 
-// Today's day-level key (YYYY-MM-DD) — the same key stored on each attendance
-// record, so we can both read today's marks back and write idempotently.
-function getTodayKey() {
-  const now = new Date();
+// Start of the week (Sunday) containing a given date.
+function getStartOfWeek(date) {
+  const d = new Date(date);
+  const day = d.getDay(); // 0 is Sunday, 1 is Monday, etc.
+  d.setDate(d.getDate() - day);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+
+// Generate the 7 days of the week starting from a given Sunday.
+function getWeekDays(sunday) {
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(sunday);
+    d.setDate(sunday.getDate() + i);
+    days.push(d);
+  }
+  return days;
+}
+
+
+// Format a Date object to YYYY-MM-DD.
+function getDayKey(date) {
   return [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, '0'),
-    String(now.getDate()).padStart(2, '0'),
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
   ].join('-');
+}
+
+
+// Today's day-level key.
+function getTodayKey() {
+  return getDayKey(new Date());
+}
+
+
+// Formats a Sunday date into a Hebrew range string (e.g. "7 ביוני – 13 ביוני 2026").
+function getWeekRangeLabel(sunday) {
+  const saturday = new Date(sunday);
+  saturday.setDate(sunday.getDate() + 6);
+  
+  const options = { day: 'numeric', month: 'long' };
+  const sunLabel = sunday.toLocaleDateString('he-IL', options);
+  const satLabel = saturday.toLocaleDateString('he-IL', options);
+  const year = sunday.getFullYear();
+  
+  return `${sunLabel} – ${satLabel} ${year}`;
 }
 
 
@@ -54,15 +94,21 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
   const [selectedGroupId, setSelectedGroupId] = useState(initialGroupId);
   const [selectedGroupName, setSelectedGroupName] = useState(initialGroupName);
 
-  // The selected group's volunteers (each with a local present/absent status).
+  // The selected group's volunteers.
   const [volunteers, setVolunteers] = useState([]);
+
+  // The selected group's attendance records for the active week.
+  const [attendanceRecords, setAttendanceRecords] = useState([]);
+
+  // The active week's Sunday.
+  const [currentWeekStart, setCurrentWeekStart] = useState(() => getStartOfWeek(new Date()));
+
+  // The current UI checkbox state per volunteer and day.
+  const [gridState, setGridState] = useState({});
 
   // True while volunteers load; true while a save is in flight.
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-
-  // True once today's already-saved attendance was merged in (edit mode).
-  const [loadedExisting, setLoadedExisting] = useState(false);
 
   // Brief "saved ✓" confirmation flag.
   const [justSaved, setJustSaved] = useState(false);
@@ -74,6 +120,9 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
 
   // The effective group name to filter volunteers by.
   const activeGroupName = selectedGroup?.groupName || selectedGroup?.name || selectedGroupName;
+
+  const weekDays = useMemo(() => getWeekDays(currentWeekStart), [currentWeekStart]);
+  const weekDaysKeys = useMemo(() => weekDays.map(getDayKey), [weekDays]);
 
   // Load the groups (falling back to the static list if none exist).
   const fetchGroups = useCallback(async () => {
@@ -96,68 +145,59 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
     setGroups(GROUP_NAMES.map((groupName) => ({ id: groupName, groupName })));
   }, []);
 
-  // Load the selected group's volunteers, pre-filled with today's saved marks.
+  // Load the selected group's volunteers, pre-filled with the week's saved marks.
   const fetchVolunteersByGroup = useCallback(async () => {
     // No group chosen: nothing to load.
     if (!selectedGroupId && !activeGroupName) {
       setVolunteers([]);
-      setLoadedExisting(false);
+      setAttendanceRecords([]);
       return;
     }
 
     setLoading(true);
 
     try {
-      const todayKey = getTodayKey();
-
-      // Read the volunteers and today's attendance together.
+      // Fetch volunteers and the week's attendance in parallel.
       const [volunteersSnap, attendanceSnap] = await Promise.all([
         getDocs(collection(db, 'volunteers')),
-        getDocs(query(collection(db, 'attendance'), where('dateKey', '==', todayKey))),
+        getDocs(query(collection(db, 'attendance'), where('dateKey', 'in', weekDaysKeys))),
       ]);
 
-      // Map volunteerId -> the status already saved today (so we can edit it).
-      const savedStatus = new Map();
-      attendanceSnap.docs.forEach((documentSnapshot) => {
-        const record = documentSnapshot.data();
-        if (record.volunteerId !== undefined) {
-          savedStatus.set(record.volunteerId, record.status === true);
-        }
-      });
-
-      // Keep only this group's volunteers; seed each from today's saved status
-      // (defaulting to "not present" when there's no record yet).
+      // All volunteers matching active group filter.
       const volunteersData = volunteersSnap.docs
         .map((documentSnapshot) => ({ id: documentSnapshot.id, ...documentSnapshot.data() }))
         .filter((volunteer) => (
           volunteer.groupId === selectedGroupId ||
           volunteer.groupName === activeGroupName ||
           volunteer.group === activeGroupName
-        ))
-        .map((volunteer) => ({
-          ...volunteer,
-          status: savedStatus.has(volunteer.id) ? savedStatus.get(volunteer.id) : false,
-        }));
+        ));
 
-      // Were any of these volunteers already marked today?
-      const anyExisting = volunteersData.some((volunteer) => savedStatus.has(volunteer.id));
+      // Attendance records for this week and group.
+      const groupName = activeGroupName;
+      const attendanceData = attendanceSnap.docs
+        .map((doc) => ({ id: doc.id, ...doc.data() }))
+        .filter((rec) => (
+          rec.groupId === selectedGroupId ||
+          rec.groupName === groupName ||
+          rec.group === groupName
+        ));
 
       setVolunteers(volunteersData);
-      setLoadedExisting(anyExisting);
+      setAttendanceRecords(attendanceData);
     } catch (error) {
-      console.error('Error loading volunteers:', error);
-      alert('אירעה שגיאה בטעינת המתנדבים');
+      console.error('Error loading volunteers and attendance:', error);
+      alert('אירעה שגיאה בטעינת הנתונים');
     } finally {
       setLoading(false);
     }
-  }, [activeGroupName, selectedGroupId]);
+  }, [activeGroupName, selectedGroupId, weekDaysKeys]);
 
   // Load the groups once on mount.
   useEffect(() => {
     fetchGroups();
   }, [fetchGroups]);
 
-  // Reload volunteers whenever the selected group changes.
+  // Reload volunteers whenever the selected group or week changes.
   useEffect(() => {
     fetchVolunteersByGroup();
   }, [fetchVolunteersByGroup]);
@@ -171,70 +211,172 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
     setSelectedGroupName(group?.groupName || group?.name || groupId);
   };
 
-  // Flip one volunteer's present/absent status.
-  const handleStatusChange = (id) => {
-    setVolunteers((previousVolunteers) => (
-      previousVolunteers.map((volunteer) => (
-        volunteer.id === id ? { ...volunteer, status: !volunteer.status } : volunteer
-      ))
-    ));
+  // Map volunteerId -> dayKey -> attendanceRecord
+  const initialAttendance = useMemo(() => {
+    const map = {};
+    volunteers.forEach((v) => {
+      map[v.id] = {};
+    });
+
+    attendanceRecords.forEach((rec) => {
+      const vId = rec.volunteerId;
+      const dKey = rec.dateKey;
+      if (!vId || !dKey || !map[vId]) return;
+
+      // Keep the latest one if duplicates exist
+      const currentLatest = map[vId][dKey];
+      const recTime = rec.date?.toDate?.()?.getTime() || new Date(rec.date).getTime() || 0;
+      const curTime = currentLatest?.date?.toDate?.()?.getTime() || new Date(currentLatest?.date).getTime() || 0;
+
+      if (!currentLatest || recTime > curTime) {
+        map[vId][dKey] = rec;
+      }
+    });
+
+    return map;
+  }, [attendanceRecords, volunteers]);
+
+  // Reset gridState whenever the initial database records or roster changes
+  useEffect(() => {
+    const initialGrid = {};
+    volunteers.forEach((v) => {
+      initialGrid[v.id] = {};
+      weekDaysKeys.forEach((dKey) => {
+        const rec = initialAttendance[v.id]?.[dKey];
+        if (rec) {
+          if (rec.status === true) {
+            initialGrid[v.id][dKey] = 'present';
+          } else if (rec.status === false) {
+            initialGrid[v.id][dKey] = 'absent';
+          } else {
+            initialGrid[v.id][dKey] = 'unmarked';
+          }
+        } else {
+          initialGrid[v.id][dKey] = 'unmarked';
+        }
+      });
+    });
+    setGridState(initialGrid);
+  }, [initialAttendance, weekDaysKeys, volunteers]);
+
+  const handleStatusSelect = (volunteerId, dKey, statusType) => {
+    setGridState((prev) => {
+      const current = prev[volunteerId]?.[dKey] || 'unmarked';
+      const next = current === statusType ? 'unmarked' : statusType;
+      return {
+        ...prev,
+        [volunteerId]: {
+          ...prev[volunteerId],
+          [dKey]: next,
+        },
+      };
+    });
   };
 
-  // Mark everyone present, or clear everyone, in one tap.
-  const markAll = (present) => {
-    setVolunteers((previousVolunteers) => (
-      previousVolunteers.map((volunteer) => ({ ...volunteer, status: present }))
-    ));
+  const goToPrevWeek = () => {
+    setCurrentWeekStart((prev) => {
+      const d = new Date(prev);
+      d.setDate(prev.getDate() - 7);
+      return d;
+    });
   };
 
-  // Live counts for the summary bar.
-  const presentCount = volunteers.filter((volunteer) => volunteer.status).length;
-  const absentCount = volunteers.length - presentCount;
+  const goToNextWeek = () => {
+    setCurrentWeekStart((prev) => {
+      const d = new Date(prev);
+      d.setDate(prev.getDate() + 7);
+      return d;
+    });
+  };
 
-  // Save attendance — one document per volunteer, committed as a single atomic
-  // batch. Each document uses a DETERMINISTIC id (group + day + volunteer), so
-  // saving the same group again on the same day OVERWRITES the record instead
-  // of creating a duplicate.
+  const goToCurrentWeek = () => {
+    setCurrentWeekStart(getStartOfWeek(new Date()));
+  };
+
+  // Live counts for the weekly summary bar.
+  let presentCount = 0;
+  let absentCount = 0;
+  let unmarkedCount = 0;
+  volunteers.forEach((v) => {
+    weekDaysKeys.forEach((dKey) => {
+      const state = gridState[v.id]?.[dKey] || 'unmarked';
+      if (state === 'present') {
+        presentCount++;
+      } else if (state === 'absent') {
+        absentCount++;
+      } else {
+        unmarkedCount++;
+      }
+    });
+  });
+
+  // Save attendance — save/update records for modified days only.
   const handleSaveAttendance = async () => {
-    // A group must be chosen first.
     if (!selectedGroupId && !activeGroupName) {
       alert('יש לבחור קבוצה');
       return;
     }
 
     const now = new Date();
-    const dateKey = getTodayKey();
-
-    // The group part of the id — never empty, and '/' is illegal in doc ids.
     const groupKey = String(selectedGroupId || selectedGroup?.id || activeGroupName || 'group')
       .replace(/\//g, '-');
 
     setSaving(true);
 
+    // Find which days have changes
+    const modifiedDays = new Set();
+    weekDays.forEach((day) => {
+      const dKey = getDayKey(day);
+      const dayChanged = volunteers.some((v) => {
+        const currentVal = gridState[v.id]?.[dKey] || 'unmarked';
+        const initialRec = initialAttendance[v.id]?.[dKey];
+        const initialVal = initialRec ? (initialRec.status === true ? 'present' : 'absent') : 'unmarked';
+        return currentVal !== initialVal;
+      });
+      if (dayChanged) {
+        modifiedDays.add(dKey);
+      }
+    });
+
     try {
-      // One batch = all-or-nothing, and no half-saved attendance.
       const batch = writeBatch(db);
+      let writeCount = 0;
 
-      for (const volunteer of volunteers) {
-        const volunteerName = getVolunteerName(volunteer);
-        const attendanceId = `${groupKey}_${dateKey}_${volunteer.id}`;
+      for (const day of weekDays) {
+        const dKey = getDayKey(day);
+        if (!modifiedDays.has(dKey)) continue;
 
-        batch.set(doc(db, 'attendance', attendanceId), {
-          groupId: selectedGroupId || selectedGroup?.id || '',
-          group: activeGroupName,
-          groupName: activeGroupName,
-          date: now,
-          dateKey,
-          status: volunteer.status,
-          volunteerId: volunteer.id,
-          volunteerName,
-        });
+        const targetDate = new Date(day);
+        targetDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+
+        for (const volunteer of volunteers) {
+          const volunteerName = getVolunteerName(volunteer);
+          const attendanceId = `${groupKey}_${dKey}_${volunteer.id}`;
+          const state = gridState[volunteer.id]?.[dKey] || 'unmarked';
+
+          if (state === 'unmarked') {
+            batch.delete(doc(db, 'attendance', attendanceId));
+          } else {
+            batch.set(doc(db, 'attendance', attendanceId), {
+              groupId: selectedGroupId || selectedGroup?.id || '',
+              group: activeGroupName,
+              groupName: activeGroupName,
+              date: targetDate,
+              dateKey: dKey,
+              status: state === 'present',
+              volunteerId: volunteer.id,
+              volunteerName,
+            });
+          }
+          writeCount++;
+        }
       }
 
-      await batch.commit();
+      if (writeCount > 0) {
+        await batch.commit();
+        await fetchVolunteersByGroup();
+      }
 
-      // Now there's saved data for today — flash a confirmation.
-      setLoadedExisting(true);
       setJustSaved(true);
       window.setTimeout(() => setJustSaved(false), 2500);
     } catch (error) {
@@ -245,7 +387,6 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
     }
   };
 
-  // Whether a group is selected at all.
   const hasGroup = Boolean(selectedGroupId || activeGroupName);
 
   return (
@@ -256,7 +397,7 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
         <div className="attendance-header-row">
           <div className="attendance-title-block">
             <h1>סימון נוכחות</h1>
-            {activeGroupName && <p className="attendance-sub">קבוצת {activeGroupName} · {getTodayLabel()}</p>}
+            {activeGroupName && <p className="attendance-sub">קבוצת {activeGroupName}</p>}
           </div>
           {typeof onBack === 'function' && (
             <button className="attendance-back-button" onClick={onBack}>חזרה</button>
@@ -287,14 +428,21 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
         {/* The marking UI, once a group with volunteers is loaded. */}
         {!loading && volunteers.length > 0 && (
           <>
-            {/* Note that we loaded marks already saved today. */}
-            {loadedExisting && (
-              <div className="att-loaded-note">
-                נטענה הנוכחות שכבר סומנה היום — אפשר לעדכן ולשמור שוב.
-              </div>
-            )}
+            {/* Week Navigation */}
+            <div className="week-nav">
+              <button type="button" className="week-nav-btn" onClick={goToNextWeek}>
+                שבוע הבא ◀
+              </button>
+              <span className="week-label">{getWeekRangeLabel(currentWeekStart)}</span>
+              <button type="button" className="week-nav-today-btn" onClick={goToCurrentWeek}>
+                השבוע הנוכחי
+              </button>
+              <button type="button" className="week-nav-btn" onClick={goToPrevWeek}>
+                ▶ שבוע קודם
+              </button>
+            </div>
 
-            {/* Live summary: present / absent / total. */}
+            {/* Live summary: present / absent / unmarked. */}
             <div className="att-summary">
               <div className="att-stat att-stat-present">
                 <span className="att-stat-num">{presentCount}</span>
@@ -302,45 +450,79 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
               </div>
               <div className="att-stat att-stat-absent">
                 <span className="att-stat-num">{absentCount}</span>
-                <span className="att-stat-label">לא נוכחים</span>
+                <span className="att-stat-label">חסרים</span>
               </div>
-              <div className="att-stat att-stat-total">
-                <span className="att-stat-num">{volunteers.length}</span>
-                <span className="att-stat-label">סה״כ</span>
+              <div className="att-stat att-stat-unmarked">
+                <span className="att-stat-num">{unmarkedCount}</span>
+                <span className="att-stat-label">לא סומנו</span>
               </div>
             </div>
 
-            {/* Quick actions. */}
-            <div className="att-quick">
-              <button type="button" className="att-quick-btn" onClick={() => markAll(true)}>
-                סימון כולם כנוכחים
-              </button>
-              <button type="button" className="att-quick-btn" onClick={() => markAll(false)}>
-                ניקוי הכל
-              </button>
-            </div>
-
-            {/* The roster — tap a row to toggle present / not present. */}
-            <div className="attendance-list">
-              {volunteers.map((volunteer) => {
-                const name = getVolunteerName(volunteer);
-
-                return (
-                  <button
-                    type="button"
-                    key={volunteer.id}
-                    className={`att-row ${volunteer.status ? 'is-present' : 'is-absent'}`}
-                    onClick={() => handleStatusChange(volunteer.id)}
-                    aria-pressed={volunteer.status}
-                  >
-                    <span className="att-avatar">{getInitial(name)}</span>
-                    <span className="att-name">{name}</span>
-                    <span className="att-status-pill">
-                      {volunteer.status ? 'נוכח/ת' : 'לא נוכח/ת'}
-                    </span>
-                  </button>
-                );
-              })}
+            {/* The weekly table container */}
+            <div className="attendance-table-container">
+              <table className="attendance-table">
+                <thead>
+                  <tr>
+                    <th className="sticky-col">שם המתנדב</th>
+                    {weekDays.map((day) => {
+                      const dKey = getDayKey(day);
+                      const isToday = dKey === getTodayKey();
+                      const dayName = day.toLocaleDateString('he-IL', { weekday: 'long' }).replace('יום ', '');
+                      const dateStr = day.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' });
+                      
+                      return (
+                        <th key={dKey} className={isToday ? 'is-today' : ''}>
+                          <div className="th-content">
+                            <span className="day-name">{dayName}</span>
+                            <span className="day-date">{dateStr}</span>
+                          </div>
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {volunteers.map((volunteer) => {
+                    const name = getVolunteerName(volunteer);
+                    return (
+                      <tr key={volunteer.id}>
+                        <td className="sticky-col">
+                          <div className="volunteer-name-cell">
+                            <span className="att-avatar">{getInitial(name)}</span>
+                            <span className="volunteer-name">{name}</span>
+                          </div>
+                        </td>
+                        {weekDays.map((day) => {
+                          const dKey = getDayKey(day);
+                          const status = gridState[volunteer.id]?.[dKey] || 'unmarked';
+                          return (
+                            <td key={dKey} className="attendance-cell">
+                              <div className="att-cell-actions">
+                                <button
+                                  type="button"
+                                  className={`att-action-toggle present ${status === 'present' ? 'is-active' : ''}`}
+                                  onClick={() => handleStatusSelect(volunteer.id, dKey, 'present')}
+                                  title="נוכח"
+                                >
+                                  ✓
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`att-action-toggle absent ${status === 'absent' ? 'is-active' : ''}`}
+                                  onClick={() => handleStatusSelect(volunteer.id, dKey, 'absent')}
+                                  title="חסר"
+                                >
+                                  ✗
+                                </button>
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
 
             {/* Save. */}
@@ -353,12 +535,5 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
     </div>
   );
 }
-
-
-// Today as a short Hebrew date label (e.g. "8 ביוני").
-function getTodayLabel() {
-  return new Date().toLocaleDateString('he-IL', { day: 'numeric', month: 'long' });
-}
-
 
 export default AttendanceScreen;

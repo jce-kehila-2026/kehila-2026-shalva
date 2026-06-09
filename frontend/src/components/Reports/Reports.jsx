@@ -676,7 +676,7 @@ export default function Reports() {
         'מיקום',
         'סטטוס',
         'נוכחים',
-        'נעדרים',
+        'חסרים',
         'הערות',
       ],
 
@@ -773,7 +773,7 @@ export default function Reports() {
             <th>אירועים</th>
             <th>מפגשי נוכחות</th>
             <th>נוכחים</th>
-            <th>נעדרים</th>
+            <th>חסרים</th>
           </tr>
         </thead>
 
@@ -787,7 +787,7 @@ export default function Reports() {
                 <td data-label="אירועים">{group.events}</td>
                 <td data-label="מפגשי נוכחות">{group.attendanceMeetings}</td>
                 <td data-label="נוכחים">{group.present}</td>
-                <td data-label="נעדרים">{group.absent}</td>
+                <td data-label="חסרים">{group.absent}</td>
               </tr>
             ))
           ) : (
@@ -813,7 +813,7 @@ export default function Reports() {
             <th>תאריך</th>
             <th>קבוצה</th>
             <th>נוכחים</th>
-            <th>נעדרים</th>
+            <th>חסרים</th>
             <th>לא ידוע</th>
           </tr>
         </thead>
@@ -826,7 +826,7 @@ export default function Reports() {
                 <td data-label="תאריך">{attendanceItem.date}</td>
                 <td data-label="קבוצה">{attendanceItem.group}</td>
                 <td data-label="נוכחים">{attendanceItem.present}</td>
-                <td data-label="נעדרים">{attendanceItem.absent}</td>
+                <td data-label="חסרים">{attendanceItem.absent}</td>
                 <td data-label="לא ידוע">{attendanceItem.unknown}</td>
               </tr>
             ))

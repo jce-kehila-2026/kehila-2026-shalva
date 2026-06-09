@@ -18,14 +18,13 @@ export default defineConfig({
         // Split the big third-party libraries into their own chunks instead of
         // one ~700KB bundle. Smaller app chunk + the vendor code is cached
         // separately, so app changes don't force a re-download of Firebase.
-        manualChunks: {
-          firebase: [
-            'firebase/app',
-            'firebase/auth',
-            'firebase/firestore',
-            'firebase/storage',
-          ],
-          react: ['react', 'react-dom'],
+        manualChunks(id) {
+          if (id.includes('firebase/')) {
+            return 'firebase';
+          }
+          if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
+            return 'react';
+          }
         },
       },
     },

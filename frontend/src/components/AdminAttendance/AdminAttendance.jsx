@@ -1,7 +1,5 @@
 // AdminAttendance — attendance tracking for admins. Lists every group with its
-// guide, and for the group's most recent attendance day shows each volunteer
-// and whether the guide marked them as arrived. Volunteers the guide didn't
-// mark show as "not marked".
+// guide, and allows clicking a group to view a full weekly attendance table.
 
 // React hooks for state, effects and derived values.
 import { useEffect, useMemo, useState } from 'react';
@@ -30,50 +28,49 @@ function getName(person) {
 }
 
 
-// Parse a date-ish value (string / Timestamp / Date / { seconds }) into a
-// day descriptor { time, key, label }, or null when it can't be parsed.
-function parseDay(value) {
-  // Resolve whatever shape we got into a real Date.
-  let date = null;
+// Start of the week (Sunday) containing a given date.
+function getStartOfWeek(date) {
+  const d = new Date(date);
+  const day = d.getDay(); // 0 is Sunday, 1 is Monday, etc.
+  d.setDate(d.getDate() - day);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
 
-  if (!value) {
-    date = null;
-  } else if (typeof value === 'string') {
-    const parsed = new Date(value);
-    if (!Number.isNaN(parsed.getTime())) date = parsed;
-  } else if (typeof value.toDate === 'function') {
-    date = value.toDate();
-  } else if (value instanceof Date) {
-    date = value;
-  } else if (typeof value.seconds === 'number') {
-    date = new Date(value.seconds * 1000);
+
+// Generate the 7 days of the week starting from a given Sunday.
+function getWeekDays(sunday) {
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(sunday);
+    d.setDate(sunday.getDate() + i);
+    days.push(d);
   }
-
-  // No usable date.
-  if (!date) return null;
-
-  return {
-    time: date.getTime(),
-    // Day-level key so all records from that day group together.
-    key: `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`,
-    // Readable Hebrew label.
-    label: date.toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' }),
-  };
+  return days;
 }
 
 
-// Was this volunteer marked present? Uses the shared normalization so it
-// agrees with the reports / charts on every status shape.
-function isPresent(record) {
-  return normalizeAttendanceStatus(getRecordStatus(record)) === 'present';
+// Format a Date object to YYYY-MM-DD.
+function getDayKey(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
 }
 
 
-// Hebrew label for each attendance state.
-function stateLabel(state) {
-  if (state === 'present') return 'נוכח/ת';
-  if (state === 'absent') return 'נעדר/ת';
-  return 'לא סומן';
+// Formats a Sunday date into a Hebrew range string (e.g. "7 ביוני – 13 ביוני 2026").
+function getWeekRangeLabel(sunday) {
+  const saturday = new Date(sunday);
+  saturday.setDate(sunday.getDate() + 6);
+  
+  const options = { day: 'numeric', month: 'long' };
+  const sunLabel = sunday.toLocaleDateString('he-IL', options);
+  const satLabel = saturday.toLocaleDateString('he-IL', options);
+  const year = sunday.getFullYear();
+  
+  return `${sunLabel} – ${satLabel} ${year}`;
 }
 
 
@@ -90,15 +87,19 @@ function AdminAttendance() {
   // Free-text search (by group or guide name).
   const [search, setSearch] = useState('');
 
-  // The group row currently expanded (null when none).
-  const [openGroupId, setOpenGroupId] = useState(null);
+  // The currently selected group to view attendance for.
+  const [selectedGroup, setSelectedGroup] = useState(null);
+
+  // The active week's Sunday.
+  const [currentWeekStart, setCurrentWeekStart] = useState(() => getStartOfWeek(new Date()));
+
+  const weekDays = useMemo(() => getWeekDays(currentWeekStart), [currentWeekStart]);
+  const weekDaysKeys = useMemo(() => weekDays.map(getDayKey), [weekDays]);
 
   // Load groups + volunteers + attendance once when the screen opens.
   useEffect(() => {
-    // Guards against state updates after unmount.
     let isMounted = true;
 
-    // Read one collection, returning null on failure (so it can be flagged).
     const fetchDocs = async (name) => {
       try {
         const snapshot = await getDocs(collection(db, name));
@@ -132,8 +133,13 @@ function AdminAttendance() {
     };
   }, []);
 
+  // Filter attendance records to only this week in-memory.
+  const weekAttendance = useMemo(() => {
+    return attendance.filter((rec) => rec.dateKey && weekDaysKeys.includes(rec.dateKey));
+  }, [attendance, weekDaysKeys]);
+
   // Build one row per group: its guide, its volunteers, and each volunteer's
-  // arrived/absent/not-marked state on the group's most recent attendance day.
+  // weekly status map (present / absent / unmarked) for the selected week.
   const groupRows = useMemo(() => {
     return groups
       .map((group) => {
@@ -147,57 +153,67 @@ function AdminAttendance() {
           vol.group === groupName
         ));
 
-        // Attendance records for this group.
-        const groupAttendance = attendance.filter((rec) => (
+        // Attendance records for this group and selected week.
+        const groupWeekAttendance = weekAttendance.filter((rec) => (
           rec.groupId === group.id ||
           rec.groupName === groupName ||
           rec.group === groupName
         ));
 
-        // Find the group's most recent attendance day.
-        let latest = null;
-        groupAttendance.forEach((rec) => {
-          const day = parseDay(rec.date ?? rec.createdAt);
-          if (day && (!latest || day.time > latest.time)) latest = day;
-        });
-
-        // Map volunteerId -> present? for that latest day.
-        const statusByVolunteer = {};
-        if (latest) {
-          groupAttendance.forEach((rec) => {
-            const day = parseDay(rec.date ?? rec.createdAt);
-            if (day && day.key === latest.key && rec.volunteerId) {
-              statusByVolunteer[rec.volunteerId] = isPresent(rec);
-            }
-          });
-        }
-
-        // Each volunteer with their state (present / absent / unmarked).
+        // Each volunteer with their weekly status.
         const people = groupVolunteers
           .map((vol) => {
-            let state = 'unmarked';
-            if (vol.id in statusByVolunteer) {
-              state = statusByVolunteer[vol.id] ? 'present' : 'absent';
-            }
-            return { id: vol.id, name: getName(vol), state };
+            const weeklyStatus = {};
+            weekDaysKeys.forEach((dKey) => {
+              const recs = groupWeekAttendance.filter((r) => r.volunteerId === vol.id && r.dateKey === dKey);
+              if (recs.length > 0) {
+                // Get the latest record if duplicates exist.
+                let latestRec = recs[0];
+                recs.forEach((r) => {
+                  const rTime = r.date?.toDate?.()?.getTime() || new Date(r.date).getTime() || 0;
+                  const curTime = latestRec.date?.toDate?.()?.getTime() || new Date(latestRec.date).getTime() || 0;
+                  if (rTime > curTime) {
+                    latestRec = r;
+                  }
+                });
+                const norm = normalizeAttendanceStatus(getRecordStatus(latestRec));
+                weeklyStatus[dKey] = norm === 'present' ? 'present' : norm === 'absent' ? 'absent' : 'unmarked';
+              } else {
+                weeklyStatus[dKey] = 'unmarked';
+              }
+            });
+            return { id: vol.id, name: getName(vol), weeklyStatus };
           })
           .sort((a, b) => a.name.localeCompare(b.name, 'he'));
 
-        // How many were marked present.
-        const presentCount = people.filter((person) => person.state === 'present').length;
+        // Calculate total present and absent marks for this week.
+        let totalPresent = 0;
+        let totalAbsent = 0;
+        people.forEach((person) => {
+          Object.values(person.weeklyStatus).forEach((status) => {
+            if (status === 'present') totalPresent++;
+            else if (status === 'absent') totalAbsent++;
+          });
+        });
 
         return {
           id: group.id,
           groupName,
           guideName,
-          dateLabel: latest ? latest.label : null,
           total: people.length,
-          presentCount,
+          totalPresent,
+          totalAbsent,
           people,
         };
       })
       .sort((a, b) => a.groupName.localeCompare(b.groupName, 'he'));
-  }, [groups, volunteers, attendance]);
+  }, [groups, volunteers, weekAttendance, weekDaysKeys]);
+
+  // Find the selected group details from the latest computed groupRows.
+  const activeSelectedGroup = useMemo(() => {
+    if (!selectedGroup) return null;
+    return groupRows.find((r) => r.id === selectedGroup.id);
+  }, [selectedGroup, groupRows]);
 
   // Apply the search filter.
   const visibleGroups = useMemo(() => {
@@ -209,11 +225,153 @@ function AdminAttendance() {
     ));
   }, [groupRows, search]);
 
-  // Toggle a group open/closed.
-  const toggleGroup = (id) => setOpenGroupId((current) => (current === id ? null : id));
+  const goToPrevWeek = () => {
+    setCurrentWeekStart((prev) => {
+      const d = new Date(prev);
+      d.setDate(prev.getDate() - 7);
+      return d;
+    });
+  };
 
+  const goToNextWeek = () => {
+    setCurrentWeekStart((prev) => {
+      const d = new Date(prev);
+      d.setDate(prev.getDate() + 7);
+      return d;
+    });
+  };
+
+  const goToCurrentWeek = () => {
+    setCurrentWeekStart(getStartOfWeek(new Date()));
+  };
+
+  // View 2: Dedicated Weekly Attendance Table Review for Selected Group
+  if (activeSelectedGroup) {
+    let presentCount = 0;
+    let absentCount = 0;
+    let unmarkedCount = 0;
+
+    activeSelectedGroup.people.forEach((person) => {
+      Object.values(person.weeklyStatus).forEach((status) => {
+        if (status === 'present') presentCount++;
+        else if (status === 'absent') absentCount++;
+        else unmarkedCount++;
+      });
+    });
+
+    return (
+      <div className="adm-att" dir="rtl">
+        {/* Header row with back button */}
+        <div className="adm-att-header-row">
+          <div className="adm-att-title-block">
+            <h2>נוכחות שבועית</h2>
+            <p>קבוצת {activeSelectedGroup.groupName} · מדריך/ה: {activeSelectedGroup.guideName}</p>
+          </div>
+          <button type="button" className="adm-att-back-btn" onClick={() => setSelectedGroup(null)}>
+            חזרה לרשימה
+          </button>
+        </div>
+
+        {/* Week Navigation */}
+        <div className="week-nav">
+          <button type="button" className="week-nav-btn" onClick={goToNextWeek}>
+            שבוע הבא ◀
+          </button>
+          <span className="week-label">{getWeekRangeLabel(currentWeekStart)}</span>
+          <button type="button" className="week-nav-today-btn" onClick={goToCurrentWeek}>
+            השבוע הנוכחי
+          </button>
+          <button type="button" className="week-nav-btn" onClick={goToPrevWeek}>
+            ▶ שבוע קודם
+          </button>
+        </div>
+
+        {/* Summary stats tiles */}
+        <div className="adm-att-summary-row">
+          <div className="adm-att-stat-tile is-present">
+            <span>{presentCount}</span>
+            <p>נוכחים</p>
+          </div>
+          <div className="adm-att-stat-tile is-absent">
+            <span>{absentCount}</span>
+            <p>חסרים</p>
+          </div>
+          <div className="adm-att-stat-tile is-unmarked">
+            <span>{unmarkedCount}</span>
+            <p>לא סומנו</p>
+          </div>
+        </div>
+
+        {/* Weekly table container */}
+        <div className="adm-att-table-container" style={{ borderTop: 'none', padding: 0 }}>
+          <table className="adm-att-table">
+            <thead>
+              <tr>
+                <th className="sticky-col">שם המתנדב</th>
+                {weekDays.map((day) => {
+                  const dKey = getDayKey(day);
+                  const dayName = day.toLocaleDateString('he-IL', { weekday: 'long' }).replace('יום ', '');
+                  const dateStr = day.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' });
+                  return (
+                    <th key={dKey}>
+                      <div className="th-content">
+                        <span className="day-name">{dayName}</span>
+                        <span className="day-date">{dateStr}</span>
+                      </div>
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {activeSelectedGroup.people.length > 0 ? (
+                activeSelectedGroup.people.map((person) => (
+                  <tr key={person.id}>
+                    <td className="sticky-col">
+                      <span className="adm-att-person-name">{person.name}</span>
+                    </td>
+                    {weekDaysKeys.map((dKey) => {
+                      const status = person.weeklyStatus[dKey];
+                      return (
+                        <td key={dKey} className="adm-att-cell">
+                          {status === 'present' && (
+                            <span className="adm-cell-status is-present" title="נוכח">✓</span>
+                          )}
+                          {status === 'absent' && (
+                            <span className="adm-cell-status is-absent" title="חסר">✗</span>
+                          )}
+                          {status === 'unmarked' && (
+                            <span className="adm-cell-status is-unmarked" title="לא סומן">-</span>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={8} className="adm-att-empty-row">
+                    אין מתנדבים בקבוצה זו.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  // View 1: Group Selection List View
   return (
     <section className="adm-att" dir="rtl" aria-label="מעקב נוכחות">
+
+      {/* Title block */}
+      <div className="adm-att-title-block">
+        <div className="adm-att-eyebrow">מערכת ניהול</div>
+        <h1 className="adm-att-title">מעקב נוכחות</h1>
+        <p className="adm-att-subtitle">בחר קבוצה להצגת טבלת נוכחות שבועית מלאה.</p>
+      </div>
 
       {/* Warning shown when the data failed to load. */}
       {hadError && (
@@ -233,66 +391,29 @@ function AdminAttendance() {
         />
       </div>
 
-      {/* Loading / empty / the group list. */}
+      {/* Loading / empty / the group card grid. */}
       {loading ? (
         <div className="adm-att-empty">טוען נתונים...</div>
       ) : visibleGroups.length === 0 ? (
         <div className="adm-att-empty">אין קבוצות להצגה.</div>
       ) : (
-        <div className="adm-att-list">
-          {visibleGroups.map((group) => {
-            // Is this group expanded?
-            const isOpen = openGroupId === group.id;
-
-            return (
-              <div className={`adm-att-meeting ${isOpen ? 'is-open' : ''}`} key={group.id}>
-
-                {/* Group header: name, guide + date, present/total, chevron. */}
-                <button
-                  type="button"
-                  className="adm-att-meeting-head"
-                  onClick={() => toggleGroup(group.id)}
-                  aria-expanded={isOpen}
-                >
-                  <span className="adm-att-meeting-main">
-                    <span className="adm-att-meeting-group">{group.groupName}</span>
-                    <span className="adm-att-meeting-date">
-                      מדריך/ה: {group.guideName}
-                      {group.dateLabel ? ` · נוכחות ל-${group.dateLabel}` : ' · טרם סומנה נוכחות'}
-                    </span>
-                  </span>
-
-                  <span className="adm-att-badges">
-                    <span className="adm-att-badge is-present">
-                      נוכחים {group.presentCount}/{group.total}
-                    </span>
-                  </span>
-
-                  <span className="adm-att-chevron" aria-hidden="true">{isOpen ? '▲' : '▼'}</span>
-                </button>
-
-                {/* Expanded volunteer list (only when open). */}
-                {isOpen && (
-                  <ul className="adm-att-people">
-                    {group.people.length > 0 ? (
-                      group.people.map((person) => (
-                        <li className="adm-att-person" key={person.id}>
-                          <span className="adm-att-person-name">{person.name}</span>
-                          <span className={`adm-att-person-status is-${person.state}`}>
-                            {stateLabel(person.state)}
-                          </span>
-                        </li>
-                      ))
-                    ) : (
-                      <li className="adm-att-person">
-                        <span className="adm-att-person-name">אין מתנדבים בקבוצה זו.</span>
-                      </li>
-                    )}
-                  </ul>
-                )}
+        <div className="adm-att-grid">
+          {visibleGroups.map((group) => (
+            <button
+              key={group.id}
+              type="button"
+              className="adm-att-group-card"
+              onClick={() => setSelectedGroup(group)}
+            >
+              <div className="adm-att-group-info">
+                <span className="adm-att-group-name">{group.groupName}</span>
+                <span className="adm-att-group-guide">מדריך/ה: {group.guideName}</span>
               </div>
-            );
-          })}
+              <div className="adm-att-group-meta">
+                <span className="adm-att-volunteers-count">{group.total} מתנדבים</span>
+              </div>
+            </button>
+          ))}
         </div>
       )}
     </section>

@@ -119,7 +119,7 @@ function statusText(status) {
   }
 
   if (status === ATTENDANCE_STATUS.ABSENT) {
-    return 'נעדר'
+    return 'חסר'
   }
 
   return 'לא ידוע'
@@ -542,7 +542,7 @@ export default function VolunteerDetails({ volunteer, onBack }) {
 
           <article className="volunteer-details-summary-card">
             <span>{attendanceSummary.absent}</span>
-            <p>נעדר</p>
+            <p>חסר</p>
           </article>
 
           <article className="volunteer-details-summary-card">

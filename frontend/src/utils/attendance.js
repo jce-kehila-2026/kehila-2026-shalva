@@ -24,7 +24,7 @@ export function normalizeAttendanceStatus(value) {
   }
 
   // Words that mean "absent".
-  if (['absent', 'no', 'false', '0', 'נעדר', 'נעדרת', 'לא'].includes(text)) {
+  if (['absent', 'no', 'false', '0', 'נעדר', 'נעדרת', 'לא', 'חסר', 'חסרה'].includes(text)) {
     return 'absent';
   }
 

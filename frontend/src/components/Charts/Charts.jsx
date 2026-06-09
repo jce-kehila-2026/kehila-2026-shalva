@@ -292,7 +292,7 @@ function Charts() {
   // Two donut segments: present vs absent.
   const attendanceSegments = [
     { label: 'נוכחים', color: '#16a34a', value: present },
-    { label: 'נעדרים', color: '#dc2626', value: absent },
+    { label: 'חסרים', color: '#dc2626', value: absent },
   ];
 
   // ----- Events per month -----
@@ -364,7 +364,7 @@ function Charts() {
 
         {/* Attendance present vs absent. */}
         <div className="chart-card">
-          <h3>נוכחות (נוכחים מול נעדרים)</h3>
+          <h3>נוכחות (נוכחים מול חסרים)</h3>
           <Donut segments={attendanceSegments} />
         </div>
 
