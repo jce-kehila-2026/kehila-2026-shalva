@@ -13,9 +13,6 @@ import { collection, doc, getDocs, query, where, writeBatch } from 'firebase/fir
 // Our Firestore database instance.
 import { db } from '../../firebase';
 
-// Static fallback group names (when the live groups list is empty).
-import { GROUP_NAMES } from '../../utils/groupOptions';
-
 // Shared display-name helper.
 import { getDisplayName } from '../../utils/people';
 
@@ -158,16 +155,11 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
         ...documentSnapshot.data(),
       }));
 
-      if (groupsData.length > 0) {
-        setGroups(groupsData);
-        return;
-      }
+      // Live groups only — the picker always mirrors the real system.
+      setGroups(groupsData);
     } catch (error) {
       console.error('Error loading groups:', error);
     }
-
-    // Fallback: build groups from the static names.
-    setGroups(GROUP_NAMES.map((groupName) => ({ id: groupName, groupName })));
   }, []);
 
   // Load the selected group's volunteers, pre-filled with the week's saved marks.

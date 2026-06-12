@@ -21,9 +21,6 @@ import {
 // Our Firestore database instance.
 import { db } from '../../firebase'
 
-// Default group names (fallback when the live groups list is empty).
-import { GROUP_NAMES } from '../../utils/groupOptions'
-
 // Date picker used for the event date field.
 import BirthDatePicker from '../shared/BirthDatePicker/BirthDatePicker'
 
@@ -257,11 +254,7 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
         console.error('Error loading groups:', groupsError)
       }
 
-      // Fall back to the static list if nothing came back.
-      if (names.length === 0) {
-        names = [...GROUP_NAMES]
-      }
-
+      // Live groups only — selection lists always mirror the real system.
       // Store a de-duplicated list.
       if (active) {
         setGroupOptions([...new Set(names)])

@@ -533,7 +533,11 @@ function GuideManagement() {
             </button>
             <button
               className="mgmt-secondary-btn"
-              onClick={() => downloadGuidesTemplate(groupsList)}
+              onClick={async () => {
+                // Pull the groups fresh so the template matches the system NOW.
+                const snapshot = await getDocs(collection(db, 'groups'));
+                downloadGuidesTemplate(snapshot.docs.map((groupDoc) => groupDoc.data()));
+              }}
             >
               ⬇️ הורדת תבנית אקסל
             </button>

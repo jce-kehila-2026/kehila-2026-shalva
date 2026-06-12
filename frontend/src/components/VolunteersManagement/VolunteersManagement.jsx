@@ -424,10 +424,14 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
               {isImporting ? '⏳ מייבא...' : '📥 ייבא מאקסל'}
             </button>
 
-            {/* Downloads the ready-to-fill import template (groups + times included). */}
+            {/* Downloads the import template. The groups list is pulled fresh
+                at click time, so the file always matches the system NOW. */}
             <button
               className="mgmt-secondary-btn"
-              onClick={() => downloadVolunteersTemplate(groups)}
+              onClick={async () => {
+                const snapshot = await getDocs(collection(db, 'groups'));
+                downloadVolunteersTemplate(snapshot.docs.map((groupDoc) => groupDoc.data()));
+              }}
             >
               ⬇️ הורדת תבנית אקסל
             </button>

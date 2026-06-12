@@ -660,7 +660,17 @@ const GroupManagement = ({ registerBack }) => {
             </button>
             <button
               className="mgmt-secondary-btn"
-              onClick={() => downloadGroupsTemplate(guides, volunteers)}
+              onClick={async () => {
+                // Pull guides + volunteers fresh at click time.
+                const [usersSnap, volunteersSnap] = await Promise.all([
+                  getDocs(collection(db, 'users')),
+                  getDocs(collection(db, 'volunteers')),
+                ]);
+                const freshGuides = usersSnap.docs
+                  .map(toRecord)
+                  .filter((user) => user.role === 'guide' && !user.disabled);
+                downloadGroupsTemplate(freshGuides, volunteersSnap.docs.map(toRecord));
+              }}
             >
               ⬇️ הורדת תבנית אקסל
             </button>
