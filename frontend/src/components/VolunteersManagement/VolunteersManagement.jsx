@@ -8,9 +8,6 @@ import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 // Firestore helpers for reading and writing documents.
 import { addDoc, collection, doc, getDocs, query, updateDoc, where, writeBatch } from 'firebase/firestore';
 
-// Excel parsing library
-import * as XLSX from 'xlsx';
-
 // Our Firestore database instance.
 import { db } from '../../firebase';
 
@@ -231,6 +228,10 @@ const VolunteersManagement = ({ initialGroup = null, onBack }) => {
     setIsImporting(true);
 
     try {
+      // Load the Excel parser on demand — only admins importing a file pay
+      // for it, so the main bundle stays small for everyone else.
+      const XLSX = await import('xlsx');
+
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data, { type: 'array' });
       
