@@ -176,8 +176,15 @@ function AdminOverview({ onNavigate }) {
         })
         .filter(Boolean);
 
-      // Publish everything to state.
-      setData({ groups, events, pendingCount, birthdaysToday });
+      // Publish everything to state (counts feed the top stats row).
+      setData({
+        groups,
+        events,
+        pendingCount,
+        birthdaysToday,
+        volunteerCount: volunteers.length,
+        guideCount: guides.length,
+      });
       setHadError(anyError);
       setLoading(false);
     };
@@ -343,10 +350,55 @@ function AdminOverview({ onNavigate }) {
         </div>
       )}
 
-      {/* Admin home: a big calendar (right) + חמ״ל (left) on top, birthdays below. */}
+      {/* Admin home: the data cards on top; calendar + חמ״ל below them, and
+          the birthdays block at the bottom. */}
       <div className="ao-home">
 
-        {/* Top row: the big events calendar, then the חמ״ל activity beside it. */}
+        {/* ---------- Top stats row: every data card, side by side ---------- */}
+        <div className="ao-stats-row">
+
+          {/* Pending registrations — opens the registrations screen. */}
+          <button
+            type="button"
+            className="ao-stat-card is-pending"
+            onClick={() => onNavigate && onNavigate('registrations')}
+          >
+            <span className="ao-stat-num">{data.pendingCount}</span>
+            <span className="ao-stat-label">ממתינים לאישור</span>
+          </button>
+
+          {/* Volunteer count — opens volunteer management. */}
+          <button
+            type="button"
+            className="ao-stat-card"
+            onClick={() => onNavigate && onNavigate('volunteers')}
+          >
+            <span className="ao-stat-num">{data.volunteerCount}</span>
+            <span className="ao-stat-label">מתנדבים</span>
+          </button>
+
+          {/* Guide count — opens guide management. */}
+          <button
+            type="button"
+            className="ao-stat-card"
+            onClick={() => onNavigate && onNavigate('guides')}
+          >
+            <span className="ao-stat-num">{data.guideCount}</span>
+            <span className="ao-stat-label">מדריכים</span>
+          </button>
+
+          {/* Group count — opens group management. */}
+          <button
+            type="button"
+            className="ao-stat-card"
+            onClick={() => onNavigate && onNavigate('groups')}
+          >
+            <span className="ao-stat-num">{data.groups.length}</span>
+            <span className="ao-stat-label">קבוצות</span>
+          </button>
+        </div>
+
+        {/* Below the cards: the big events calendar, then the חמ״ל beside it. */}
         <div className="ao-home-top">
 
           {/* ---------- Events calendar (large) ---------- */}
@@ -438,18 +490,9 @@ function AdminOverview({ onNavigate }) {
           {/* חמ״ל activity — the left column beside the calendar. The pending
               count is passed in as the first stat card with the other counters. */}
           <div className="ao-home-acc">
+            {/* The pending-registrations card moved to the top stats row. */}
             <ActivityCommandCenter
               reloadToken={accReloadToken}
-              leadingCard={(
-                <button
-                  type="button"
-                  className="acc-card acc-card--pending"
-                  onClick={() => onNavigate && onNavigate('registrations')}
-                >
-                  <span className="acc-card-num">{data.pendingCount}</span>
-                  <span className="acc-card-label">ממתינים לאישור</span>
-                </button>
-              )}
               onNavigate={onNavigate}
             />
           </div>

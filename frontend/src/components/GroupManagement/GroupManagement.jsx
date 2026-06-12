@@ -20,6 +20,9 @@ import GroupDetails from './GroupDetails';
 // The styled cover-image picker used in the create / edit modals.
 import CoverImageField from './CoverImageField';
 
+// The closed list of activity times (בוקר / צהריים / ערב).
+import { GROUP_TIMES } from '../../utils/groupOptions';
+
 // Shared management-screen styles + this screen's own styles.
 import '../shared/ManagementScreen.css';
 import './GroupManagement.css';
@@ -621,16 +624,19 @@ const GroupManagement = () => {
                 />
               </div>
 
-              {/* Meeting time. */}
+              {/* Activity time — a closed list, not free text. */}
               <div className="form-group">
-                <label>שעת מפגש:</label>
-                <input
-                  type="text"
+                <label>זמן פעילות:</label>
+                <select
                   className="styled-input full-width-input"
                   value={newGroupTime}
                   onChange={(event) => setNewGroupTime(event.target.value)}
-                  placeholder="לדוגמה: יום ראשון 17:00"
-                />
+                >
+                  <option value="">-- בחר זמן פעילות --</option>
+                  {GROUP_TIMES.map((timeOption) => (
+                    <option key={timeOption} value={timeOption}>{timeOption}</option>
+                  ))}
+                </select>
               </div>
 
               {/* Group description (shown on the public home; admin-editable). */}
@@ -715,16 +721,24 @@ const GroupManagement = () => {
                 />
               </div>
 
-              {/* Meeting time. */}
+              {/* Activity time — the same closed list as the create modal. The
+                  current value is kept as an extra option if it's a legacy
+                  free-text time, so editing never silently erases it. */}
               <div className="form-group">
-                <label>שעת מפגש:</label>
-                <input
-                  type="text"
+                <label>זמן פעילות:</label>
+                <select
                   className="styled-input full-width-input"
                   value={editForm.time}
                   onChange={(event) => setEditForm({ ...editForm, time: event.target.value })}
-                  placeholder="לדוגמה: יום ראשון 17:00"
-                />
+                >
+                  <option value="">-- בחר זמן פעילות --</option>
+                  {editForm.time && !GROUP_TIMES.includes(editForm.time) && (
+                    <option value={editForm.time}>{editForm.time} (ערך ישן)</option>
+                  )}
+                  {GROUP_TIMES.map((timeOption) => (
+                    <option key={timeOption} value={timeOption}>{timeOption}</option>
+                  ))}
+                </select>
               </div>
 
               {/* Group description (shown on the public home; admin-editable). */}

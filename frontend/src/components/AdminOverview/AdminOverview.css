@@ -1554,3 +1554,53 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ---------- Top stats row (the data cards moved above everything) ---------- */
+
+/* Responsive card row: wraps on narrow screens. */
+.ao-stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+/* One stat card — clickable, links to the matching management screen. */
+.ao-stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 18px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ao-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* The big number. */
+.ao-stat-num {
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--brand-600);
+  line-height: 1.1;
+}
+
+/* The label under the number. */
+.ao-stat-label {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+/* Pending registrations stand out (they need action). */
+.ao-stat-card.is-pending .ao-stat-num {
+  color: #d97706;
+}

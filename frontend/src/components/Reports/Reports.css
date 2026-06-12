@@ -543,3 +543,67 @@
     color: #0f172a;
   }
 }
+
+/* ---------- Step 1: the report picker ---------- */
+
+.reports-picker {
+  padding: 36px 32px;
+  text-align: center;
+}
+
+.reports-picker-title {
+  margin: 0 0 4px;
+  font-size: 26px;
+}
+
+.reports-picker-sub {
+  color: var(--text-muted, #64748b);
+  margin: 0 0 22px;
+  font-size: 14.5px;
+}
+
+/* One card per report type. */
+.reports-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.reports-picker-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 26px 18px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.reports-picker-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 30px rgba(79, 70, 229, 0.14);
+}
+
+.reports-picker-emoji { font-size: 34px; }
+.reports-picker-name { font-size: 18px; font-weight: 800; }
+.reports-picker-desc { font-size: 13px; color: var(--text-muted, #64748b); }
+
+/* ---------- Step 3: export buttons — small, on the left ---------- */
+
+/* In RTL, flex-end is the LEFT side of the row. */
+.reports-actions {
+  justify-content: flex-end;
+}
+
+.reports-actions button {
+  font-size: 12.5px;
+  padding: 6px 14px;
+}
+
+/* The back-to-picker button stands apart from the report tabs. */
+.reports-back-btn {
+  opacity: 0.85;
+}

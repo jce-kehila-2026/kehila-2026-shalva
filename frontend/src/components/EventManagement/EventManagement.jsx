@@ -163,9 +163,9 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false }
   // Search text used to filter the event table.
   const [searchTerm, setSearchTerm] = useState('')
 
-  // Whether the events list is revealed (admins open it with a button; it
-  // always shows for read-only viewers who have no add form).
-  const [showList, setShowList] = useState(false)
+  // Whether the add/edit form is open. The list always shows first; the form
+  // opens only via the "הוספת אירוע" button or when editing an event.
+  const [showForm, setShowForm] = useState(false)
 
   // UI state for loading, saving, and Firestore errors.
   const [loading, setLoading] = useState(true)
@@ -347,10 +347,12 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false }
         })
       }
 
-      // Reset the form back to add mode (bump the key so the date picker clears).
+      // Reset the form back to add mode (bump the key so the date picker
+      // clears) and return to the list view.
       setForm(EMPTY_FORM)
       setEditingEventId(null)
       setFormResetKey((key) => key + 1)
+      setShowForm(false)
     } catch (firebaseError) {
       // Report a failed save.
       console.error('Error saving event:', firebaseError)
@@ -367,8 +369,8 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false }
     setEditingEventId(eventToEdit.id)
     setForm(createFormFromEvent(eventToEdit))
 
-    // Close the list popup so the edit form is visible.
-    setShowList(false)
+    // Open the form pre-filled with this event.
+    setShowForm(true)
 
     // Scroll up to the form.
     window.scrollTo({
@@ -511,6 +513,17 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false }
             <span>{events.length}</span>
             <small>אירועים</small>
           </div>
+
+          {/* Opens the add-event form (the list is the default view). */}
+          {!readOnly && !showForm && (
+            <button
+              type="button"
+              className="event-management-primary-btn"
+              onClick={() => setShowForm(true)}
+            >
+              + הוספת אירוע
+            </button>
+          )}
         </header>
 
         {/* Error banner shown if the events failed to load. */}
@@ -520,8 +533,8 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false }
           </div>
         )}
 
-        {/* Add / edit event form (hidden for read-only viewers). */}
-        {!readOnly && (
+        {/* Add / edit event form — opens only via the add/edit buttons. */}
+        {!readOnly && showForm && (
         <form className="event-management-form" onSubmit={handleSubmit}>
 
           {/* Title changes between add and edit mode. */}
@@ -670,13 +683,16 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false }
               {getSubmitButtonText({ saving, isEditing })}
             </button>
 
-            {/* Reveal / hide the events list (the card grid). */}
+            {/* Close the form and return to the list. */}
             <button
               type="button"
               className="event-management-secondary-btn"
-              onClick={() => setShowList((show) => !show)}
+              onClick={() => {
+                handleCancelEdit()
+                setShowForm(false)
+              }}
             >
-              {showList ? 'הסתר רשימת אירועים' : 'רשימת אירועים'}
+              סגירה
             </button>
 
             {/* Cancel only appears while editing (spans the full row). */}
@@ -693,34 +709,8 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false }
         </form>
         )}
 
-        {/* Read-only viewers see the list inline; admins open it in a modal
-            window via the "רשימת אירועים" button. */}
-        {readOnly && eventListSection}
-
-        {!readOnly && showList && (
-          <div className="event-management-modal-overlay" onClick={() => setShowList(false)}>
-            <div
-              className="event-management-modal"
-              role="dialog"
-              aria-modal="true"
-              onClick={(event) => event.stopPropagation()}
-            >
-              {/* Sticky bar holding the close button. */}
-              <div className="event-management-modal-bar">
-                <button
-                  type="button"
-                  className="event-management-modal-close"
-                  onClick={() => setShowList(false)}
-                  aria-label="סגירה"
-                >
-                  ✕
-                </button>
-              </div>
-
-              {eventListSection}
-            </div>
-          </div>
-        )}
+        {/* The events list is the screen's main view, for everyone. */}
+        {eventListSection}
       </section>
     </main>
   )

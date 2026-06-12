@@ -2,8 +2,8 @@
 // guide makes a Firebase Auth account (via a secondary app so the admin stays
 // signed in) plus matching "users" and "guides" documents.
 
-// React hooks for state, effects and memoization.
-import { useState, useEffect, useMemo } from 'react';
+// React hooks for state, effects, memoization and refs.
+import { useState, useEffect, useMemo, useRef } from 'react';
 
 // Secondary Firebase app helpers (used to create/delete guide auth accounts).
 import { initializeApp, deleteApp } from 'firebase/app';
@@ -21,6 +21,9 @@ import { db } from '../../firebase';
 
 // Date picker for the guide's birth date.
 import BirthDatePicker from '../shared/BirthDatePicker/BirthDatePicker';
+
+// Downloads the ready-to-fill Excel template for bulk guide import.
+import { downloadGuidesTemplate } from '../../utils/excelTemplates';
 
 // Shared management-screen styles + the volunteers screen styles.
 import '../shared/ManagementScreen.css';
@@ -55,6 +58,16 @@ function GuideManagement() {
 
   // Search text for filtering the table.
   const [searchQuery, setSearchQuery] = useState('');
+
+  // The live groups list (for the Excel template + matching imported rows).
+  const [groupsList, setGroupsList] = useState([]);
+
+  // Excel import state: in-flight flag + the per-row results to show after.
+  const [isImporting, setIsImporting] = useState(false);
+  const [importResults, setImportResults] = useState(null);
+
+  // The hidden file input behind the "ייבוא מאקסל" button.
+  const importFileRef = useRef(null);
 
   // The form fields for the new / edited guide.
   const [newGuide, setNewGuide] = useState({
@@ -241,6 +254,157 @@ function GuideManagement() {
     fetchAllGuidesData();
   }, []);
 
+  // Load the groups once (used by the Excel template and row matching).
+  useEffect(() => {
+    const fetchGroups = async () => {
+      try {
+        const snapshot = await getDocs(collection(db, 'groups'));
+        setGroupsList(snapshot.docs.map((groupDoc) => ({ id: groupDoc.id, ...groupDoc.data() })));
+      } catch (error) {
+        console.error('שגיאה בטעינת קבוצות:', error);
+      }
+    };
+
+    fetchGroups();
+  }, []);
+
+  // A random temporary password for an imported guide (letters + digits, 10
+  // chars + a symbol so Firebase's strength rules pass). Shown once after the
+  // import; the guide should change it via "שכחתי סיסמה".
+  const generateTempPassword = () => {
+    const characters = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    let password = '';
+    for (let index = 0; index < 10; index += 1) {
+      password += characters[Math.floor(Math.random() * characters.length)];
+    }
+    return `${password}!`;
+  };
+
+  // Bulk-import guides from an Excel file. Each valid row gets an Auth
+  // account (temporary password), a users/{uid} profile and a guides/{uid}
+  // mapping; a matched group also gets its guideId/guideName updated.
+  const handleGuidesFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setIsImporting(true);
+
+    // One secondary app for the whole import, torn down at the end.
+    let secondaryApp = null;
+    const results = [];
+
+    try {
+      // Parse the workbook (the Excel library loads on demand).
+      const XLSX = await import('xlsx');
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+
+      secondaryApp = initializeApp(firebaseConfig, 'SecondaryImportApp');
+      const secondaryAuth = getAuth(secondaryApp);
+
+      for (const row of rows) {
+        const firstName = String(row['שם פרטי'] || row['firstName'] || '').trim();
+        const lastName = String(row['שם משפחה'] || row['lastName'] || '').trim();
+        const email = String(row['אימייל'] || row['email'] || '').trim();
+        const phone = String(row['טלפון'] || row['phone'] || '').trim();
+        const birthDate = String(row['תאריך לידה'] || row['birthDate'] || '').trim();
+        const groupNameRaw = String(row['קבוצה'] || row['group'] || '').trim();
+        const activityTime = String(row['זמן פעילות'] || row['activityTime'] || '').trim();
+
+        const displayName = `${firstName} ${lastName}`.trim() || email;
+
+        // An email is required — it's the login identifier.
+        if (!email) {
+          if (firstName || lastName) {
+            results.push({ name: displayName, email: '', password: '', error: 'חסר אימייל' });
+          }
+          continue;
+        }
+
+        // Match the group column against the live groups list.
+        const matchedGroup = groupsList.find(
+          (group) => (group.groupName || group.name || '').trim() === groupNameRaw,
+        );
+
+        const tempPassword = generateTempPassword();
+
+        try {
+          // Create the login account on the secondary app.
+          const credential = await createUserWithEmailAndPassword(secondaryAuth, email, tempPassword);
+          const newUid = credential.user.uid;
+
+          // Profile + group mapping (+ group back-reference), one atomic batch.
+          const batch = writeBatch(db);
+
+          batch.set(doc(db, 'users', newUid), {
+            firstName,
+            lastName,
+            email,
+            phone,
+            birthDate,
+            role: 'guide',
+          });
+
+          batch.set(doc(db, 'guides', newUid), {
+            groupId: matchedGroup?.id || '',
+            groupName: matchedGroup?.groupName || matchedGroup?.name || 'Unassigned',
+            activityTime,
+          });
+
+          if (matchedGroup) {
+            batch.update(doc(db, 'groups', matchedGroup.id), {
+              guideId: newUid,
+              guideName: displayName,
+            });
+          }
+
+          await batch.commit();
+
+          results.push({ name: displayName, email, password: tempPassword, error: '' });
+        } catch (rowError) {
+          // Most common: the email is already registered.
+          console.error('שגיאה בייבוא מדריך:', email, rowError);
+          results.push({ name: displayName, email, password: '', error: rowError.message });
+        }
+      }
+
+      if (results.length === 0) {
+        alert('לא נמצאו שורות תקינות בקובץ. ודאו שקיימת עמודת "אימייל".');
+      } else {
+        // Show the results modal (with the temporary passwords to hand out).
+        setImportResults(results);
+        await fetchAllGuidesData();
+      }
+    } catch (error) {
+      console.error('שגיאה בייבוא קובץ מדריכים:', error);
+      alert('אירעה שגיאה בייבוא הקובץ. ודאו שזהו קובץ אקסל תקין.');
+    } finally {
+      if (secondaryApp) {
+        await deleteApp(secondaryApp);
+      }
+      setIsImporting(false);
+      if (importFileRef.current) {
+        importFileRef.current.value = null;
+      }
+    }
+  };
+
+  // Copy all the imported credentials to the clipboard, one line per guide.
+  const handleCopyImportResults = async () => {
+    const created = (importResults || []).filter((result) => !result.error);
+
+    const text = created
+      .map((result) => `${result.name} — ${result.email} — סיסמה זמנית: ${result.password}`)
+      .join('\n');
+
+    try {
+      await navigator.clipboard.writeText(text);
+      alert('פרטי ההתחברות הועתקו!');
+    } catch {
+      alert('ההעתקה נכשלה — העתיקו ידנית מהטבלה.');
+    }
+  };
+
   // Update one form field by its input name.
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -351,6 +515,29 @@ function GuideManagement() {
             <button className="mgmt-primary-btn" onClick={handleOpenAdd}>
               + הוסף מדריך חדש
             </button>
+
+            {/* Hidden file input + the Excel import / template buttons. */}
+            <input
+              type="file"
+              accept=".xlsx, .xls, .csv"
+              style={{ display: 'none' }}
+              ref={importFileRef}
+              onChange={handleGuidesFileUpload}
+            />
+            <button
+              className="mgmt-secondary-btn"
+              onClick={() => importFileRef.current?.click()}
+              disabled={isImporting}
+            >
+              {isImporting ? '⏳ מייבא...' : '📥 ייבוא מאקסל'}
+            </button>
+            <button
+              className="mgmt-secondary-btn"
+              onClick={() => downloadGuidesTemplate(groupsList)}
+            >
+              ⬇️ הורדת תבנית אקסל
+            </button>
+
             <input
               type="search"
               className="mgmt-search"
@@ -361,6 +548,54 @@ function GuideManagement() {
           </div>
 
         </section>
+
+        {/* Import results modal — shows each guide's temporary password. */}
+        {importResults && (
+          <div className="modal-overlay" role="dialog" aria-modal="true">
+            <div className="modal-content" style={{ maxWidth: '640px' }}>
+              <div className="modal-header">תוצאות ייבוא מדריכים</div>
+
+              <p>
+                אלו הסיסמאות הזמניות שנוצרו — העתיקו ושלחו לכל מדריך.
+                מומלץ שכל מדריך יחליף סיסמה דרך "שכחתי סיסמה" בכניסה הראשונה.
+              </p>
+
+              <div className="mgmt-table-wrap">
+                <table className="mgmt-table">
+                  <thead>
+                    <tr>
+                      <th>שם</th>
+                      <th>אימייל</th>
+                      <th>סיסמה זמנית / שגיאה</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importResults.map((result, index) => (
+                      <tr key={index}>
+                        <td data-label="שם">{result.name}</td>
+                        <td data-label="אימייל" dir="ltr">{result.email}</td>
+                        <td data-label="סיסמה זמנית / שגיאה">
+                          {result.error
+                            ? <span style={{ color: '#dc2626' }}>{result.error}</span>
+                            : <code dir="ltr">{result.password}</code>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="modal-actions" style={{ marginTop: '16px' }}>
+                <button type="button" className="btn btn-success" onClick={handleCopyImportResults}>
+                  📋 העתקת כל פרטי ההתחברות
+                </button>
+                <button type="button" className="btn btn-outline" onClick={() => setImportResults(null)}>
+                  סגירה
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Add / edit guide modal — same style as the volunteers screen. */}
         {showAddForm && (

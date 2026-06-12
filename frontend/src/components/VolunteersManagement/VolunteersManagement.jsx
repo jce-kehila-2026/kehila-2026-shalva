@@ -20,6 +20,9 @@ import WhatsAppButton from '../shared/WhatsAppButton/WhatsAppButton';
 // Builds the greeting text for WhatsApp.
 import { greetingMessage } from '../../utils/whatsapp';
 
+// Downloads the ready-to-fill Excel template for bulk volunteer import.
+import { downloadVolunteersTemplate } from '../../utils/excelTemplates';
+
 // Shared management-screen styles + this screen's own styles.
 import '../shared/ManagementScreen.css';
 import './VolunteersManagement.css';
@@ -283,6 +286,16 @@ const VolunteersManagement = ({ initialGroup = null, onBack }) => {
         const experience = String(row['ניסיון'] || row['experience'] || '').trim();
         const school = String(row['בית ספר'] || row['school'] || '').trim();
 
+        // Group column: match the name against the live groups list so the
+        // volunteer gets a real groupId (falls back to the locked group).
+        const groupNameRaw = String(row['קבוצה'] || row['group'] || '').trim();
+        const matchedGroup = groups.find(
+          (group) => (group.groupName || group.name || '').trim() === groupNameRaw,
+        );
+
+        // Activity time column (בוקר / צהריים / ערב).
+        const activityTime = String(row['זמן פעילות'] || row['activityTime'] || '').trim();
+
         volunteersToAdd.push({
           name,
           firstName,
@@ -295,8 +308,11 @@ const VolunteersManagement = ({ initialGroup = null, onBack }) => {
           email,
           experience,
           school,
-          groupId: passedGroup?.id || '',
-          groupName: passedGroup?.groupName || '',
+          activityTime,
+          groupId: matchedGroup?.id || passedGroup?.id || '',
+          groupName:
+            matchedGroup?.groupName || matchedGroup?.name ||
+            passedGroup?.groupName || groupNameRaw || '',
           createdAt: new Date(),
         });
       });
@@ -376,6 +392,14 @@ const VolunteersManagement = ({ initialGroup = null, onBack }) => {
               disabled={isImporting}
             >
               {isImporting ? '⏳ מייבא...' : '📥 ייבא מאקסל'}
+            </button>
+
+            {/* Downloads the ready-to-fill import template (groups + times included). */}
+            <button
+              className="mgmt-secondary-btn"
+              onClick={() => downloadVolunteersTemplate(groups)}
+            >
+              ⬇️ הורדת תבנית אקסל
             </button>
 
             <input

@@ -519,12 +519,16 @@ export default function Reports() {
   // UI states for loading, errors, selected tab, and search.
   const [loading, setLoading] = useState(true)
   const [errors, setErrors] = useState([])
-  const [activeReport, setActiveReport] = useState(REPORT_TYPES.EVENTS)
+  // Step 1 state: no report chosen yet — the picker screen shows first.
+  const [activeReport, setActiveReport] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
 
   // Date-range filter (inclusive). Empty strings mean "no bound on that side".
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
+
+  // Group filter ('' means all groups).
+  const [groupFilter, setGroupFilter] = useState('')
 
 
   // Load report data once when the screen opens.
@@ -611,13 +615,18 @@ export default function Reports() {
     // Normalize the search text.
     const search = searchTerm.trim().toLowerCase()
 
+    // Apply the group filter first (when one is chosen).
+    const groupScopedEvents = groupFilter
+      ? dateFilteredEvents.filter((event) => getEventGroup(event) === groupFilter)
+      : dateFilteredEvents
+
     // No search: show everything in the date range.
     if (!search) {
-      return dateFilteredEvents
+      return groupScopedEvents
     }
 
     // Match the search against the event's combined text.
-    return dateFilteredEvents.filter((event) => {
+    return groupScopedEvents.filter((event) => {
       const text = [
         event.name,
         event.date,
@@ -630,30 +639,40 @@ export default function Reports() {
 
       return text.includes(search)
     })
-  }, [dateFilteredEvents, searchTerm])
+  }, [dateFilteredEvents, searchTerm, groupFilter])
 
   // Group rows filtered by group name.
   const filteredGroups = useMemo(() => {
     const search = searchTerm.trim().toLowerCase()
 
+    // Group filter narrows to a single group row.
+    const scopedGroups = groupFilter
+      ? groupRows.filter((group) => group.name === groupFilter)
+      : groupRows
+
     if (!search) {
-      return groupRows
+      return scopedGroups
     }
 
-    return groupRows.filter((group) =>
+    return scopedGroups.filter((group) =>
       group.name.toLowerCase().includes(search),
     )
-  }, [groupRows, searchTerm])
+  }, [groupRows, searchTerm, groupFilter])
 
   // Attendance rows filtered by date or group name.
   const filteredAttendance = useMemo(() => {
     const search = searchTerm.trim().toLowerCase()
 
+    // Group filter keeps only that group's meetings.
+    const scopedAttendance = groupFilter
+      ? attendanceRows.filter((attendanceItem) => attendanceItem.group === groupFilter)
+      : attendanceRows
+
     if (!search) {
-      return attendanceRows
+      return scopedAttendance
     }
 
-    return attendanceRows.filter((attendanceItem) => {
+    return scopedAttendance.filter((attendanceItem) => {
       const text = [
         attendanceItem.date,
         attendanceItem.group,
@@ -663,7 +682,7 @@ export default function Reports() {
 
       return text.includes(search)
     })
-  }, [attendanceRows, searchTerm])
+  }, [attendanceRows, searchTerm, groupFilter])
 
   // Open the browser print dialog (print styles live in the CSS file).
   const handleExportPdf = () => {
@@ -860,6 +879,41 @@ export default function Reports() {
     return renderEventsReport()
   }
 
+  // ----- Step 1: pick a report (nothing chosen yet) -----
+  if (!activeReport) {
+    return (
+      <main className="reports-container" dir="rtl">
+        <section className="reports-card reports-picker">
+
+          <h1 className="reports-picker-title">בחירת דוח</h1>
+          <p className="reports-picker-sub">
+            שלב 1: בוחרים דוח · שלב 2: מסננים (תאריכים / קבוצה) · שלב 3: מייצאים או מדפיסים
+          </p>
+
+          <div className="reports-picker-grid">
+            <button type="button" className="reports-picker-card" onClick={() => setActiveReport(REPORT_TYPES.EVENTS)}>
+              <span className="reports-picker-emoji" aria-hidden="true">📅</span>
+              <span className="reports-picker-name">דוח אירועים</span>
+              <span className="reports-picker-desc">כל האירועים: תאריך, מיקום, קבוצה וסטטוס</span>
+            </button>
+
+            <button type="button" className="reports-picker-card" onClick={() => setActiveReport(REPORT_TYPES.GROUPS)}>
+              <span className="reports-picker-emoji" aria-hidden="true">👥</span>
+              <span className="reports-picker-name">דוח קבוצות</span>
+              <span className="reports-picker-desc">סיכום לכל קבוצה: מתנדבים, אירועים ונוכחות</span>
+            </button>
+
+            <button type="button" className="reports-picker-card" onClick={() => setActiveReport(REPORT_TYPES.ATTENDANCE)}>
+              <span className="reports-picker-emoji" aria-hidden="true">✅</span>
+              <span className="reports-picker-name">דוח נוכחות</span>
+              <span className="reports-picker-desc">מפגש-מפגש: נוכחים, חסרים ולא ידוע</span>
+            </button>
+          </div>
+        </section>
+      </main>
+    )
+  }
+
   return (
     <main className="reports-container" dir="rtl">
       <section className="reports-card">
@@ -881,6 +935,10 @@ export default function Reports() {
 
         {/* Report names (tabs) at the top — pick which report to view. */}
         <div className="reports-tabs">
+          {/* Back to the report picker (step 1). */}
+          <button type="button" className="reports-back-btn" onClick={() => setActiveReport(null)}>
+            ↩ כל הדוחות
+          </button>
           <button
             type="button"
             className={activeReport === REPORT_TYPES.EVENTS ? 'active' : ''}
@@ -906,14 +964,18 @@ export default function Reports() {
           </button>
         </div>
 
-        {/* Export actions — directly below the report names. */}
+        {/* Step 3 — export actions: small buttons, aligned to the left. */}
         <div className="reports-actions">
-          <button type="button" onClick={handleExportPdf}>
-            🖨️ ייצוא PDF
+          <button type="button" onClick={handleExportPdf} title="נפתח חלון הדפסה — בחרו 'שמירה כ-PDF'">
+            📄 ייצוא PDF
           </button>
 
           <button type="button" onClick={handleExportExcel}>
             📊 ייצוא Excel
+          </button>
+
+          <button type="button" onClick={() => window.print()}>
+            🖨️ הדפסה
           </button>
         </div>
 
@@ -941,6 +1003,21 @@ export default function Reports() {
               value={toDate}
               onChange={(event) => setToDate(event.target.value)}
             />
+          </div>
+
+          {/* Group filter — narrows the report to one group. */}
+          <div className="reports-filter-field">
+            <label htmlFor="reports-group">קבוצה</label>
+            <select
+              id="reports-group"
+              value={groupFilter}
+              onChange={(event) => setGroupFilter(event.target.value)}
+            >
+              <option value="">כל הקבוצות</option>
+              {groupRows.map((group) => (
+                <option key={group.name} value={group.name}>{group.name}</option>
+              ))}
+            </select>
           </div>
 
           {/* Clear button, shown only when a range is set. */}

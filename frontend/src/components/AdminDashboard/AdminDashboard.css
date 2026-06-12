@@ -1,27 +1,99 @@
-/* AdminDashboard — shell layout (sidebar + content) and sidebar styling. */
+/* AdminDashboard — shell layout, the fixed hamburger button, and the
+   navigation drawer (the sidebar now slides in on every screen size). */
 
-/* Two-column shell: sidebar on the right (RTL start), content fills the rest. */
+/* Single-column shell: the drawer floats above, so content gets full width. */
 .admin-shell {
   display: flex;
-  align-items: flex-start;
-  gap: 20px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
 }
 
-/* ---------- Sidebar ---------- */
+/* Keep the off-screen drawer from creating horizontal scroll. */
+html,
+body {
+  overflow-x: hidden;
+}
 
-/* The persistent navigation panel. */
-.admin-sidebar {
-  flex: 0 0 230px;
-  position: sticky;
+/* ---------- Hamburger button (fixed, top-right, always visible) ---------- */
+
+.admin-nav-toggle {
+  position: fixed;
   top: 16px;
-  background: var(--surface);
+  right: 16px;
+  z-index: 1300;
+
+  /* A round, modern floating button. */
+  width: 48px;
+  height: 48px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: 50%;
+  background: var(--surface);
   box-shadow: var(--shadow-sm);
-  padding: 16px 12px;
+  cursor: pointer;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 
-/* Sidebar heading. */
+.admin-nav-toggle:hover {
+  box-shadow: var(--shadow-lg);
+  transform: scale(1.05);
+}
+
+/* The three bars. */
+.admin-nav-toggle-bar {
+  width: 20px;
+  height: 2.5px;
+  border-radius: 2px;
+  background: var(--brand-700);
+  transition: transform 0.25s ease, opacity 0.2s ease;
+}
+
+/* Open state: the bars animate into an X. */
+.admin-nav-toggle.is-open .admin-nav-toggle-bar:nth-child(1) {
+  transform: translateY(7.5px) rotate(45deg);
+}
+.admin-nav-toggle.is-open .admin-nav-toggle-bar:nth-child(2) {
+  opacity: 0;
+}
+.admin-nav-toggle.is-open .admin-nav-toggle-bar:nth-child(3) {
+  transform: translateY(-7.5px) rotate(-45deg);
+}
+
+/* Shift the shared header's content away from the corner the button owns. */
+.authenticated-layout:has(.admin-shell) .authenticated-header {
+  padding-right: 76px;
+}
+
+/* ---------- Navigation drawer ---------- */
+
+/* Slides in from the right (RTL start) on every screen size. */
+.admin-sidebar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(80vw, 300px);
+  z-index: 1200;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  padding: 74px 12px 16px; /* top padding clears the fixed hamburger */
+  overflow-y: auto;
+  transform: translateX(100%);
+  transition: transform 0.25s ease;
+}
+
+/* Open state slides the drawer into view. */
+.admin-sidebar.is-open {
+  transform: translateX(0);
+}
+
+/* Drawer heading. */
 .admin-sidebar-title {
   font-size: 16px;
   font-weight: 800;
@@ -87,91 +159,22 @@
 
 /* ---------- Content pane ---------- */
 
-/* The selected area fills the rest of the row. */
+/* The selected area fills the full width below the floating button. */
 .admin-content {
   flex: 1 1 auto;
   min-width: 0;
 }
 
-/* ---------- Mobile navigation drawer ---------- */
-
-/* The menu button is hidden on desktop (the sidebar is always visible). */
-.admin-nav-toggle {
-  display: none;
-}
-
-/* On phones the sidebar becomes a drawer opened by a button. */
-@media (max-width: 820px) {
-
-  /* The drawer is positioned off-screen (translateX) when closed; clip the
-     root so that doesn't create horizontal scroll / shift the page content. */
-  html,
-  body {
-    overflow-x: hidden;
-  }
-
-  /* Stack: menu button on top, content below. align-items must be stretch so
-     the content fills the full width (the desktop rule uses flex-start, which
-     in a column shrinks children to their content width). */
-  .admin-shell {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 14px;
-  }
-
-  /* Show the menu button. */
-  .admin-nav-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    align-self: flex-start;
-    padding: 10px 18px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-pill);
-    background: var(--surface);
-    color: var(--brand-700);
-    font-weight: 800;
-    font-size: 15px;
-    box-shadow: var(--shadow-sm);
-    cursor: pointer;
-  }
-
-  /* The sidebar becomes a slide-in drawer from the right (RTL start). */
-  .admin-sidebar {
-    position: fixed;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: min(80vw, 300px);
-    z-index: 1200;
-    border-radius: 0;
-    overflow-y: auto;
-    transform: translateX(100%);
-    transition: transform 0.25s ease;
-    box-shadow: var(--shadow-lg);
-  }
-
-  /* Open state slides the drawer into view. */
-  .admin-sidebar.is-open {
-    transform: translateX(0);
-  }
-
-  /* Keep the title visible inside the drawer. */
-  .admin-sidebar-title {
-    display: block;
-  }
-
-  /* Dim backdrop behind the open drawer (click to close). */
-  .admin-nav-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 1100;
-    background: rgba(15, 23, 42, 0.45);
-  }
+/* Dim backdrop behind the open drawer (click to close). */
+.admin-nav-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(15, 23, 42, 0.45);
 }
 
 /* Print / PDF export: drop the admin chrome so the exported report (or any
-   screen) prints only its content — no "מרכז ניהול" sidebar or menu button. */
+   screen) prints only its content — no drawer or menu button. */
 @media print {
   .admin-sidebar,
   .admin-nav-toggle,

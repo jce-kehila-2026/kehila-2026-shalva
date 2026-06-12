@@ -1,0 +1,99 @@
+/* Messages — styles for the compose box, audience picker and summary bar. */
+
+/* Screen title. */
+.msg-title {
+  margin: 0;
+  font-size: 24px;
+}
+
+/* Quick-template buttons above the textarea. */
+.msg-templates {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+/* The message box. */
+.msg-textarea {
+  width: 100%;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.6;
+}
+
+/* Audience mode tabs. */
+.msg-modes {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.msg-mode-btn {
+  padding: 8px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.msg-mode-btn.is-active {
+  background: var(--brand-600);
+  border-color: var(--brand-600);
+  color: #fff;
+}
+
+/* Group checkboxes. */
+.msg-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
+}
+
+.msg-group-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+/* Single-volunteer search results. */
+.msg-single {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 420px;
+}
+
+.msg-single-option {
+  text-align: right;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.msg-single-option.is-active {
+  background: var(--brand-600);
+  border-color: var(--brand-600);
+  color: #fff;
+}
+
+/* Recipient count + copy action row. */
+.msg-summary {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  font-size: 14.5px;
+}

@@ -19,6 +19,7 @@ import EventDetails from '../EventDetails/EventDetails';
 import EventManagement from '../EventManagement/EventManagement';
 import GroupManagement from '../GroupManagement/GroupManagement';
 import GuideManagement from '../GuideManagement/GuideManagement';
+import Messages from '../Messages/Messages';
 import RegistrationsManagement from '../RegistrationsManagement/RegistrationsManagement';
 import Reports from '../Reports/Reports';
 import VolunteersManagement from '../VolunteersManagement/VolunteersManagement';
@@ -37,6 +38,7 @@ const NAV_ITEMS = [
   { id: 'guides', label: 'ניהול מדריכים' },
   { id: 'events', label: 'ניהול אירועים' },
   { id: 'attendance', label: 'מעקב נוכחות' },
+  { id: 'messages', label: 'הודעות' },
   { id: 'reports', label: 'דוחות' },
   { id: 'charts', label: 'תרשימים' },
   { id: 'birthdays', label: 'ימי הולדת' },
@@ -94,6 +96,10 @@ function AdminDashboard({ currentView, setCurrentView }) {
       case 'attendance':
         return <AdminAttendance />;
 
+      // WhatsApp-based messaging hub.
+      case 'messages':
+        return <Messages />;
+
       // Reports.
       case 'reports':
         return <Reports />;
@@ -117,9 +123,18 @@ function AdminDashboard({ currentView, setCurrentView }) {
   return (
     <div className="admin-shell" dir="rtl">
 
-      {/* Mobile-only button that opens the navigation drawer. */}
-      <button type="button" className="admin-nav-toggle" onClick={() => setMobileNavOpen(true)}>
-        <span aria-hidden="true">☰</span> מרכז ניהול
+      {/* Hamburger menu — fixed at the top-right corner, always visible.
+          Opens / closes the navigation drawer (the bars animate into an X). */}
+      <button
+        type="button"
+        className={`admin-nav-toggle ${mobileNavOpen ? 'is-open' : ''}`}
+        onClick={() => setMobileNavOpen((open) => !open)}
+        aria-label={mobileNavOpen ? 'סגירת תפריט ניהול' : 'פתיחת תפריט ניהול'}
+        aria-expanded={mobileNavOpen}
+      >
+        <span className="admin-nav-toggle-bar" aria-hidden="true" />
+        <span className="admin-nav-toggle-bar" aria-hidden="true" />
+        <span className="admin-nav-toggle-bar" aria-hidden="true" />
       </button>
 
       {/* Dim backdrop behind the open mobile drawer (click to close). */}
