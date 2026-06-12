@@ -2,8 +2,8 @@
 // and the user's role, then renders the matching experience (public pages /
 // admin / guide / viewer). The shared signed-in header is rendered once here.
 
-// React hooks for state and side effects.
-import { useEffect, useState } from 'react';
+// React hooks for state, side effects and refs.
+import { useEffect, useRef, useState } from 'react';
 
 // Firebase auth helpers.
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -39,6 +39,21 @@ const ROLE_LABELS = {
 };
 
 
+// Restore a saved view from sessionStorage (so an unexpected page reload —
+// e.g. the dev server reconnecting after the tab slept — puts the user back
+// on the exact screen they were on instead of the home view).
+function restoreView(storageKey, fallback) {
+  try {
+    return sessionStorage.getItem(storageKey) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+// Auto sign-out after this much time with no user activity.
+const IDLE_LIMIT_MS = 5 * 60 * 1000;
+
+
 function App() {
   // The signed-in user (null when logged out).
   const [user, setUser] = useState(null);
@@ -46,18 +61,18 @@ function App() {
   // True while the auth session is being resolved.
   const [loading, setLoading] = useState(true);
 
-  // Which viewer tab is active.
-  const [activeScreen, setActiveScreen] = useState('users');
+  // Which viewer tab is active (restored across reloads).
+  const [activeScreen, setActiveScreen] = useState(() => restoreView('kehila.activeScreen', 'users'));
 
-  // The admin dashboard's current view.
-  const [adminView, setAdminView] = useState('overview');
+  // The admin dashboard's current view (restored across reloads).
+  const [adminView, setAdminView] = useState(() => restoreView('kehila.adminView', 'overview'));
 
   // Whether the admin navigation drawer is open (the hamburger lives in the
   // shared header, so the state is owned here).
   const [adminNavOpen, setAdminNavOpen] = useState(false);
 
-  // The guide dashboard's current view.
-  const [guideView, setGuideView] = useState('menu');
+  // The guide dashboard's current view (restored across reloads).
+  const [guideView, setGuideView] = useState(() => restoreView('kehila.guideView', 'menu'));
 
   // The event / volunteer opened in the viewer (null when none).
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -66,11 +81,30 @@ function App() {
   // Which public page is showing when logged out.
   const [publicView, setPublicView] = useState('main');
 
+  // True once the FIRST auth check finished (used to skip the full-page
+  // loader on later re-emissions, so the screen never "jumps").
+  const initialAuthResolved = useRef(false);
+
+  // Save the current view on every change, so a reload restores it.
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('kehila.activeScreen', activeScreen);
+      sessionStorage.setItem('kehila.adminView', adminView);
+      sessionStorage.setItem('kehila.guideView', guideView);
+    } catch {
+      // Storage unavailable (private mode) — navigation simply won't persist.
+    }
+  }, [activeScreen, adminView, guideView]);
+
   // Subscribe to Firebase auth changes and enrich the user with their
   // Firestore profile (role defaults to "viewer" when none is set).
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setLoading(true);
+      // Show the loader only for the very first session check; later
+      // re-emissions (token refresh / reconnect) keep the current screen.
+      if (!initialAuthResolved.current) {
+        setLoading(true);
+      }
 
       try {
         // Logged out: clear the user and show the public home.
@@ -110,6 +144,7 @@ function App() {
         console.error('Error fetching user role:', error);
         setUser(null);
       } finally {
+        initialAuthResolved.current = true;
         setLoading(false);
       }
     });
@@ -117,6 +152,42 @@ function App() {
     // Stop listening when the component unmounts.
     return () => unsubscribe();
   }, []);
+
+  // Auto sign-out after 5 minutes with no activity at all (no clicks,
+  // typing, scrolling or pointer movement), with a clear message.
+  useEffect(() => {
+    // Only track idleness while someone is signed in.
+    if (!user) return undefined;
+
+    let idleTimer;
+
+    // (Re)start the countdown; fires the sign-out when it completes.
+    const resetIdleTimer = () => {
+      window.clearTimeout(idleTimer);
+      idleTimer = window.setTimeout(async () => {
+        try {
+          await signOut(auth);
+        } catch (error) {
+          console.error('Idle sign-out failed:', error);
+        }
+        window.alert('נותקת מהמערכת עקב חוסר פעילות במשך 5 דקות.');
+      }, IDLE_LIMIT_MS);
+    };
+
+    // capture:true also catches scrolling inside inner panels ('scroll'
+    // doesn't bubble); passive keeps scrolling smooth.
+    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'wheel', 'touchstart', 'scroll'];
+    activityEvents.forEach((eventName) =>
+      window.addEventListener(eventName, resetIdleTimer, { capture: true, passive: true }));
+
+    resetIdleTimer();
+
+    return () => {
+      window.clearTimeout(idleTimer);
+      activityEvents.forEach((eventName) =>
+        window.removeEventListener(eventName, resetIdleTimer, { capture: true }));
+    };
+  }, [user]);
 
   // Sign out and reset all view state back to defaults.
   const handleLogout = async () => {

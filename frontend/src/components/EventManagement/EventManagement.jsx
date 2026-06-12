@@ -475,13 +475,15 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false }
                   </div>
                 </dl>
 
-                {/* Actions: "פרטים" opens the detail screen; edit/delete for admins. */}
+                {/* Actions. Admins manage with edit/delete only (the card
+                    already shows the details); read-only viewers keep the
+                    "פרטים" button — it's their only way into an event. */}
                 <div className="event-management-row-actions event-card-actions">
-                  <button type="button" onClick={() => handleOpenDetails(eventItem)}>
-                    פרטים
-                  </button>
-
-                  {!readOnly && (
+                  {readOnly ? (
+                    <button type="button" onClick={() => handleOpenDetails(eventItem)}>
+                      פרטים
+                    </button>
+                  ) : (
                     <>
                       <button type="button" onClick={() => handleEdit(eventItem)}>
                         עריכה

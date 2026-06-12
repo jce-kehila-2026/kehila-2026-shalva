@@ -18,26 +18,41 @@ body {
 /* ---------- Hamburger button (fixed, top-right, always visible) ---------- */
 
 /* A normal header child (App renders it first, so in RTL it's the rightmost
-   element of the bar) — flat, icon-only, scrolls with the bar. */
+   element of the bar) — bars only: no box, no background, no border, level
+   with the rest of the header's content. */
 .admin-nav-toggle {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   flex-shrink: 0;
+  align-self: center;
+  margin: 0;
+  padding: 0;
   display: inline-flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 5px;
   border: none;
-  border-radius: 10px;
+  border-radius: 0;
   background: transparent;
   box-shadow: none;
   cursor: pointer;
-  transition: background 0.15s ease;
 }
 
-.admin-nav-toggle:hover {
-  background: rgba(158, 33, 136, 0.08);
+/* No square on hover / click — only the bars themselves darken a little. */
+.admin-nav-toggle:hover .admin-nav-toggle-bar,
+.admin-nav-toggle:active .admin-nav-toggle-bar {
+  background: var(--brand-600);
+}
+
+/* No focus box after a mouse click; keyboard users still get an outline. */
+.admin-nav-toggle:focus {
+  outline: none;
+}
+
+.admin-nav-toggle:focus-visible {
+  outline: 2px solid var(--brand-600);
+  outline-offset: 3px;
 }
 
 /* The three bars. */
