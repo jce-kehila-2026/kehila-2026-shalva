@@ -31,13 +31,14 @@ function buildListsSheet(XLSX, groups) {
 }
 
 
-// Download a workbook built from a header row + one example row.
-async function downloadTemplate({ groups, fileName, sheetName, headers, exampleRow }) {
+// Download a workbook with a header row only — a completely empty template
+// to fill in (no example data, nothing from the live system).
+async function downloadTemplate({ groups, fileName, sheetName, headers }) {
   // Load the Excel library on demand (kept out of the main bundle).
   const XLSX = await import('xlsx');
 
-  // Main sheet: headers + a single example row to delete after reading.
-  const mainSheet = XLSX.utils.aoa_to_sheet([headers, exampleRow]);
+  // Main sheet: just the ordered column headers, ready for new rows.
+  const mainSheet = XLSX.utils.aoa_to_sheet([headers]);
   mainSheet['!cols'] = headers.map(() => ({ wch: 16 }));
 
   // Assemble the workbook: the fill-in sheet + the valid-values sheet.
@@ -60,11 +61,6 @@ export function downloadVolunteersTemplate(groups) {
       'שם פרטי', 'שם משפחה', 'תעודת זהות', 'טלפון', 'תאריך לידה',
       'גיל', 'כתובת', 'אימייל', 'בית ספר', 'ניסיון', 'קבוצה', 'זמן פעילות',
     ],
-    exampleRow: [
-      'דנה', 'לוי', '123456789', '052-1234567', '2006-01-15',
-      '20', 'ירושלים', 'dana@example.com', 'תיכון דוגמה', 'שנה בתנועת נוער',
-      'תותים', 'בוקר',
-    ],
   });
 }
 
@@ -77,9 +73,6 @@ export function downloadGuidesTemplate(groups) {
     sheetName: 'מדריכים',
     headers: [
       'שם פרטי', 'שם משפחה', 'אימייל', 'טלפון', 'תאריך לידה', 'קבוצה', 'זמן פעילות',
-    ],
-    exampleRow: [
-      'יוסי', 'כהן', 'yossi@example.com', '054-7654321', '1995-06-02', 'דובדבן', 'ערב',
     ],
   });
 }

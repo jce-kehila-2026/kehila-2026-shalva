@@ -607,3 +607,13 @@
 .reports-back-btn {
   opacity: 0.85;
 }
+
+/* More breathing room between the filter fields (מתאריך / עד תאריך / קבוצה). */
+.reports-filterbar {
+  gap: 22px;
+  row-gap: 14px;
+}
+
+.reports-filter-field {
+  margin-inline-end: 6px;
+}

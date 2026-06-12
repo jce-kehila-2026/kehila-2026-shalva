@@ -301,7 +301,9 @@ const GroupManagement = () => {
     setGroupToEdit(group);
     setEditForm({
       groupName: group.groupName || group.name || '',
-      time: group.time || '',
+      // Legacy free-text times (e.g. "8") are dropped — only the closed list
+      // is valid, so saving the form also cleans the old value.
+      time: GROUP_TIMES.includes(group.time) ? group.time : '',
       description: group.description || '',
       imageUrl: group.imageUrl || '',
     });
@@ -721,20 +723,16 @@ const GroupManagement = () => {
                 />
               </div>
 
-              {/* Activity time — the same closed list as the create modal. The
-                  current value is kept as an extra option if it's a legacy
-                  free-text time, so editing never silently erases it. */}
+              {/* Activity time — strictly the closed list (a legacy free-text
+                  value shows as unselected and must be replaced). */}
               <div className="form-group">
                 <label>זמן פעילות:</label>
                 <select
                   className="styled-input full-width-input"
-                  value={editForm.time}
+                  value={GROUP_TIMES.includes(editForm.time) ? editForm.time : ''}
                   onChange={(event) => setEditForm({ ...editForm, time: event.target.value })}
                 >
                   <option value="">-- בחר זמן פעילות --</option>
-                  {editForm.time && !GROUP_TIMES.includes(editForm.time) && (
-                    <option value={editForm.time}>{editForm.time} (ערך ישן)</option>
-                  )}
                   {GROUP_TIMES.map((timeOption) => (
                     <option key={timeOption} value={timeOption}>{timeOption}</option>
                   ))}

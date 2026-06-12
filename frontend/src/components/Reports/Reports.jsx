@@ -292,31 +292,6 @@ function getAttendanceDate(attendanceItem) {
 }
 
 
-// Total attendance stats (meetings + present/absent/unknown) for the summary cards.
-function calculateAttendanceStats(attendanceRecords) {
-  return attendanceRecords.reduce(
-    (summary, attendanceItem) => {
-      // Counts for this record.
-      const counts = getAttendanceCounts(attendanceItem)
-
-      // Add this record into the running totals.
-      return {
-        meetings: summary.meetings + 1,
-        present: summary.present + counts.present,
-        absent: summary.absent + counts.absent,
-        unknown: summary.unknown + counts.unknown,
-      }
-    },
-    {
-      meetings: 0,
-      present: 0,
-      absent: 0,
-      unknown: 0,
-    },
-  )
-}
-
-
 // Build one combined per-group report from volunteers, events and attendance.
 function buildGroupRows(users, events, attendanceRecords) {
   // Group name -> accumulated stats.
@@ -580,23 +555,6 @@ export default function Reports() {
     setToDate('')
   }
 
-  // Totals for the attendance summary cards (within the date range).
-  const attendanceStats = useMemo(
-    () => calculateAttendanceStats(dateFilteredAttendance),
-    [dateFilteredAttendance],
-  )
-
-  // Grand total of all attendance records.
-  const attendanceTotal =
-    attendanceStats.present +
-    attendanceStats.absent +
-    attendanceStats.unknown
-
-  // Present percentage (0 when there's nothing to divide by).
-  const attendanceRate =
-    attendanceTotal > 0
-      ? Math.round((attendanceStats.present / attendanceTotal) * 100)
-      : 0
 
   // Group report rows, derived from the (date-filtered) data.
   const groupRows = useMemo(
@@ -1035,29 +993,6 @@ export default function Reports() {
             placeholder="חיפוש בדוח הנוכחי"
             className="reports-search"
           />
-        </div>
-
-        {/* Headline summary cards. */}
-        <div className="reports-summary-grid">
-          <article className="reports-summary-card">
-            <span>{data.volunteers.length}</span>
-            <p>מתנדבים</p>
-          </article>
-
-          <article className="reports-summary-card">
-            <span>{groupRows.length}</span>
-            <p>קבוצות</p>
-          </article>
-
-          <article className="reports-summary-card">
-            <span>{dateFilteredEvents.length}</span>
-            <p>אירועים</p>
-          </article>
-
-          <article className="reports-summary-card">
-            <span>{attendanceRate}%</span>
-            <p>אחוז נוכחות</p>
-          </article>
         </div>
 
         {/* The active report table (the heading shows on the printed PDF). */}

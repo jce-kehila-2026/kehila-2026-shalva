@@ -18,36 +18,36 @@ body {
 /* ---------- Hamburger button (fixed, top-right, always visible) ---------- */
 
 .admin-nav-toggle {
+  /* Sits inside the top header bar (the header reserves this corner via the
+     padding rule below) — a flat, icon-only button, not a floating circle. */
   position: fixed;
-  top: 16px;
-  right: 16px;
+  top: 34px;
+  right: 38px;
   z-index: 1300;
 
-  /* A round, modern floating button. */
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   display: inline-flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 5px;
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
   cursor: pointer;
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  transition: background 0.15s ease;
 }
 
 .admin-nav-toggle:hover {
-  box-shadow: var(--shadow-lg);
-  transform: scale(1.05);
+  background: rgba(158, 33, 136, 0.08);
 }
 
 /* The three bars. */
 .admin-nav-toggle-bar {
-  width: 20px;
-  height: 2.5px;
+  width: 22px;
+  height: 3px;
   border-radius: 2px;
   background: var(--brand-700);
   transition: transform 0.25s ease, opacity 0.2s ease;
@@ -55,13 +55,13 @@ body {
 
 /* Open state: the bars animate into an X. */
 .admin-nav-toggle.is-open .admin-nav-toggle-bar:nth-child(1) {
-  transform: translateY(7.5px) rotate(45deg);
+  transform: translateY(8px) rotate(45deg);
 }
 .admin-nav-toggle.is-open .admin-nav-toggle-bar:nth-child(2) {
   opacity: 0;
 }
 .admin-nav-toggle.is-open .admin-nav-toggle-bar:nth-child(3) {
-  transform: translateY(-7.5px) rotate(-45deg);
+  transform: translateY(-8px) rotate(-45deg);
 }
 
 /* Shift the shared header's content away from the corner the button owns. */
