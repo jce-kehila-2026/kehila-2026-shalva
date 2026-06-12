@@ -487,7 +487,7 @@ function isWithinRange(value, fromDate, toDate) {
 
 
 // Reports screen: attendance, group and event reports with PDF / Excel export.
-export default function Reports() {
+export default function Reports({ registerBack }) {
   // Firebase data used by all reports.
   const [data, setData] = useState(EMPTY_DATA)
 
@@ -504,6 +504,18 @@ export default function Reports() {
 
   // Group filter ('' means all groups).
   const [groupFilter, setGroupFilter] = useState('')
+
+  // Dashboard back button: an open report returns to the picker first.
+  useEffect(() => {
+    if (!registerBack) return
+    registerBack(() => {
+      if (activeReport) {
+        setActiveReport(null)
+        return true
+      }
+      return false
+    })
+  }, [registerBack, activeReport])
 
 
   // Load report data once when the screen opens.

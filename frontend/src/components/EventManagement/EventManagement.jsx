@@ -150,7 +150,7 @@ function getSubmitButtonText({ saving, isEditing }) {
 
 // Event management: add, edit, delete, search and open event details.
 // `readOnly` hides all editing (used for viewers, who can only browse).
-export default function EventManagement({ onOpenEventDetails, readOnly = false }) {
+export default function EventManagement({ onOpenEventDetails, readOnly = false, registerBack }) {
   // Events loaded from Firestore.
   const [events, setEvents] = useState([])
 
@@ -166,6 +166,20 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false }
   // Whether the add/edit form is open. The list always shows first; the form
   // opens only via the "הוספת אירוע" button or when editing an event.
   const [showForm, setShowForm] = useState(false)
+
+  // Dashboard back button: an open form returns to the list first.
+  useEffect(() => {
+    if (!registerBack) return
+    registerBack(() => {
+      if (showForm) {
+        setForm(EMPTY_FORM)
+        setEditingEventId(null)
+        setShowForm(false)
+        return true
+      }
+      return false
+    })
+  }, [registerBack, showForm])
 
   // UI state for loading, saving, and Firestore errors.
   const [loading, setLoading] = useState(true)

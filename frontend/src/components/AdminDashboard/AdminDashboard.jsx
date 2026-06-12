@@ -4,7 +4,7 @@
 // no longer a separate menu entry.
 
 // React hooks for state and side effects.
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 // The admin home / overview screen (now includes the חמ״ל).
 import AdminOverview from '../AdminOverview/AdminOverview';
@@ -55,6 +55,30 @@ function AdminDashboard({ currentView, setCurrentView, navOpen = false, setNavOp
   // The screens visited before the current one (for the back button).
   const viewHistory = useRef([]);
 
+  // A screen with internal levels (an open form, a chosen report…) registers
+  // a handler here; it returns true when it consumed the back press by
+  // stepping back INSIDE the module.
+  const internalBackRef = useRef(null);
+  const registerBack = useCallback((handler) => {
+    internalBackRef.current = handler;
+  }, []);
+
+  // Back priority: 1) close an open event detail, 2) let the active screen
+  // step back internally, 3) the previous module, 4) the dashboard home.
+  const handleBack = () => {
+    if (selectedEvent) {
+      setSelectedEvent(null);
+      return;
+    }
+
+    if (internalBackRef.current && internalBackRef.current()) {
+      return;
+    }
+
+    internalBackRef.current = null;
+    setCurrentView(viewHistory.current.pop() || 'overview');
+  };
+
   // Default to the home view when nothing is selected yet.
   const activeView = currentView || 'overview';
 
@@ -71,11 +95,11 @@ function AdminDashboard({ currentView, setCurrentView, navOpen = false, setNavOp
 
       // Group management.
       case 'groups':
-        return <GroupManagement />;
+        return <GroupManagement registerBack={registerBack} />;
 
       // Volunteer management.
       case 'volunteers':
-        return <VolunteersManagement />;
+        return <VolunteersManagement registerBack={registerBack} />;
 
       // Incoming registration submissions.
       case 'registrations':
@@ -90,12 +114,12 @@ function AdminDashboard({ currentView, setCurrentView, navOpen = false, setNavOp
         return selectedEvent ? (
           <EventDetails event={selectedEvent} onBack={() => setSelectedEvent(null)} />
         ) : (
-          <EventManagement onOpenEventDetails={(eventItem) => setSelectedEvent(eventItem)} />
+          <EventManagement registerBack={registerBack} onOpenEventDetails={(eventItem) => setSelectedEvent(eventItem)} />
         );
 
       // Read-only attendance history.
       case 'attendance':
-        return <AdminAttendance />;
+        return <AdminAttendance registerBack={registerBack} />;
 
       // WhatsApp-based messaging hub.
       case 'messages':
@@ -103,7 +127,7 @@ function AdminDashboard({ currentView, setCurrentView, navOpen = false, setNavOp
 
       // Reports.
       case 'reports':
-        return <Reports />;
+        return <Reports registerBack={registerBack} />;
 
       // Charts / statistics.
       case 'charts':
@@ -149,6 +173,7 @@ function AdminDashboard({ currentView, setCurrentView, navOpen = false, setNavOp
                 if (item.id !== activeView) {
                   viewHistory.current.push(activeView);
                 }
+                internalBackRef.current = null;
                 setCurrentView(item.id);
                 setNavOpen(false);
               }}
@@ -163,16 +188,32 @@ function AdminDashboard({ currentView, setCurrentView, navOpen = false, setNavOp
       {/* The selected area renders here. */}
       <div className="admin-content">
 
-        {/* Back button — returns to the previous screen (home as fallback).
-            Hidden on the home view, where there is nowhere to go back to. */}
+        {/* Breadcrumb + back — hidden on the home view. */}
         {activeView !== 'overview' && (
-          <button
-            type="button"
-            className="admin-back-btn"
-            onClick={() => setCurrentView(viewHistory.current.pop() || 'overview')}
-          >
-            → חזור
-          </button>
+          <div className="admin-nav-row">
+            <button type="button" className="admin-back-btn" onClick={handleBack}>
+              → חזור
+            </button>
+
+            {/* Where am I: ראשי > current module (ראשי is clickable). */}
+            <nav className="admin-breadcrumb" aria-label="מיקום במערכת">
+              <button
+                type="button"
+                className="admin-crumb-link"
+                onClick={() => {
+                  internalBackRef.current = null;
+                  viewHistory.current = [];
+                  setCurrentView('overview');
+                }}
+              >
+                ראשי
+              </button>
+              <span className="admin-crumb-sep">‹</span>
+              <span className="admin-crumb-here">
+                {NAV_ITEMS.find((item) => item.id === activeView)?.label || ''}
+              </span>
+            </nav>
+          </div>
         )}
 
         {renderContent()}

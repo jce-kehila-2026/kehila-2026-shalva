@@ -47,7 +47,7 @@ const getVolunteerName = (volunteer) => (
   'מתנדב ללא שם'
 );
 
-const VolunteersManagement = ({ initialGroup = null, onBack }) => {
+const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => {
   const passedGroup = initialGroup?.id || initialGroup?.groupName ? initialGroup : null;
 
   const [volunteers, setVolunteers] = useState([]);
@@ -85,6 +85,22 @@ const VolunteersManagement = ({ initialGroup = null, onBack }) => {
   const computedAge = formData.birthDate
     ? String(computeAge(new Date(formData.birthDate)))
     : '';
+
+  // Dashboard back button: close an open card / form first, then leave.
+  useEffect(() => {
+    if (!registerBack) return;
+    registerBack(() => {
+      if (viewingVolunteer) {
+        setViewingVolunteer(null);
+        return true;
+      }
+      if (isModalOpen) {
+        setIsModalOpen(false);
+        return true;
+      }
+      return false;
+    });
+  }, [registerBack, viewingVolunteer, isModalOpen]);
 
   const fetchData = useCallback(async () => {
     try {

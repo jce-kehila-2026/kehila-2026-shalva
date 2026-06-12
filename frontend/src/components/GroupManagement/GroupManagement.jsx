@@ -84,7 +84,7 @@ const getGuideName = (guide) => {
 };
 
 
-const GroupManagement = () => {
+const GroupManagement = ({ registerBack }) => {
   // The group currently opened in the details view (null = list view).
   const [selectedGroupId, setSelectedGroupId] = useState(null);
 
@@ -96,6 +96,18 @@ const GroupManagement = () => {
   // Excel import: in-flight flag + the hidden file input.
   const [isImporting, setIsImporting] = useState(false);
   const importFileRef = useRef(null);
+
+  // Dashboard back button: close the details view first, then leave.
+  useEffect(() => {
+    if (!registerBack) return;
+    registerBack(() => {
+      if (selectedGroupId) {
+        setSelectedGroupId(null);
+        return true;
+      }
+      return false;
+    });
+  }, [registerBack, selectedGroupId]);
 
   // "Add group" form fields + modal visibility.
   const [newGroupName, setNewGroupName] = useState('');

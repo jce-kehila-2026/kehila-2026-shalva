@@ -211,3 +211,41 @@ body {
 .admin-back-btn:hover {
   background: var(--surface-2);
 }
+
+/* Back button + breadcrumb share one row above the content. */
+.admin-nav-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+/* "ראשי ‹ module" trail. */
+.admin-breadcrumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+}
+
+.admin-crumb-link {
+  border: none;
+  background: transparent;
+  color: var(--brand-700);
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.admin-crumb-link:hover {
+  text-decoration: underline;
+}
+
+.admin-crumb-sep {
+  color: var(--text-muted);
+}
+
+.admin-crumb-here {
+  color: var(--text-muted);
+  font-weight: 600;
+}

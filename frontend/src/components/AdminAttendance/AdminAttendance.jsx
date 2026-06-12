@@ -74,7 +74,7 @@ function getWeekRangeLabel(sunday) {
 }
 
 
-function AdminAttendance() {
+function AdminAttendance({ registerBack }) {
   // The raw collections.
   const [groups, setGroups] = useState([]);
   const [volunteers, setVolunteers] = useState([]);
@@ -89,6 +89,18 @@ function AdminAttendance() {
 
   // The currently selected group to view attendance for.
   const [selectedGroup, setSelectedGroup] = useState(null);
+
+  // Dashboard back button: the weekly table returns to the group list first.
+  useEffect(() => {
+    if (!registerBack) return;
+    registerBack(() => {
+      if (selectedGroup) {
+        setSelectedGroup(null);
+        return true;
+      }
+      return false;
+    });
+  }, [registerBack, selectedGroup]);
 
   // The active week's Sunday.
   const [currentWeekStart, setCurrentWeekStart] = useState(() => getStartOfWeek(new Date()));
