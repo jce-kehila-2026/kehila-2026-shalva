@@ -2,8 +2,8 @@
 // assign / remove a guide, edit a group's name and time, and open its details.
 // Data is kept in sync across the "groups" and "guides" collections.
 
-// React hooks for state, effects, memoization and stable callbacks.
-import { useCallback, useEffect, useMemo, useState } from 'react';
+// React hooks for state, effects, memoization, stable callbacks and refs.
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 
 // Firestore helpers for reading and writing documents.
 import { collection, doc, getDocs, query, setDoc, where, writeBatch } from 'firebase/firestore';
@@ -22,6 +22,9 @@ import CoverImageField from './CoverImageField';
 
 // The closed list of activity times (בוקר / צהריים / ערב).
 import { GROUP_TIMES } from '../../utils/groupOptions';
+
+// Downloads the empty groups template (dropdowns for time/guide/day).
+import { downloadGroupsTemplate } from '../../utils/excelTemplates';
 
 // Shared management-screen styles + this screen's own styles.
 import '../shared/ManagementScreen.css';
@@ -89,6 +92,10 @@ const GroupManagement = () => {
   const [groups, setGroups] = useState([]);
   const [volunteers, setVolunteers] = useState([]);
   const [guides, setGuides] = useState([]);
+
+  // Excel import: in-flight flag + the hidden file input.
+  const [isImporting, setIsImporting] = useState(false);
+  const importFileRef = useRef(null);
 
   // "Add group" form fields + modal visibility.
   const [newGroupName, setNewGroupName] = useState('');
@@ -465,6 +472,104 @@ const GroupManagement = () => {
   };
 
   // Open a group's details view.
+  // Bulk-import groups from the Excel template. Each row creates a NEW group
+  // (existing names are skipped); only valid activity times are kept, a
+  // matched guide is linked on both sides, and volunteers listed by name are
+  // assigned to the new group — all in one atomic batch.
+  const handleGroupsFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setIsImporting(true);
+
+    try {
+      // Parse the workbook (the Excel reader loads on demand).
+      const XLSX = await import('xlsx');
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+
+      // Never create a duplicate of an existing group name.
+      const existingNames = new Set(groups.map((g) => (g.groupName || g.name || '').trim()));
+
+      const batch = writeBatch(db);
+      let added = 0;
+      let skipped = 0;
+
+      rows.forEach((row) => {
+        const groupName = String(row['שם קבוצה *'] || row['שם קבוצה'] || '').trim();
+        if (!groupName) return;
+
+        if (existingNames.has(groupName)) {
+          skipped += 1;
+          return;
+        }
+        existingNames.add(groupName);
+
+        // Only the closed list of times is accepted (no "8"-style values).
+        const rawTime = String(row['זמן פעילות'] || '').trim();
+
+        // Match the responsible guide by display name.
+        const guideNameRaw = String(row['מדריך אחראי'] || '').trim();
+        const matchedGuide = guides.find((guide) => getGuideName(guide).trim() === guideNameRaw);
+
+        const newGroupRef = doc(collection(db, 'groups'));
+
+        batch.set(newGroupRef, {
+          groupName,
+          time: GROUP_TIMES.includes(rawTime) ? rawTime : '',
+          location: String(row['מיקום / חדר'] || '').trim(),
+          activityDay: String(row['יום פעילות'] || '').trim(),
+          notes: String(row['הערות'] || '').trim(),
+          guideId: matchedGuide?.id || '',
+          guideName: matchedGuide ? getGuideName(matchedGuide) : '',
+          createdAt: new Date(),
+        });
+
+        // Mirror the assignment on the guide's side (the attendance screen
+        // finds the guide's group through guides/{uid}.groupId).
+        if (matchedGuide) {
+          batch.set(
+            doc(db, 'guides', matchedGuide.id),
+            { groupId: newGroupRef.id, groupName },
+            { merge: true },
+          );
+        }
+
+        // Assign listed volunteers (comma-separated names) to the new group.
+        String(row['מתנדבים משויכים (שמות, מופרדים בפסיק)'] || row['מתנדבים משויכים'] || '')
+          .split(',')
+          .map((name) => name.trim())
+          .filter(Boolean)
+          .forEach((volunteerName) => {
+            const match = volunteers.find((volunteer) => (
+              (volunteer.name || `${volunteer.firstName || ''} ${volunteer.lastName || ''}`.trim()) === volunteerName
+            ));
+
+            if (match) {
+              batch.update(doc(db, 'volunteers', match.id), { groupId: newGroupRef.id, groupName });
+            }
+          });
+
+        added += 1;
+      });
+
+      if (added > 0) {
+        await batch.commit();
+        await fetchData();
+      }
+
+      alert(`יובאו ${added} קבוצות חדשות${skipped ? `, דולגו ${skipped} שכבר קיימות` : ''}.`);
+    } catch (error) {
+      console.error('שגיאה בייבוא קבוצות:', error);
+      alert('אירעה שגיאה בייבוא הקובץ. ודאו שזהו קובץ התבנית.');
+    } finally {
+      setIsImporting(false);
+      if (importFileRef.current) {
+        importFileRef.current.value = null;
+      }
+    }
+  };
+
   const handleViewDetails = (groupId) => {
     setSelectedGroupId(groupId);
   };
@@ -525,6 +630,28 @@ const GroupManagement = () => {
         <section className="mgmt-section">
           <div className="mgmt-toolbar">
             <button className="mgmt-primary-btn" onClick={openAddModal}>+ צור קבוצה חדשה</button>
+
+            {/* Hidden file input + Excel import / empty-template buttons. */}
+            <input
+              type="file"
+              accept=".xlsx, .xls, .csv"
+              style={{ display: 'none' }}
+              ref={importFileRef}
+              onChange={handleGroupsFileUpload}
+            />
+            <button
+              className="mgmt-secondary-btn"
+              onClick={() => importFileRef.current?.click()}
+              disabled={isImporting}
+            >
+              {isImporting ? '⏳ מייבא...' : '📥 ייבוא מאקסל'}
+            </button>
+            <button
+              className="mgmt-secondary-btn"
+              onClick={() => downloadGroupsTemplate(guides, volunteers)}
+            >
+              ⬇️ הורדת תבנית אקסל
+            </button>
             <input
               type="search"
               className="mgmt-search"

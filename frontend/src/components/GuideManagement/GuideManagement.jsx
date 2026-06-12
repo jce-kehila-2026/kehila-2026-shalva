@@ -303,9 +303,9 @@ function GuideManagement() {
       const secondaryAuth = getAuth(secondaryApp);
 
       for (const row of rows) {
-        const firstName = String(row['שם פרטי'] || row['firstName'] || '').trim();
-        const lastName = String(row['שם משפחה'] || row['lastName'] || '').trim();
-        const email = String(row['אימייל'] || row['email'] || '').trim();
+        const firstName = String(row['שם פרטי *'] || row['שם פרטי'] || row['firstName'] || '').trim();
+        const lastName = String(row['שם משפחה *'] || row['שם משפחה'] || row['lastName'] || '').trim();
+        const email = String(row['אימייל *'] || row['אימייל'] || row['email'] || '').trim();
         const phone = String(row['טלפון'] || row['phone'] || '').trim();
         const birthDate = String(row['תאריך לידה'] || row['birthDate'] || '').trim();
         const groupNameRaw = String(row['קבוצה'] || row['group'] || '').trim();

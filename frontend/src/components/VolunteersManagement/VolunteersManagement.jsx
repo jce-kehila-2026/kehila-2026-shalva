@@ -277,8 +277,8 @@ const VolunteersManagement = ({ initialGroup = null, onBack }) => {
       };
 
       jsonRows.forEach((row) => {
-        const firstName = String(row['שם פרטי'] || row['firstName'] || '').trim();
-        const lastName = String(row['שם משפחה'] || row['lastName'] || '').trim();
+        const firstName = String(row['שם פרטי *'] || row['שם פרטי'] || row['firstName'] || '').trim();
+        const lastName = String(row['שם משפחה *'] || row['שם משפחה'] || row['lastName'] || '').trim();
         
         let name = String(row['שם מלא'] || row['שם'] || row['name'] || '').trim();
         if (!name && (firstName || lastName)) {
@@ -292,7 +292,8 @@ const VolunteersManagement = ({ initialGroup = null, onBack }) => {
 
         const phone = String(row['טלפון'] || row['phone'] || '').trim();
         const idNumber = String(row['תעודת זהות'] || row['ת.ז'] || row['idNumber'] || '').trim();
-        const age = String(row['גיל'] || row['age'] || '').trim();
+        const age = String(row['גיל (אוטומטי)'] || row['גיל'] || row['age'] || '').trim();
+        const notes = String(row['הערות'] || row['notes'] || '').trim();
         const address = String(row['כתובת'] || row['address'] || '').trim();
         const email = String(row['אימייל'] || row['דוא"ל'] || row['email'] || '').trim();
         const experience = String(row['ניסיון'] || row['experience'] || '').trim();
@@ -320,6 +321,7 @@ const VolunteersManagement = ({ initialGroup = null, onBack }) => {
           email,
           experience,
           school,
+          notes,
           activityTime,
           groupId: matchedGroup?.id || passedGroup?.id || '',
           groupName:
