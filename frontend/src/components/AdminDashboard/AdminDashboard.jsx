@@ -46,13 +46,11 @@ const NAV_ITEMS = [
 
 
 // currentView / setCurrentView are lifted to App so navigation state survives
-// across the shared header.
-function AdminDashboard({ currentView, setCurrentView }) {
+// across the shared header; navOpen / setNavOpen too, because the hamburger
+// button itself renders inside App's shared header bar.
+function AdminDashboard({ currentView, setCurrentView, navOpen = false, setNavOpen }) {
   // The event opened from the events area (null when none is open).
   const [selectedEvent, setSelectedEvent] = useState(null);
-
-  // Whether the mobile navigation drawer is open.
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   // Default to the home view when nothing is selected yet.
   const activeView = currentView || 'overview';
@@ -123,27 +121,14 @@ function AdminDashboard({ currentView, setCurrentView }) {
   return (
     <div className="admin-shell" dir="rtl">
 
-      {/* Hamburger menu — fixed at the top-right corner, always visible.
-          Opens / closes the navigation drawer (the bars animate into an X). */}
-      <button
-        type="button"
-        className={`admin-nav-toggle ${mobileNavOpen ? 'is-open' : ''}`}
-        onClick={() => setMobileNavOpen((open) => !open)}
-        aria-label={mobileNavOpen ? 'סגירת תפריט ניהול' : 'פתיחת תפריט ניהול'}
-        aria-expanded={mobileNavOpen}
-      >
-        <span className="admin-nav-toggle-bar" aria-hidden="true" />
-        <span className="admin-nav-toggle-bar" aria-hidden="true" />
-        <span className="admin-nav-toggle-bar" aria-hidden="true" />
-      </button>
-
-      {/* Dim backdrop behind the open mobile drawer (click to close). */}
-      {mobileNavOpen && (
-        <div className="admin-nav-backdrop" onClick={() => setMobileNavOpen(false)} />
+      {/* The hamburger button lives in App's shared header; this screen only
+          renders the drawer it opens. Dim backdrop closes on click. */}
+      {navOpen && (
+        <div className="admin-nav-backdrop" onClick={() => setNavOpen(false)} />
       )}
 
-      {/* Navigation: a persistent sidebar on desktop, a slide-in drawer on mobile. */}
-      <aside className={`admin-sidebar ${mobileNavOpen ? 'is-open' : ''}`} aria-label="ניווט ניהול">
+      {/* Navigation drawer, slides in from the right. */}
+      <aside className={`admin-sidebar ${navOpen ? 'is-open' : ''}`} aria-label="ניווט ניהול">
 
         {/* Sidebar title. */}
         <div className="admin-sidebar-title">מרכז ניהול</div>
@@ -157,9 +142,9 @@ function AdminDashboard({ currentView, setCurrentView }) {
               className={`admin-nav-item ${activeView === item.id ? 'is-active' : ''}`}
               aria-current={activeView === item.id ? 'page' : undefined}
               onClick={() => {
-                // Switch the view and close the mobile drawer.
+                // Switch the view and close the drawer.
                 setCurrentView(item.id);
-                setMobileNavOpen(false);
+                setNavOpen(false);
               }}
             >
               {/* Area label (text only). */}

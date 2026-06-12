@@ -17,16 +17,12 @@ body {
 
 /* ---------- Hamburger button (fixed, top-right, always visible) ---------- */
 
+/* A normal header child (App renders it first, so in RTL it's the rightmost
+   element of the bar) — flat, icon-only, scrolls with the bar. */
 .admin-nav-toggle {
-  /* Sits inside the top header bar (the header reserves this corner via the
-     padding rule below) — a flat, icon-only button, not a floating circle. */
-  position: fixed;
-  top: 34px;
-  right: 38px;
-  z-index: 1300;
-
   width: 44px;
   height: 44px;
+  flex-shrink: 0;
   display: inline-flex;
   flex-direction: column;
   align-items: center;
@@ -62,11 +58,6 @@ body {
 }
 .admin-nav-toggle.is-open .admin-nav-toggle-bar:nth-child(3) {
   transform: translateY(-8px) rotate(-45deg);
-}
-
-/* Shift the shared header's content away from the corner the button owns. */
-.authenticated-layout:has(.admin-shell) .authenticated-header {
-  padding-right: 76px;
 }
 
 /* ---------- Navigation drawer ---------- */

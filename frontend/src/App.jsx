@@ -52,6 +52,10 @@ function App() {
   // The admin dashboard's current view.
   const [adminView, setAdminView] = useState('overview');
 
+  // Whether the admin navigation drawer is open (the hamburger lives in the
+  // shared header, so the state is owned here).
+  const [adminNavOpen, setAdminNavOpen] = useState(false);
+
   // The guide dashboard's current view.
   const [guideView, setGuideView] = useState('menu');
 
@@ -186,7 +190,14 @@ function App() {
 
     // Admins get the admin dashboard.
     if (role === 'admin') {
-      return <AdminDashboard currentView={adminView} setCurrentView={setAdminView} />;
+      return (
+        <AdminDashboard
+          currentView={adminView}
+          setCurrentView={setAdminView}
+          navOpen={adminNavOpen}
+          setNavOpen={setAdminNavOpen}
+        />
+      );
     }
 
     // Guides get the guide dashboard.
@@ -294,6 +305,22 @@ function App() {
               comes first.) Admin navigation now lives in the sidebar, so the
               header only keeps the logout action. */}
           <header className="authenticated-header">
+
+            {/* Admin hamburger — sits INSIDE the header bar (rightmost in
+                RTL), scrolling together with it. */}
+            {user.role === 'admin' && (
+              <button
+                type="button"
+                className={`admin-nav-toggle ${adminNavOpen ? 'is-open' : ''}`}
+                onClick={() => setAdminNavOpen((open) => !open)}
+                aria-label={adminNavOpen ? 'סגירת תפריט ניהול' : 'פתיחת תפריט ניהול'}
+                aria-expanded={adminNavOpen}
+              >
+                <span className="admin-nav-toggle-bar" aria-hidden="true" />
+                <span className="admin-nav-toggle-bar" aria-hidden="true" />
+                <span className="admin-nav-toggle-bar" aria-hidden="true" />
+              </button>
+            )}
 
             {/* Greeting + role badge + logo (right side). */}
             <div className="auth-user-block">
