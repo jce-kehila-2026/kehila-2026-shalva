@@ -192,3 +192,22 @@ body {
     display: block;
   }
 }
+
+/* Back button — sits above the active screen's content. */
+.admin-back-btn {
+  align-self: flex-start;
+  padding: 8px 20px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--brand-700);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  margin-bottom: 4px;
+}
+
+.admin-back-btn:hover {
+  background: var(--surface-2);
+}

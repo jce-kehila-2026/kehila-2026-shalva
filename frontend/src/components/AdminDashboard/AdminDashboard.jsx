@@ -4,7 +4,7 @@
 // no longer a separate menu entry.
 
 // React hooks for state and side effects.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // The admin home / overview screen (now includes the חמ״ל).
 import AdminOverview from '../AdminOverview/AdminOverview';
@@ -51,6 +51,9 @@ const NAV_ITEMS = [
 function AdminDashboard({ currentView, setCurrentView, navOpen = false, setNavOpen }) {
   // The event opened from the events area (null when none is open).
   const [selectedEvent, setSelectedEvent] = useState(null);
+
+  // The screens visited before the current one (for the back button).
+  const viewHistory = useRef([]);
 
   // Default to the home view when nothing is selected yet.
   const activeView = currentView || 'overview';
@@ -142,7 +145,10 @@ function AdminDashboard({ currentView, setCurrentView, navOpen = false, setNavOp
               className={`admin-nav-item ${activeView === item.id ? 'is-active' : ''}`}
               aria-current={activeView === item.id ? 'page' : undefined}
               onClick={() => {
-                // Switch the view and close the drawer.
+                // Remember where we were, switch the view, close the drawer.
+                if (item.id !== activeView) {
+                  viewHistory.current.push(activeView);
+                }
                 setCurrentView(item.id);
                 setNavOpen(false);
               }}
@@ -156,6 +162,19 @@ function AdminDashboard({ currentView, setCurrentView, navOpen = false, setNavOp
 
       {/* The selected area renders here. */}
       <div className="admin-content">
+
+        {/* Back button — returns to the previous screen (home as fallback).
+            Hidden on the home view, where there is nowhere to go back to. */}
+        {activeView !== 'overview' && (
+          <button
+            type="button"
+            className="admin-back-btn"
+            onClick={() => setCurrentView(viewHistory.current.pop() || 'overview')}
+          >
+            → חזור
+          </button>
+        )}
+
         {renderContent()}
       </div>
     </div>

@@ -175,3 +175,25 @@
   border-color: var(--brand-600);
   background: rgba(158, 33, 136, 0.06);
 }
+
+/* The single send-to-all button — WhatsApp green, unmissable. */
+.msg-send-all-btn {
+  padding: 12px 28px;
+  font-size: 15.5px;
+  font-weight: 800;
+  color: #fff;
+  background: #1faa55;
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 6px 16px rgba(31, 170, 85, 0.35);
+  cursor: pointer;
+}
+
+.msg-send-all-btn:hover {
+  background: #178a45;
+}
+
+.msg-send-all-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

@@ -864,7 +864,7 @@ export default function Reports() {
             <button type="button" className="reports-picker-card" onClick={() => setActiveReport(REPORT_TYPES.ATTENDANCE)}>
               <span className="reports-picker-emoji" aria-hidden="true">✅</span>
               <span className="reports-picker-name">דוח נוכחות</span>
-              <span className="reports-picker-desc">מפגש-מפגש: נוכחים, חסרים ולא ידוע</span>
+              <span className="reports-picker-desc">מפגשים: נוכחים, חסרים ולא ידוע</span>
             </button>
           </div>
         </section>

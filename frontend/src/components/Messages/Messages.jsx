@@ -18,7 +18,7 @@ import WhatsAppButton from '../shared/WhatsAppButton/WhatsAppButton';
 
 // Shared people helpers + message templates.
 import { getDisplayName } from '../../utils/people';
-import { greetingMessage, birthdayMessage, hasValidPhone } from '../../utils/whatsapp';
+import { greetingMessage, birthdayMessage, hasValidPhone, buildWhatsAppUrl } from '../../utils/whatsapp';
 
 // Shared management-screen styles + this screen's own styles.
 import '../shared/ManagementScreen.css';
@@ -102,8 +102,31 @@ function Messages() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audienceMode, volunteers, selectedGroupIds, singleVolunteerId, groups]);
 
-  // How many of the recipients actually have a usable phone.
-  const reachableCount = recipients.filter((volunteer) => hasValidPhone(volunteer.phone)).length;
+  // The recipients that actually have a usable phone (the send queue).
+  const reachableRecipients = recipients.filter((volunteer) => hasValidPhone(volunteer.phone));
+  const reachableCount = reachableRecipients.length;
+
+  // How far the one-button send has progressed through the queue.
+  const [sendIndex, setSendIndex] = useState(0);
+
+  // Changing the audience or the message restarts the queue.
+  useEffect(() => {
+    setSendIndex(0);
+  }, [audienceMode, selectedGroupIds, singleVolunteerId, messageText]);
+
+  // One button sends to everyone selected: each press opens the NEXT
+  // recipient's WhatsApp chat with the message ready (browsers block opening
+  // many chats at once, so the queue advances press by press).
+  const handleSendToAll = () => {
+    if (sendIndex >= reachableRecipients.length) {
+      setSendIndex(0);
+      return;
+    }
+
+    const recipient = reachableRecipients[sendIndex];
+    window.open(buildWhatsAppUrl(recipient.phone, messageText), '_blank');
+    setSendIndex(sendIndex + 1);
+  };
 
   // Volunteers matching the single-mode search box.
   const singleMatches = useMemo(() => {
@@ -229,6 +252,20 @@ function Messages() {
           <div className="msg-summary">
             <span><strong>{recipients.length}</strong> נמענים נבחרו</span>
             <span><strong>{reachableCount}</strong> עם מספר וואטסאפ תקין</span>
+
+            {/* One send button for everyone selected — advances the queue. */}
+            <button
+              type="button"
+              className="msg-send-all-btn"
+              onClick={handleSendToAll}
+              disabled={!messageText.trim() || reachableCount === 0}
+            >
+              {sendIndex === 0
+                ? `📤 שליחה לכל הנמענים (${reachableCount})`
+                : sendIndex >= reachableCount
+                  ? '✅ נשלח לכולם — לחיצה להתחלה מחדש'
+                  : `📤 לנמען הבא (${sendIndex}/${reachableCount})`}
+            </button>
             <button type="button" className="mgmt-secondary-btn" onClick={handleCopyMessage} disabled={!messageText.trim()}>
               📋 העתקת ההודעה
             </button>
