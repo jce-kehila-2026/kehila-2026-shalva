@@ -58,6 +58,26 @@ async function createTemplate(sheetName, headers) {
 }
 
 
+// Enforce real DATES on a column: Excel rejects free text with a Hebrew
+// error, and the cell is date-formatted. (A popup calendar can't be embedded
+// in a plain .xlsx — that needs VBA — so strict validation is the maximum.)
+function addDateColumn(sheet, columnLetter) {
+  for (let row = 2; row <= TEMPLATE_ROWS; row += 1) {
+    const cell = sheet.getCell(`${columnLetter}${row}`);
+    cell.numFmt = 'dd/mm/yyyy';
+    cell.dataValidation = {
+      type: 'date',
+      operator: 'between',
+      allowBlank: true,
+      showErrorMessage: true,
+      errorTitle: 'תאריך לא תקין',
+      error: 'יש להזין תאריך אמיתי בפורמט יום/חודש/שנה (למשל 15/06/1999) — לא טקסט חופשי.',
+      formulae: [new Date(1900, 0, 1), new Date()],
+    };
+  }
+}
+
+
 // Apply a list dropdown to a whole column (rows 2..TEMPLATE_ROWS).
 function addDropdown(sheet, columnLetter, listFormula) {
   for (let row = 2; row <= TEMPLATE_ROWS; row += 1) {
@@ -85,7 +105,7 @@ function fillHiddenList(lists, columnLetter, values) {
 export async function downloadVolunteersTemplate(groups = []) {
   const headers = [
     'שם פרטי *', 'שם משפחה *', 'תעודת זהות', 'טלפון', 'אימייל',
-    'תאריך לידה', 'גיל (אוטומטי)', 'קבוצה', 'זמן פעילות', 'כתובת', 'הערות',
+    'תאריך לידה', 'גיל (אוטומטי)', 'קבוצה', 'זמן פעילות', 'כתובת', 'בית ספר', 'הערות',
   ];
 
   const { workbook, sheet, lists } = await createTemplate('מתנדבים', headers);
@@ -95,9 +115,9 @@ export async function downloadVolunteersTemplate(groups = []) {
   addDropdown(sheet, 'H', fillHiddenList(lists, 'A', groupNames));
   addDropdown(sheet, 'I', `"${GROUP_TIMES.join(',')}"`);
 
-  // Birth date column: date-formatted cells; age column: automatic formula.
+  // Birth date column: dates only (validated); age column: automatic formula.
+  addDateColumn(sheet, 'F');
   for (let row = 2; row <= TEMPLATE_ROWS; row += 1) {
-    sheet.getCell(`F${row}`).numFmt = 'dd/mm/yyyy';
     sheet.getCell(`G${row}`).value = {
       formula: `IF(F${row}="","",DATEDIF(F${row},TODAY(),"Y"))`,
     };
@@ -120,9 +140,8 @@ export async function downloadGuidesTemplate(groups = []) {
   addDropdown(sheet, 'F', fillHiddenList(lists, 'A', groupNames));
   addDropdown(sheet, 'G', `"${GROUP_TIMES.join(',')}"`);
 
-  for (let row = 2; row <= TEMPLATE_ROWS; row += 1) {
-    sheet.getCell(`E${row}`).numFmt = 'dd/mm/yyyy';
-  }
+  // Birth date column: dates only (validated, dd/mm/yyyy).
+  addDateColumn(sheet, 'E');
 
   await downloadWorkbook(workbook, 'תבנית-מדריכים.xlsx');
 }
