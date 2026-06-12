@@ -12,7 +12,8 @@
   "dependencies": {
     "firebase": "^12.12.1",
     "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "react-dom": "^19.2.5",
+    "xlsx": "^0.18.5"
   },
   "overrides": {
     "rollup": "npm:@rollup/wasm-node@^4"
