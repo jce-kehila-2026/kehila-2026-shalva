@@ -191,7 +191,7 @@ function App() {
 
     // Guides get the guide dashboard.
     if (role === 'guide') {
-      return <GuideDashboard user={user} onLogout={handleLogout} currentView={guideView} setCurrentView={setGuideView} />;
+      return <GuideDashboard user={user} currentView={guideView} setCurrentView={setGuideView} />;
     }
 
     // Everyone else gets the tabbed viewer screens.
@@ -248,8 +248,7 @@ function App() {
   // A shared registration-form link (?register=1) opens the public volunteer
   // form for anyone, regardless of sign-in. Admins send this link by WhatsApp
   // or email; once it is filled, the submission shows up in the admin screen.
-  const isRegistrationForm =
-    new URLSearchParams(window.location.search).get('register') === '1';
+  const isRegistrationForm = urlParams.get('register') === '1';
 
   // The public registration form, shown straight from the share link.
   if (isRegistrationForm) {

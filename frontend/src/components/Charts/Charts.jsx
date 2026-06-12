@@ -1,3 +1,7 @@
+// Charts — visual statistics dashboard: hand-built SVG donut and bar charts
+// for event statuses, attendance (present vs absent), volunteer age buckets,
+// events per month and volunteers per group. No chart library needed.
+
 // React hooks for state and side effects.
 import { useEffect, useState } from 'react';
 

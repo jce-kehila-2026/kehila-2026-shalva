@@ -1,3 +1,8 @@
+// Reports — admin reports hub. Loads volunteers, events and attendance,
+// builds per-group and per-meeting summary tables (using the shared
+// attendance normalizer), and exports any report as CSV that opens
+// correctly in Excel in Hebrew (BOM-prefixed).
+
 // React hooks for state, effects, memoization and stable callbacks.
 import { useEffect, useMemo, useState } from 'react'
 

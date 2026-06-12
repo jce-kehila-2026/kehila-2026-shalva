@@ -1,3 +1,8 @@
+// EventManagement — create, edit and delete community events. The list stays
+// live via an onSnapshot subscription, statuses are derived from the event
+// date (shared eventStatus util), and `readOnly` turns the screen into a
+// browse-only view for viewers.
+
 // React hooks for state, effects and memoization.
 import { useEffect, useMemo, useState } from 'react'
 

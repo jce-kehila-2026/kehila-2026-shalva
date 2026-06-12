@@ -1,3 +1,7 @@
+// Birthdays — upcoming-birthdays screen: lists everyone (volunteers + guides)
+// with a birth date, sorted by how soon their birthday is, with a one-tap
+// WhatsApp greeting. With `editable` (admin) a birth date can be fixed inline.
+
 // React hooks used by this screen.
 import { useCallback, useEffect, useState } from 'react';
 
@@ -15,6 +19,10 @@ import WhatsAppButton from '../shared/WhatsAppButton/WhatsAppButton';
 
 // Builds the birthday greeting text for WhatsApp.
 import { birthdayMessage } from '../../utils/whatsapp';
+
+// Shared people helpers (one definition for every screen). getDisplayName's
+// default fallback is the same 'חבר/ת קהילה' this screen used locally.
+import { getDisplayName as getName, parseBirthDate, computeAge } from '../../utils/people';
 
 // Styles for this screen.
 import './Birthdays.css';
@@ -65,82 +73,6 @@ const CONFETTI_PIECES = Array.from({ length: 44 }, (_, index) => ({
   // Pick a colour, cycling through the palette.
   color: CONFETTI_COLORS[index % CONFETTI_COLORS.length],
 }));
-
-
-// Field names that might hold a birth date across the different collections.
-const BIRTH_DATE_FIELDS = ['birthDate', 'birthday', 'dob', 'dateOfBirth', 'birth_date'];
-
-
-// Pick the best display name, falling back gracefully when fields are missing.
-function getName(person) {
-  return (
-    // Prefer an explicit single name.
-    person.name ||
-
-    // Otherwise join first + last name.
-    [person.firstName, person.lastName].filter(Boolean).join(' ').trim() ||
-
-    // Otherwise show the email.
-    person.email ||
-
-    // Last resort: a generic label.
-    'חבר/ת קהילה'
-  );
-}
-
-
-// Read the birth date from any supported field name and value format.
-function parseBirthDate(person) {
-  // Try each possible field name in order.
-  for (const field of BIRTH_DATE_FIELDS) {
-    // The raw value for this field.
-    const value = person[field];
-
-    // Skip empty fields.
-    if (!value) continue;
-
-    // Will hold the parsed Date.
-    let date = null;
-
-    if (typeof value === 'string') {
-      // ISO / text date string.
-      const parsed = new Date(value);
-      if (!Number.isNaN(parsed.getTime())) date = parsed;
-    } else if (typeof value.toDate === 'function') {
-      // Firestore Timestamp.
-      date = value.toDate();
-    } else if (value instanceof Date) {
-      // Native Date object.
-      date = value;
-    } else if (typeof value.seconds === 'number') {
-      // Plain { seconds } shape (epoch seconds).
-      date = new Date(value.seconds * 1000);
-    }
-
-    // Return the first valid date we manage to build.
-    if (date && !Number.isNaN(date.getTime())) return date;
-  }
-
-  // No usable birth date found.
-  return null;
-}
-
-
-// Current age in whole years, accounting for whether the birthday already passed.
-function computeAge(birthDate, today) {
-  // Rough age from the year difference.
-  let age = today.getFullYear() - birthDate.getFullYear();
-
-  // How far today is from the birth month.
-  const monthDiff = today.getMonth() - birthDate.getMonth();
-
-  // If this year's birthday hasn't happened yet, subtract one.
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-    age -= 1;
-  }
-
-  return age;
-}
 
 
 // Format a Date into a "YYYY-MM-DD" string for the date input.
