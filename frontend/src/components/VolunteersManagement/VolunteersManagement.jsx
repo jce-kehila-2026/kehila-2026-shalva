@@ -23,6 +23,12 @@ import { greetingMessage } from '../../utils/whatsapp';
 // Downloads the ready-to-fill Excel template for bulk volunteer import.
 import { downloadVolunteersTemplate } from '../../utils/excelTemplates';
 
+// The closed list of activity times (בוקר / צהריים / ערב).
+import { GROUP_TIMES } from '../../utils/groupOptions';
+
+// Shared age calculation (the form derives age from the birth date).
+import { computeAge } from '../../utils/people';
+
 // Shared management-screen styles + this screen's own styles.
 import '../shared/ManagementScreen.css';
 import './VolunteersManagement.css';
@@ -65,7 +71,7 @@ const VolunteersManagement = ({ initialGroup = null, onBack }) => {
     idNumber: '',
     phone: '',
     birthDate: '',
-    age: '',
+    activityTime: '',
     address: '',
     email: '',
     school: '',
@@ -74,6 +80,11 @@ const VolunteersManagement = ({ initialGroup = null, onBack }) => {
   };
 
   const [formData, setFormData] = useState(defaultFormData);
+
+  // Age derived from the selected birth date — never typed by hand.
+  const computedAge = formData.birthDate
+    ? String(computeAge(new Date(formData.birthDate)))
+    : '';
 
   const fetchData = useCallback(async () => {
     try {
@@ -139,7 +150,7 @@ const VolunteersManagement = ({ initialGroup = null, onBack }) => {
       idNumber: volunteer.idNumber || '',
       phone: volunteer.phone || '',
       birthDate: volunteer.birthDate || '',
-      age: volunteer.age || '',
+      activityTime: volunteer.activityTime || '',
       address: volunteer.address || '',
       email: volunteer.email || '',
       school: volunteer.school || '',
@@ -173,7 +184,8 @@ const VolunteersManagement = ({ initialGroup = null, onBack }) => {
       idNumber: formData.idNumber.trim(),
       phone: formData.phone.trim(),
       birthDate: formData.birthDate.trim(),
-      age: formData.age.trim(),
+      age: computedAge,
+      activityTime: formData.activityTime,
       address: formData.address.trim(),
       email: formData.email.trim(),
       school: formData.school.trim(),
@@ -566,14 +578,31 @@ const VolunteersManagement = ({ initialGroup = null, onBack }) => {
                   />
                 </div>
 
+                {/* Age is derived from the birth date — never typed by hand. */}
                 <div className="form-group">
-                  <label>גיל:</label>
+                  <label>גיל (מחושב אוטומטית):</label>
                   <input
                     type="text"
                     className="styled-input full-width-input"
-                    value={formData.age}
-                    onChange={(e) => setFormData({ ...formData, age: e.target.value })}
+                    value={computedAge !== '' ? computedAge : 'בחרו תאריך לידה'}
+                    readOnly
+                    disabled
                   />
+                </div>
+
+                {/* Activity time — the same closed list used for groups. */}
+                <div className="form-group">
+                  <label>זמן פעילות:</label>
+                  <select
+                    className="styled-input full-width-input"
+                    value={formData.activityTime}
+                    onChange={(e) => setFormData({ ...formData, activityTime: e.target.value })}
+                  >
+                    <option value="">-- בחר זמן פעילות --</option>
+                    {GROUP_TIMES.map((timeOption) => (
+                      <option key={timeOption} value={timeOption}>{timeOption}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="form-group">
