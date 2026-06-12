@@ -68,11 +68,13 @@ Legend: ✅ done · ⚠️ done with a documented caveat · ❌ open item
   change their own role/disabled flag or delete themselves).
 - ✅ **Data validation rules** — public registrations are fully validated;
   attendance writes are restricted to a known field set (`keys().hasOnly`).
-- ❌ **Emulator tests** — not yet automated. To test manually:
-  `firebase emulators:start --only firestore,auth`, then exercise each role
-  (no auth / viewer / guide / admin / disabled user) against each collection.
-  Writing rules unit tests with `@firebase/rules-unit-testing` is the next
-  step.
+- ✅ **Emulator tests** — automated: `npm run test:rules` (repo root) starts
+  the Firestore + Storage emulators, runs 40 tests in
+  `frontend/tests/security-rules.test.js` covering every role (no auth /
+  viewer / guide / disabled / admin) against every collection's CRUD rules —
+  including the guide group-scoping, the registrant validation, the admin
+  self-guards and the storage upload limits — then shuts the emulators down.
+  40/40 passing as of 2026-06-12. Requires Java (the emulator runtime).
 
 ## 🔐 Storage (`storage.rules`)
 
@@ -105,11 +107,12 @@ Legend: ✅ done · ⚠️ done with a documented caveat · ❌ open item
 
 ## Known gaps / next steps
 
-1. **Rules emulator tests** (the one open checklist item) — automate role ×
-   CRUD coverage with `@firebase/rules-unit-testing`.
-2. **"Don't remove the last admin"** is enforced in the UI only (noted in
+1. **"Don't remove the last admin"** is enforced in the UI only (noted in
    `firestore.rules`); strong enforcement needs a counter/transaction or a
    backend function.
-3. **LLM bridge** — if `VITE_KEHILA_LLM_SHARED_SECRET` is ever set, remember
+2. **LLM bridge** — if `VITE_KEHILA_LLM_SHARED_SECRET` is ever set, remember
    any `VITE_*` value ships in the public bundle: it is a rate-limiting gate,
    not a secret. Real LLM API keys must stay in the Cloudflare Worker.
+3. **Keep the rules tests green** — any change to `firestore.rules`,
+   `storage.rules` or the role model must be followed by `npm run test:rules`;
+   add a test alongside every new rule.
