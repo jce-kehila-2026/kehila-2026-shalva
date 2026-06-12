@@ -19,12 +19,37 @@ import { GROUP_NAMES } from '../../utils/groupOptions';
 // Shared display-name helper.
 import { getDisplayName } from '../../utils/people';
 
+// Shared attendance normalization (handles old Hebrew/string statuses too).
+import { normalizeAttendanceStatus, getRecordStatus } from '../../utils/attendance';
+
 // Styles for this screen.
 import './AttendanceScreen.css';
 
 
 // A volunteer's display name (this screen's fallback wording).
 const getVolunteerName = (volunteer) => getDisplayName(volunteer, 'מתנדב ללא שם');
+
+
+// Map a stored attendance record to the grid's three UI states.
+function getGridStateFromRecord(record) {
+  // No record at all means the day was never marked.
+  if (!record) {
+    return 'unmarked';
+  }
+
+  // Normalize boolean / Hebrew / English statuses the same way everywhere.
+  const normalized = normalizeAttendanceStatus(getRecordStatus(record));
+
+  if (normalized === 'present') {
+    return 'present';
+  }
+
+  if (normalized === 'absent') {
+    return 'absent';
+  }
+
+  return 'unmarked';
+}
 
 
 // Start of the week (Sunday) containing a given date.
@@ -243,17 +268,9 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
       initialGrid[v.id] = {};
       weekDaysKeys.forEach((dKey) => {
         const rec = initialAttendance[v.id]?.[dKey];
-        if (rec) {
-          if (rec.status === true) {
-            initialGrid[v.id][dKey] = 'present';
-          } else if (rec.status === false) {
-            initialGrid[v.id][dKey] = 'absent';
-          } else {
-            initialGrid[v.id][dKey] = 'unmarked';
-          }
-        } else {
-          initialGrid[v.id][dKey] = 'unmarked';
-        }
+
+        // One shared mapping for booleans and older string statuses.
+        initialGrid[v.id][dKey] = getGridStateFromRecord(rec);
       });
     });
     setGridState(initialGrid);
@@ -329,8 +346,11 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
       const dKey = getDayKey(day);
       const dayChanged = volunteers.some((v) => {
         const currentVal = gridState[v.id]?.[dKey] || 'unmarked';
-        const initialRec = initialAttendance[v.id]?.[dKey];
-        const initialVal = initialRec ? (initialRec.status === true ? 'present' : 'absent') : 'unmarked';
+
+        // Compare against the same mapping the grid was loaded with, so
+        // untouched days are never flagged as modified.
+        const initialVal = getGridStateFromRecord(initialAttendance[v.id]?.[dKey]);
+
         return currentVal !== initialVal;
       });
       if (dayChanged) {

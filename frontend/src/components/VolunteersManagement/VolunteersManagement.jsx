@@ -239,8 +239,8 @@ const VolunteersManagement = ({ initialGroup = null, onBack }) => {
       
       const jsonRows = XLSX.utils.sheet_to_json(worksheet);
 
-      const batch = writeBatch(db);
-      let addedCount = 0;
+      // Collect the parsed rows first; written in chunks after parsing.
+      const volunteersToAdd = [];
 
       const parseExcelDate = (excelValue) => {
         if (!excelValue) return '';
@@ -252,7 +252,8 @@ const VolunteersManagement = ({ initialGroup = null, onBack }) => {
             const month = String(dateObj.m).padStart(2, '0'); 
             const day = String(dateObj.d).padStart(2, '0');
             return `${year}-${month}-${day}`;
-          } catch (err) {
+          } catch {
+            // Unparseable date number: keep the raw value as text.
             return String(excelValue);
           }
         }
@@ -281,15 +282,13 @@ const VolunteersManagement = ({ initialGroup = null, onBack }) => {
         const experience = String(row['ניסיון'] || row['experience'] || '').trim();
         const school = String(row['בית ספר'] || row['school'] || '').trim();
 
-        const newDocRef = doc(collection(db, 'volunteers'));
-        
-        batch.set(newDocRef, {
+        volunteersToAdd.push({
           name,
           firstName,
           lastName,
           idNumber,
           phone,
-          birthDate, 
+          birthDate,
           age,
           address,
           email,
@@ -299,12 +298,27 @@ const VolunteersManagement = ({ initialGroup = null, onBack }) => {
           groupName: passedGroup?.groupName || '',
           createdAt: new Date(),
         });
-
-        addedCount++;
       });
 
+      const addedCount = volunteersToAdd.length;
+
       if (addedCount > 0) {
-        await batch.commit();
+        // Firestore allows at most 500 writes per batch, so commit in chunks.
+        const CHUNK_SIZE = 450;
+
+        for (let start = 0; start < volunteersToAdd.length; start += CHUNK_SIZE) {
+          const batch = writeBatch(db);
+
+          volunteersToAdd
+            .slice(start, start + CHUNK_SIZE)
+            .forEach((volunteerPayload) => {
+              const newDocRef = doc(collection(db, 'volunteers'));
+              batch.set(newDocRef, volunteerPayload);
+            });
+
+          await batch.commit();
+        }
+
         alert(`בהצלחה! יובאו ${addedCount} מתנדבים מהקובץ.`);
         await fetchData();
       } else {
