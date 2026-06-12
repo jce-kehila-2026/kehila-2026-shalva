@@ -306,7 +306,11 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
         const rawBirthDate = row['תאריך לידה'] || row['birthDate'] || '';
         const birthDate = parseExcelDate(rawBirthDate);
 
-        const phone = String(row['טלפון'] || row['phone'] || '').trim();
+        // Restore the leading 0 if Excel stored the phone as a number.
+        let phone = String(row['טלפון'] || row['phone'] || '').trim();
+        if (/^5\d{8}$/.test(phone)) {
+          phone = `0${phone}`;
+        }
         const idNumber = String(row['תעודת זהות'] || row['ת.ז'] || row['idNumber'] || '').trim();
         const age = String(row['גיל (אוטומטי)'] || row['גיל'] || row['age'] || '').trim();
         const notes = String(row['הערות'] || row['notes'] || '').trim();

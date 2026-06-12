@@ -305,8 +305,13 @@ function GuideManagement() {
       for (const row of rows) {
         const firstName = String(row['שם פרטי *'] || row['שם פרטי'] || row['firstName'] || '').trim();
         const lastName = String(row['שם משפחה *'] || row['שם משפחה'] || row['lastName'] || '').trim();
-        const email = String(row['אימייל *'] || row['אימייל'] || row['email'] || '').trim();
-        const phone = String(row['טלפון'] || row['phone'] || '').trim();
+        const email = String(row['אימייל *'] || row['אימייל'] || row['email'] || '').trim().toLowerCase();
+
+        // Restore the leading 0 if Excel stored the phone as a number.
+        let phone = String(row['טלפון'] || row['phone'] || '').trim();
+        if (/^5\d{8}$/.test(phone)) {
+          phone = `0${phone}`;
+        }
         const birthDate = String(row['תאריך לידה'] || row['birthDate'] || '').trim();
         const groupNameRaw = String(row['קבוצה'] || row['group'] || '').trim();
         const activityTime = String(row['זמן פעילות'] || row['activityTime'] || '').trim();
@@ -325,6 +330,12 @@ function GuideManagement() {
         const matchedGroup = groupsList.find(
           (group) => (group.groupName || group.name || '').trim() === groupNameRaw,
         );
+
+        // A guide with this email already exists — skip with a clear note.
+        if (guidesList.some((existing) => (existing.email || '').toLowerCase() === email)) {
+          results.push({ name: displayName, email, password: '', error: 'מדריך עם אימייל זה כבר קיים במערכת' });
+          continue;
+        }
 
         const tempPassword = generateTempPassword();
 
@@ -362,9 +373,22 @@ function GuideManagement() {
 
           results.push({ name: displayName, email, password: tempPassword, error: '' });
         } catch (rowError) {
-          // Most common: the email is already registered.
+          // Translate the common Firebase codes into actionable Hebrew.
           console.error('שגיאה בייבוא מדריך:', email, rowError);
-          results.push({ name: displayName, email, password: '', error: rowError.message });
+
+          const friendlyErrors = {
+            'auth/email-already-in-use':
+              'האימייל כבר רשום (כנראה מניסיון ייבוא קודם) — השתמשו באימייל אחר, או בקשו מהמנהל למחוק את החשבון הישן',
+            'auth/invalid-email': 'כתובת האימייל אינה תקינה',
+            'auth/weak-password': 'הסיסמה שנוצרה נדחתה — נסו שוב',
+          };
+
+          results.push({
+            name: displayName,
+            email,
+            password: '',
+            error: friendlyErrors[rowError.code] || rowError.message,
+          });
         }
       }
 

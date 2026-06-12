@@ -78,6 +78,14 @@ function addDateColumn(sheet, columnLetter) {
 }
 
 
+// Force TEXT format on a column so Excel keeps leading zeros (phones, IDs).
+function addTextColumn(sheet, columnLetter) {
+  for (let row = 2; row <= TEMPLATE_ROWS; row += 1) {
+    sheet.getCell(`${columnLetter}${row}`).numFmt = '@';
+  }
+}
+
+
 // Apply a list dropdown to a whole column (rows 2..TEMPLATE_ROWS).
 function addDropdown(sheet, columnLetter, listFormula) {
   for (let row = 2; row <= TEMPLATE_ROWS; row += 1) {
@@ -115,6 +123,10 @@ export async function downloadVolunteersTemplate(groups = []) {
   addDropdown(sheet, 'H', fillHiddenList(lists, 'A', groupNames));
   addDropdown(sheet, 'I', `"${GROUP_TIMES.join(',')}"`);
 
+  // ID + phone columns stay TEXT so Excel keeps the leading 0.
+  addTextColumn(sheet, 'C');
+  addTextColumn(sheet, 'D');
+
   // Birth date column: dates only (validated); age column: automatic formula.
   addDateColumn(sheet, 'F');
   for (let row = 2; row <= TEMPLATE_ROWS; row += 1) {
@@ -139,6 +151,9 @@ export async function downloadGuidesTemplate(groups = []) {
   const groupNames = groups.map(getName).filter(Boolean);
   addDropdown(sheet, 'F', fillHiddenList(lists, 'A', groupNames));
   addDropdown(sheet, 'G', `"${GROUP_TIMES.join(',')}"`);
+
+  // Phone column stays TEXT so Excel keeps the leading 0.
+  addTextColumn(sheet, 'D');
 
   // Birth date column: dates only (validated, dd/mm/yyyy).
   addDateColumn(sheet, 'E');
