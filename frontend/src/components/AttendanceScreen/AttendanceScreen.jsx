@@ -507,13 +507,16 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
                         {weekDays.map((day) => {
                           const dKey = getDayKey(day);
                           const status = gridState[volunteer.id]?.[dKey] || 'unmarked';
+                          const isToday = dKey === getTodayKey();
                           return (
-                            <td key={dKey} className="attendance-cell">
+                            <td key={dKey} className={`attendance-cell ${isToday ? 'is-today' : ''}`}>
                               <div className="att-cell-actions">
                                 <button
                                   type="button"
                                   className={`att-action-toggle present ${status === 'present' ? 'is-active' : ''}`}
                                   onClick={() => handleStatusSelect(volunteer.id, dKey, 'present')}
+                                  aria-pressed={status === 'present'}
+                                  aria-label={`סמן ${name} כנוכח`}
                                   title="נוכח"
                                 >
                                   ✓
@@ -522,6 +525,8 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
                                   type="button"
                                   className={`att-action-toggle absent ${status === 'absent' ? 'is-active' : ''}`}
                                   onClick={() => handleStatusSelect(volunteer.id, dKey, 'absent')}
+                                  aria-pressed={status === 'absent'}
+                                  aria-label={`סמן ${name} כחסר`}
                                   title="חסר"
                                 >
                                   ✗

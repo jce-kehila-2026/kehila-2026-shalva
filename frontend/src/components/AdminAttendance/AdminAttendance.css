@@ -126,6 +126,42 @@
   border-radius: var(--radius-pill);
 }
 
+/* Per-group attendance breakdown chips (this week): present / absent / unmarked.
+   Colours mirror the summary tiles in the weekly view. */
+.adm-att-group-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.adm-att-stat-chip {
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+.adm-att-stat-chip.is-present {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #15803d;
+}
+
+.adm-att-stat-chip.is-absent {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.adm-att-stat-chip.is-unmarked {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+  color: var(--text-soft);
+}
+
 /* ---------- Weekly Review View ---------- */
 .adm-att-header-row {
   display: flex;

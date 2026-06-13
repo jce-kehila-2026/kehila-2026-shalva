@@ -198,13 +198,15 @@ function AdminAttendance({ registerBack }) {
           })
           .sort((a, b) => a.name.localeCompare(b.name, 'he'));
 
-        // Calculate total present and absent marks for this week.
+        // Calculate this week's present / absent / unmarked marks for the group.
         let totalPresent = 0;
         let totalAbsent = 0;
+        let totalUnmarked = 0;
         people.forEach((person) => {
           Object.values(person.weeklyStatus).forEach((status) => {
             if (status === 'present') totalPresent++;
             else if (status === 'absent') totalAbsent++;
+            else totalUnmarked++;
           });
         });
 
@@ -215,6 +217,7 @@ function AdminAttendance({ registerBack }) {
           total: people.length,
           totalPresent,
           totalAbsent,
+          totalUnmarked,
           people,
         };
       })
@@ -421,6 +424,14 @@ function AdminAttendance({ registerBack }) {
                 <span className="adm-att-group-name">{group.groupName}</span>
                 <span className="adm-att-group-guide">מדריך/ה: {group.guideName}</span>
               </div>
+
+              {/* This week's attendance breakdown for the group. */}
+              <div className="adm-att-group-stats">
+                <span className="adm-att-stat-chip is-present">{group.totalPresent} נוכחים</span>
+                <span className="adm-att-stat-chip is-absent">{group.totalAbsent} חסרים</span>
+                <span className="adm-att-stat-chip is-unmarked">{group.totalUnmarked} לא סומנו</span>
+              </div>
+
               <div className="adm-att-group-meta">
                 <span className="adm-att-volunteers-count">{group.total} מתנדבים</span>
               </div>
