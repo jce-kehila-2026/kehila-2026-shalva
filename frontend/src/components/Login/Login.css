@@ -23,13 +23,22 @@
   cursor: pointer;
 }
 
-/* Forgot link hover. */
-.login-forgot:hover {
+/* Forgot link hover — skipped while the button is locked mid-request. */
+.login-forgot:hover:not(:disabled) {
   background: transparent;
   color: var(--brand-700);
   transform: none;
   box-shadow: none;
   text-decoration: underline;
+}
+
+/* Keyboard focus ring for the login buttons. Matches the public screens
+   (MainScreen / GroupShowcase) with a clear info-blue ring, rather than the
+   fainter global button ring — these are prominent calls to action. */
+.login-forgot:focus-visible,
+.login-submit:focus-visible {
+  outline: 3px solid rgba(82, 167, 221, 0.45);
+  outline-offset: 3px;
 }
 
 /* Success / info notice banner (e.g. reset email sent). */
@@ -60,6 +69,13 @@
 /* Field label. */
 .login-field label {
   margin: 0;
+}
+
+/* The email field reads left-to-right even though the form is RTL. The dir="ltr"
+   attribute handles direction; this just overrides the right alignment the input
+   would otherwise inherit from .login-form's `text-align: right`. */
+.login-field input[dir='ltr'] {
+  text-align: left;
 }
 
 /* Error message banner. */

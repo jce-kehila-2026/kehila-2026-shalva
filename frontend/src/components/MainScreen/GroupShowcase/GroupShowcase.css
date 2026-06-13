@@ -1,17 +1,18 @@
-/* ============================================================
-   GroupShowcase — cinematic, Apple-style group presentation.
-   ============================================================ */
+/* GroupShowcase — a cinematic, one-group-at-a-time showcase of the groups. */
 
-/* Outer wrapper: the stage plus the thumbnail rail beneath it. */
+/* Outer wrapper: the stage plus the thumbnail rail beneath it. Declares its own
+   RTL direction so the logical insets below behave even outside an RTL page. */
 .showcase {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  direction: rtl;
 }
 
 
 /* ---------- The stage (one group at a time) ---------- */
 
+/* The cinematic stage: every slide is stacked here; a tap opens fullscreen. */
 .showcase-stage {
   position: relative;
   /* Grows with the viewport but stays a pleasant cinematic shape. */
@@ -60,6 +61,7 @@
   animation: showcase-kenburns 7s ease-out forwards;
 }
 
+/* The slow zoom-and-drift ("Ken Burns") applied to the active background. */
 @keyframes showcase-kenburns {
   from {
     transform: scale(1.04);
@@ -80,6 +82,7 @@
   opacity: 0.55;
 }
 
+/* First orb: bright, tucked into the upper-trailing corner. */
 .showcase-orb-1 {
   top: -60px;
   inset-inline-end: -40px;
@@ -89,6 +92,7 @@
   animation: showcase-float 9s ease-in-out infinite;
 }
 
+/* Second orb: larger and softer, lower-leading corner, drifting in reverse. */
 .showcase-orb-2 {
   bottom: -80px;
   inset-inline-start: -60px;
@@ -98,6 +102,7 @@
   animation: showcase-float 11s ease-in-out infinite reverse;
 }
 
+/* Gentle looping drift that gives the orbs a sense of life. */
 @keyframes showcase-float {
   0%,
   100% {
@@ -153,6 +158,7 @@
   animation: showcase-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* The text overlay sliding up and fading in when a slide turns active. */
 @keyframes showcase-rise {
   from {
     opacity: 0;
@@ -181,12 +187,12 @@
     0 3px 16px rgba(0, 0, 0, 0.55);
 }
 
-/* Description under the name. Capped at three lines so a long description can
-   never push the chips / CTA out of the stage; extra text is trimmed with "…". */
+/* Description under the name. Capped at three lines so a long description can't
+   overrun the bottom of the stage; any extra text is trimmed with an "…". */
 .showcase-desc {
   margin: 0 0 18px;
   max-width: 560px;
-  margin-inline-start: auto; /* keep it hugging the right edge in RTL */
+  margin-inline-end: auto; /* auto on the (left) end edge hugs it to the right in RTL */
   font-size: clamp(15px, 2vw, 18.5px);
   line-height: 1.6;
   color: #ffffff;
@@ -196,12 +202,15 @@
     0 1px 8px rgba(0, 0, 0, 0.7);
   display: -webkit-box;
   -webkit-line-clamp: 3;
+  line-clamp: 3; /* standard property — pairs with the -webkit- one above */
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
+
 /* ---------- Prev / next arrows ---------- */
 
+/* Round, translucent arrow buttons floating over the stage. */
 .showcase-nav {
   position: absolute;
   top: 50%;
@@ -226,23 +235,26 @@
   transition: opacity 0.25s ease, background 0.2s ease;
 }
 
+/* Bring the arrows to full strength on stage-hover or keyboard focus. */
 .showcase-stage:hover .showcase-nav,
 .showcase-nav:focus-visible {
   opacity: 1;
 }
 
+/* A directly hovered arrow brightens its background further. */
 .showcase-nav:hover {
   background: rgba(255, 255, 255, 0.34);
   opacity: 1;
 }
 
-/* In RTL, "previous" lives on the right and "next" on the left. */
+/* In RTL, "previous" sits against the right edge — that's the inline START. */
 .showcase-nav-prev {
-  inset-inline-end: 16px;
+  inset-inline-start: 16px;
 }
 
+/* ...and "next" sits against the left edge — the inline END. */
 .showcase-nav-next {
-  inset-inline-start: 16px;
+  inset-inline-end: 16px;
 }
 
 
@@ -282,6 +294,7 @@
   background: linear-gradient(to top, rgba(8, 4, 18, 0.6), transparent 70%);
 }
 
+/* Hover lifts a thumbnail slightly and brightens it. */
 .showcase-thumb:hover {
   opacity: 0.85;
   transform: translateY(-2px);
@@ -356,6 +369,7 @@
   transition: background 0.2s ease;
 }
 
+/* Darken the close button on hover. */
 .showcase-close:hover {
   background: rgba(0, 0, 0, 0.8);
 }
@@ -382,8 +396,60 @@
   transition: background 0.2s ease;
 }
 
+/* Darken the play / pause button on hover. */
 .showcase-playpause:hover {
   background: rgba(0, 0, 0, 0.8);
+}
+
+/* Open fullscreen — a keyboard-reachable button. The whole stage is clickable
+   too, but a <div> can't take keyboard focus, so this is the keyboard way in. */
+.showcase-fullscreen {
+  position: absolute;
+  top: 18px;
+  inset-inline-start: 18px;
+  z-index: 5;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  color: #ffffff;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+/* Darken the fullscreen button on hover. */
+.showcase-fullscreen:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+/* Shared reset for the showcase buttons — strip native widget styling so the
+   explicit background/border always wins (box-sizing and the site font already
+   come from the global resets in index.css, so they're not repeated here). */
+.showcase-nav,
+.showcase-thumb,
+.showcase-close,
+.showcase-playpause,
+.showcase-fullscreen {
+  padding: 0;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* Keyboard focus ring for every control in the showcase. */
+.showcase-nav:focus-visible,
+.showcase-thumb:focus-visible,
+.showcase-close:focus-visible,
+.showcase-playpause:focus-visible,
+.showcase-fullscreen:focus-visible {
+  outline: 3px solid rgba(82, 167, 221, 0.65);
+  outline-offset: 3px;
 }
 
 /* The play / pause SVG glyph inside the button. `flex: none` stops the flex
@@ -400,6 +466,8 @@
 
 /* ---------- Responsive ---------- */
 
+/* Phones: the stage becomes a near-fullscreen poster, and the arrows give way
+   to swiping (plus the thumbnail rail). */
 @media (max-width: 640px) {
   /* Fill (almost) the whole screen so, once scrolled to, the showcase is all
      the visitor sees. `dvh` tracks the truly visible height even as the mobile
@@ -433,10 +501,10 @@
   .showcase-desc {
     font-size: 17.5px;
     -webkit-line-clamp: 3;
+    line-clamp: 3;
     margin-bottom: 20px;
   }
 
-  /* Larger detail chips. */
   /* Grow the monogram to match the larger scene. */
   .showcase-monogram {
     font-size: clamp(220px, 62vw, 380px);
@@ -448,6 +516,7 @@
     height: 96px;
   }
 
+  /* A slightly larger label to match the bigger thumbnails. */
   .showcase-thumb-name {
     font-size: 15px;
   }
@@ -462,12 +531,23 @@
   .showcase-slide,
   .showcase-bg,
   .showcase-content,
-  .showcase-orb {
+  .showcase-orb,
+  .showcase-thumb,
+  .showcase-nav,
+  .showcase-close,
+  .showcase-playpause,
+  .showcase-fullscreen {
     animation: none !important;
     transition: none !important;
   }
 
+  /* Also cancel the default zoom so the background sits perfectly still. */
   .showcase-bg {
+    transform: none;
+  }
+
+  /* ...and the thumbnail's hover lift. */
+  .showcase-thumb:hover {
     transform: none;
   }
 }

@@ -1,15 +1,8 @@
-// GroupShowcase — a cinematic, Apple-style presentation of the community
-// groups for the public landing page. Instead of a plain grid of cards, it
-// shows ONE group at a time on a large "stage". It glides to the next group on
-// its own after a few seconds (with no on-screen countdown), and visitors can
-// also drive it themselves: swipe sideways on a phone, or use the arrows /
-// thumbnails on a computer. Any manual move restarts the wait. Each change
-// cross-fades and plays a slow background zoom (the "Ken Burns" effect).
-//
-// Groups today have no image, so each group gets a rich, deterministic
-// gradient "scene" (same group -> same colours every time). If a group ever
-// gains an `imageUrl` / `image` / `photoURL` field, the stage uses that photo
-// automatically — no code change needed.
+// GroupShowcase — a cinematic, one-group-at-a-time showcase of the community
+// groups. It auto-advances every few seconds and can also be driven by swipe /
+// arrows / thumbnails (any manual move restarts the wait). Groups with no image
+// get a deterministic gradient "scene" an imageUrl/image/photoURL is used
+// automatically if one is ever added.
 
 // React hooks for state, side effects, stable callbacks, a memo, and a ref.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -56,26 +49,40 @@ function hashString(text) {
 
 // Read a group's display name, tolerating the two field names used elsewhere.
 function getGroupName(group) {
-  return group.groupName || group.name || 'קבוצה ללא שם';
+  // Trim so a name that is only whitespace falls through to the next option.
+  const name = group.groupName?.trim() || group.name?.trim();
+  return name || 'קבוצה ללא שם';
 }
 
 
 // First visible character of the name, used as the big "monogram" on gradient
 // scenes that have no photo.
 function getInitial(group) {
-  const name = getGroupName(group).trim();
-  return name ? name[0] : '◍';
+  // Array.from keeps a multi-byte first character (e.g. an emoji) whole.
+  return Array.from(getGroupName(group))[0] || '◍';
 }
 
 
 // A group's uploaded photo, if it has one. Returns null when there is none —
 // the showcase then shows the group's gradient "scene" with its monogram.
 function getImageUrl(group) {
-  return group.imageUrl || group.image || group.photoURL || null;
+  // Trim so an all-whitespace field doesn't count as a real image url.
+  const url = group.imageUrl?.trim() || group.image?.trim() || group.photoURL?.trim();
+  return url || null;
 }
 
 
-function GroupShowcase({ groups }) {
+// True when a slide is the active one or an immediate neighbour — counting the
+// wrap-around at the ends (the last slide neighbours the first). Lets us load a
+// photo only just before it's needed.
+function isNearActiveSlide(index, activeIndex, count) {
+  const direct = Math.abs(index - activeIndex);
+  const wrapped = count - direct;
+  return Math.min(direct, wrapped) <= 1;
+}
+
+
+function GroupShowcase({ groups = [] }) {
   // Which group is currently centre stage.
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -120,13 +127,24 @@ function GroupShowcase({ groups }) {
   const goNext = useCallback(() => goTo(activeIndex + 1), [goTo, activeIndex]);
   const goPrev = useCallback(() => goTo(activeIndex - 1), [goTo, activeIndex]);
 
+  // If the groups list ever shrinks, keep activeIndex inside the new range so
+  // the stage never points at a slide that no longer exists.
+  useEffect(() => {
+    setActiveIndex((current) => (groups.length === 0 ? 0 : Math.min(current, groups.length - 1)));
+  }, [groups.length]);
+
   // Where a touch gesture started (so we can measure a swipe). On phones the
   // arrows are hidden, so swiping is the primary way to move between groups.
   const touchStartX = useRef(null);
 
+  // Set when a touch turns out to be a swipe, so the click it can also fire
+  // afterwards doesn't toggle fullscreen by accident.
+  const didSwipe = useRef(false);
+
   // Remember where the finger first landed.
   const handleTouchStart = (event) => {
     touchStartX.current = event.touches[0].clientX;
+    didSwipe.current = false;
   };
 
   // On release, a far-enough horizontal drag flips to the next / previous group.
@@ -141,8 +159,10 @@ function GroupShowcase({ groups }) {
 
     // Dragging left advances; dragging right goes back.
     if (deltaX < -SWIPE_THRESHOLD) {
+      didSwipe.current = true;
       goNext();
     } else if (deltaX > SWIPE_THRESHOLD) {
+      didSwipe.current = true;
       goPrev();
     }
 
@@ -163,8 +183,15 @@ function GroupShowcase({ groups }) {
     return () => clearTimeout(timer);
   }, [activeIndex, groups.length, reduceMotion, isPaused, goNext]);
 
-  // Tapping the stage expands it to fullscreen; tapping again closes it.
-  const toggleFullscreen = () => setIsFullscreen((open) => !open);
+  // Tapping the stage expands it to fullscreen; tapping again closes it. A swipe
+  // can also fire a click, so swallow the click that immediately follows one.
+  const toggleFullscreen = () => {
+    if (didSwipe.current) {
+      didSwipe.current = false;
+      return;
+    }
+    setIsFullscreen((open) => !open);
+  };
 
   // While fullscreen: freeze the page behind the overlay and let Escape close.
   useEffect(() => {
@@ -203,9 +230,12 @@ function GroupShowcase({ groups }) {
 
   // Let the left / right arrow keys drive the showcase too.
   const handleKeyDown = (event) => {
+    // preventDefault stops the arrow keys from also scrolling the page.
     if (event.key === 'ArrowLeft') {
+      event.preventDefault();
       goNext();
     } else if (event.key === 'ArrowRight') {
+      event.preventDefault();
       goPrev();
     }
   };
@@ -227,7 +257,11 @@ function GroupShowcase({ groups }) {
           click from bubbling, so they navigate instead of toggling). */}
       <div
         className="showcase-stage"
+        // Carousel semantics: a labelled group whose role is announced as a
+        // "carousel" (APG pattern), so assistive tech describes it correctly.
+        role="group"
         aria-roledescription="carousel"
+        aria-label="חלון ראווה של קבוצות הקהילה"
         onClick={toggleFullscreen}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
@@ -237,7 +271,7 @@ function GroupShowcase({ groups }) {
           // Only the active slide (and its neighbours) need to be "live", so we
           // load a photo only when it is about to be seen — keeps things light.
           const isActive = index === activeIndex;
-          const isNear = Math.abs(index - activeIndex) <= 1;
+          const isNear = isNearActiveSlide(index, activeIndex, groups.length);
 
           const imageUrl = getImageUrl(group);
           const showImage = imageUrl && isNear;
@@ -343,6 +377,22 @@ function GroupShowcase({ groups }) {
           </button>
         )}
 
+        {/* Open fullscreen — keyboard-reachable (the whole stage is a click
+            target too, but a <div> can't receive keyboard focus). */}
+        {!isFullscreen && (
+          <button
+            type="button"
+            className="showcase-fullscreen"
+            onClick={(event) => {
+              event.stopPropagation();
+              setIsFullscreen(true);
+            }}
+            aria-label="פתיחת תצוגה במסך מלא"
+          >
+            ⛶
+          </button>
+        )}
+
         {/* Close button, only in fullscreen (tapping the image or Esc also closes). */}
         {isFullscreen && (
           <button
@@ -361,25 +411,28 @@ function GroupShowcase({ groups }) {
 
       {/* Thumbnail rail: a mini scene per group, the active one highlighted. */}
       {groups.length > 1 && (
-        <div className="showcase-thumbs" role="tablist" aria-label="בחירת קבוצה">
+        <div className="showcase-thumbs" aria-label="בחירת קבוצה">
           {groups.map((group, index) => {
             // The group's photo on its thumbnail (gradient if it has none).
             const thumbImage = getImageUrl(group);
+            const isActive = index === activeIndex;
+            const groupName = getGroupName(group);
 
             return (
             <button
               type="button"
               key={group.id || index}
-              className={`showcase-thumb${index === activeIndex ? ' is-active' : ''}`}
+              className={`showcase-thumb${isActive ? ' is-active' : ''}`}
               style={{
                 backgroundImage: thumbImage ? `url(${thumbImage})` : gradients[index],
               }}
               onClick={() => goTo(index)}
-              role="tab"
-              aria-selected={index === activeIndex}
-              aria-label={getGroupName(group)}
+              // Plain buttons with aria-current — a full ARIA "tabs" pattern would
+              // also need tabpanels, aria-controls and arrow-key roving.
+              aria-current={isActive ? 'true' : undefined}
+              aria-label={`הצגת ${groupName}`}
             >
-              <span className="showcase-thumb-name">{getGroupName(group)}</span>
+              <span className="showcase-thumb-name">{groupName}</span>
             </button>
             );
           })}
