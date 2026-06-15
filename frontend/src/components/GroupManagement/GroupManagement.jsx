@@ -26,6 +26,9 @@ import { GROUP_TIMES } from '../../utils/groupOptions';
 // Downloads the empty groups template (dropdowns for time/guide/day).
 import { downloadGroupsTemplate } from '../../utils/excelTemplates';
 
+// Shared collapsible advanced-search bar (free text + per-field filters).
+import SearchFilters from '../shared/SearchFilters/SearchFilters';
+
 // Shared management-screen styles + this screen's own styles.
 import '../shared/ManagementScreen.css';
 import './GroupManagement.css';
@@ -123,6 +126,28 @@ const GroupManagement = ({ registerBack }) => {
 
   // Search text for filtering the list.
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Sort direction for the group-name column. Clicking the header toggles it
+  // (the list is sorted A→Z by default).
+  const [sortDir, setSortDir] = useState('asc');
+  const toggleSort = () => setSortDir((dir) => (dir === 'asc' ? 'desc' : 'asc'));
+
+  // On phones the list collapses to names only; this is the row tapped open.
+  const [expandedId, setExpandedId] = useState(null);
+  const toggleExpand = (id) => setExpandedId((current) => (current === id ? null : id));
+
+  // Structured "advanced filters" (empty string means "don't filter").
+  const [filters, setFilters] = useState({ time: '', assigned: '' });
+
+  // Update one filter by name (handed to the shared SearchFilters component).
+  const updateFilter = (name, value) => {
+    setFilters((current) => ({ ...current, [name]: value }));
+  };
+
+  // Reset every structured filter.
+  const clearFilters = () => {
+    setFilters({ time: '', assigned: '' });
+  };
 
   // "Assign guide" modal state.
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
@@ -607,14 +632,69 @@ const GroupManagement = ({ registerBack }) => {
     )).length
   );
 
-  // Groups filtered by the search box.
+  // Groups filtered by the free-text search AND the structured filters, then
+  // sorted alphabetically by name (the header toggles the direction).
   const filteredGroups = useMemo(() => {
     const search = searchQuery.trim().toLowerCase();
-    if (!search) return groups;
-    return groups.filter((group) =>
-      (group.groupName || group.name || '').toLowerCase().includes(search),
-    );
-  }, [groups, searchQuery]);
+
+    const result = groups.filter((group) => {
+      // Advanced filter — activity time (בוקר / צהריים / ערב).
+      if (filters.time && (group.time || '') !== filters.time) {
+        return false;
+      }
+
+      // Advanced filter — whether a guide is assigned to the group.
+      if (filters.assigned) {
+        const hasGuide = Boolean(group.guideId || group.guideName);
+        if (filters.assigned === 'assigned' && !hasGuide) return false;
+        if (filters.assigned === 'unassigned' && hasGuide) return false;
+      }
+
+      // Free-text search — across the name, time, description and guide name.
+      if (search) {
+        const text = [
+          group.groupName,
+          group.name,
+          group.time,
+          group.description,
+          group.guideName,
+        ].filter(Boolean).join(' ').toLowerCase();
+
+        if (!text.includes(search)) return false;
+      }
+
+      return true;
+    });
+
+    // Sort by the group's name, honouring the chosen direction.
+    return result.sort((a, b) => {
+      const nameA = (a.groupName || a.name || '').trim();
+      const nameB = (b.groupName || b.name || '').trim();
+      const comparison = nameA.localeCompare(nameB, 'he');
+      return sortDir === 'asc' ? comparison : -comparison;
+    });
+  }, [groups, searchQuery, filters, sortDir]);
+
+  // The advanced-panel fields: filter by activity time and assignment status.
+  const groupFilterFields = [
+    {
+      name: 'time',
+      label: 'זמן פעילות',
+      type: 'select',
+      placeholder: 'כל הזמנים',
+      options: GROUP_TIMES,
+    },
+    {
+      name: 'assigned',
+      label: 'שיוך מדריך',
+      type: 'select',
+      placeholder: 'הכול',
+      options: [
+        { value: 'assigned', label: 'משויך למדריך' },
+        { value: 'unassigned', label: 'טרם שויך' },
+      ],
+    },
+  ];
 
   // When a group is opened, show its details view instead of the list.
   if (selectedGroupId) {
@@ -630,16 +710,14 @@ const GroupManagement = ({ registerBack }) => {
     <main className="mgmt-container" dir="rtl">
       <section className="mgmt-card">
 
-        {/* Header: just the group count (the sidebar labels the screen). */}
+        {/* Header: the group count on one side, and the action buttons (create
+            / import / download) on the same row — raised up here from below. */}
         <header className="mgmt-header">
           <div className="mgmt-count">
             <span>{filteredGroups.length}</span>
             <small>קבוצות</small>
           </div>
-        </header>
 
-        {/* Toolbar: add button, search, optional volunteers shortcut. */}
-        <section className="mgmt-section">
           <div className="mgmt-toolbar">
             <button className="mgmt-primary-btn" onClick={openAddModal}>+ צור קבוצה חדשה</button>
 
@@ -656,7 +734,7 @@ const GroupManagement = ({ registerBack }) => {
               onClick={() => importFileRef.current?.click()}
               disabled={isImporting}
             >
-              {isImporting ? '⏳ מייבא...' : '📥 ייבוא מאקסל'}
+              {isImporting ? '⏳ מייבא...' : '📥 ייבוא קבוצות'}
             </button>
             <button
               className="mgmt-secondary-btn"
@@ -674,12 +752,21 @@ const GroupManagement = ({ registerBack }) => {
             >
               ⬇️ הורדת תבנית אקסל
             </button>
-            <input
-              type="search"
-              className="mgmt-search"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="🔍 חפש קבוצה לפי שם..."
+          </div>
+        </header>
+
+        {/* Free-text search (name / time / guide / description) + collapsible
+            advanced filters (activity time, assignment status). */}
+        <section className="mgmt-section">
+          <div className="mgmt-filters-row">
+            <SearchFilters
+              searchValue={searchQuery}
+              onSearchChange={setSearchQuery}
+              searchPlaceholder="🔍 חיפוש קבוצה לפי שם, זמן או מדריך..."
+              fields={groupFilterFields}
+              values={filters}
+              onChange={updateFilter}
+              onClear={clearFilters}
             />
           </div>
         </section>
@@ -693,10 +780,15 @@ const GroupManagement = ({ registerBack }) => {
           <div className="mgmt-table-wrap">
             <table className="mgmt-table">
 
-              {/* Column headers. */}
+              {/* Column headers. The name header is a button that sorts A↔Z. */}
               <thead>
                 <tr>
-                  <th>שם הקבוצה</th>
+                  <th>
+                    <button type="button" className="mgmt-sort is-active" onClick={toggleSort}>
+                      שם הקבוצה
+                      <span className="mgmt-sort-arrow" aria-hidden="true">{sortDir === 'asc' ? '▲' : '▼'}</span>
+                    </button>
+                  </th>
                   <th>מדריך משויך</th>
                   <th className="mgmt-col-num">כמות מתנדבים</th>
                   <th>פעולות</th>
@@ -718,8 +810,14 @@ const GroupManagement = ({ registerBack }) => {
                     const guideDisplayName = getGuideDisplayName(group);
 
                     return (
-                      <tr key={group.id}>
-                        <td data-label="שם הקבוצה"><strong>{groupName}</strong></td>
+                      <tr key={group.id} className={expandedId === group.id ? 'is-expanded' : ''}>
+                        <td
+                          data-label="שם הקבוצה"
+                          className="mgmt-name-cell"
+                          onClick={() => toggleExpand(group.id)}
+                        >
+                          <strong>{groupName}</strong>
+                        </td>
 
                         {/* Assigned guide badge (or "not assigned"). */}
                         <td data-label="מדריך משויך">

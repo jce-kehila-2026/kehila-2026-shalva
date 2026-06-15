@@ -34,13 +34,13 @@ const NAV_ITEMS = [
   { id: 'overview', label: 'דף הבית' },
   { id: 'groups', label: 'ניהול קבוצות' },
   { id: 'volunteers', label: 'ניהול מתנדבים' },
-  { id: 'registrations', label: 'הרשמות להתנדבות' },
+  { id: 'registrations', label: 'ניהול נרשמים' },
   { id: 'guides', label: 'ניהול מדריכים' },
   { id: 'events', label: 'ניהול אירועים' },
   { id: 'attendance', label: 'מעקב נוכחות' },
   { id: 'messages', label: 'הודעות' },
   { id: 'reports', label: 'דוחות' },
-  { id: 'charts', label: 'תרשימים' },
+  { id: 'charts', label: 'סטטיסטיקה' },
   { id: 'birthdays', label: 'ימי הולדת' },
 ];
 

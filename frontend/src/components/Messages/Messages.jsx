@@ -1,8 +1,9 @@
-// Messages — the admin messaging hub. Compose a message once, pick the
-// audience (everyone / specific groups / a single volunteer), and send it
+// Messages — the admin messaging hub. Write a message once, choose who gets it
+// (every volunteer / by group / a single person found by search), then send it
 // person-by-person over WhatsApp. There is no sending server: each recipient
-// gets a one-tap WhatsApp button with the message pre-filled, plus a
-// copy-message button for any other channel.
+// gets a one-tap WhatsApp button that opens the chat with the message ready,
+// so the admin can tweak the wording before it goes out. The search covers
+// BOTH volunteers and guides, so anyone can be reached in a couple of taps.
 
 // React hooks for state, effects and derived values.
 import { useEffect, useMemo, useState } from 'react';
@@ -13,7 +14,8 @@ import { collection, getDocs } from 'firebase/firestore';
 // Our Firestore database instance.
 import { db } from '../../firebase';
 
-// One-tap WhatsApp button (disabled chip when there's no phone).
+// One-tap WhatsApp button (opens an edit-before-send modal; disabled chip when
+// there's no phone).
 import WhatsAppButton from '../shared/WhatsAppButton/WhatsAppButton';
 
 // Shared people helpers + message templates.
@@ -28,14 +30,22 @@ import './Messages.css';
 // The audience modes the admin can pick from.
 const AUDIENCE_MODES = [
   { id: 'all', label: 'כל המתנדבים' },
-  { id: 'groups', label: 'לפי קבוצות' },
-  { id: 'single', label: 'מתנדב בודד' },
+  { id: 'groups', label: 'לפי קבוצה' },
+  { id: 'search', label: 'חיפוש אדם' },
 ];
+
+
+// First letter of a name, for the avatar circle.
+const initialOf = (name) => {
+  const trimmed = (name || '').trim();
+  return trimmed ? trimmed.charAt(0).toUpperCase() : '?';
+};
 
 
 function Messages() {
   // The raw collections.
   const [volunteers, setVolunteers] = useState([]);
+  const [guides, setGuides] = useState([]);
   const [groups, setGroups] = useState([]);
 
   // The message text being composed.
@@ -44,19 +54,23 @@ function Messages() {
   // The chosen audience mode + its selections.
   const [audienceMode, setAudienceMode] = useState('all');
   const [selectedGroupIds, setSelectedGroupIds] = useState([]);
-  const [singleSearch, setSingleSearch] = useState('');
-  const [singleVolunteerId, setSingleVolunteerId] = useState('');
+  const [searchText, setSearchText] = useState('');
 
-  // Load volunteers + groups once.
+  // A short-lived "copied!" confirmation on the copy button.
+  const [copied, setCopied] = useState(false);
+
+  // Load volunteers + guides + groups once.
   useEffect(() => {
     const load = async () => {
       try {
-        const [volunteersSnap, groupsSnap] = await Promise.all([
+        const [volunteersSnap, guidesSnap, groupsSnap] = await Promise.all([
           getDocs(collection(db, 'volunteers')),
+          getDocs(collection(db, 'guides')),
           getDocs(collection(db, 'groups')),
         ]);
 
         setVolunteers(volunteersSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        setGuides(guidesSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
         setGroups(groupsSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
       } catch (error) {
         console.error('שגיאה בטעינת נתונים:', error);
@@ -65,6 +79,24 @@ function Messages() {
 
     load();
   }, []);
+
+  // Tag a person with their role + a stable React key, so volunteers and guides
+  // can share one list without their ids clashing.
+  const tagPerson = (person, kind) => ({
+    ...person,
+    _kind: kind,
+    _role: kind === 'guide' ? 'מדריך' : 'מתנדב',
+    _key: `${kind}_${person.id}`,
+  });
+
+  // Everyone (volunteers + guides) — the pool the "search" mode runs over.
+  const everyone = useMemo(
+    () => [
+      ...volunteers.map((person) => tagPerson(person, 'volunteer')),
+      ...guides.map((person) => tagPerson(person, 'guide')),
+    ],
+    [volunteers, guides],
+  );
 
   // Toggle one group in the multi-select.
   const toggleGroup = (groupId) => {
@@ -75,7 +107,8 @@ function Messages() {
     ));
   };
 
-  // Does this volunteer belong to one of the selected groups?
+  // Does this volunteer belong to one of the selected groups? (matched by id or
+  // by the group's name, since older records store one or the other).
   const volunteerInSelectedGroups = (volunteer) => {
     const selectedNames = groups
       .filter((group) => selectedGroupIds.includes(group.id))
@@ -87,36 +120,54 @@ function Messages() {
     );
   };
 
+  // A person matches the search when the text appears in their name, phone or
+  // group — so the admin can find someone by any of them.
+  const matchesSearch = (person, text) => {
+    const haystack = [getDisplayName(person), person.phone, person.groupName]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+    return haystack.includes(text);
+  };
+
   // The recipients matching the chosen audience.
   const recipients = useMemo(() => {
     if (audienceMode === 'all') {
-      return volunteers;
+      return volunteers.map((person) => tagPerson(person, 'volunteer'));
     }
 
     if (audienceMode === 'groups') {
-      return volunteers.filter(volunteerInSelectedGroups);
+      return volunteers
+        .filter(volunteerInSelectedGroups)
+        .map((person) => tagPerson(person, 'volunteer'));
     }
 
-    // Single mode: just the picked volunteer (if any).
-    return volunteers.filter((volunteer) => volunteer.id === singleVolunteerId);
+    // Search mode: match volunteers AND guides; empty until the admin types.
+    const text = searchText.trim().toLowerCase();
+    if (!text) {
+      return [];
+    }
+
+    return everyone.filter((person) => matchesSearch(person, text));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [audienceMode, volunteers, selectedGroupIds, singleVolunteerId, groups]);
+  }, [audienceMode, volunteers, everyone, selectedGroupIds, searchText, groups]);
 
   // The recipients that actually have a usable phone (the send queue).
-  const reachableRecipients = recipients.filter((volunteer) => hasValidPhone(volunteer.phone));
+  const reachableRecipients = recipients.filter((person) => hasValidPhone(person.phone));
   const reachableCount = reachableRecipients.length;
 
-  // How far the one-button send has progressed through the queue.
+  // How far the one-button "send to everyone" has progressed through the queue.
   const [sendIndex, setSendIndex] = useState(0);
 
   // Changing the audience or the message restarts the queue.
   useEffect(() => {
     setSendIndex(0);
-  }, [audienceMode, selectedGroupIds, singleVolunteerId, messageText]);
+  }, [audienceMode, selectedGroupIds, searchText, messageText]);
 
-  // One button sends to everyone selected: each press opens the NEXT
-  // recipient's WhatsApp chat with the message ready (browsers block opening
-  // many chats at once, so the queue advances press by press).
+  // One button sends to everyone selected: each press opens the NEXT recipient's
+  // WhatsApp chat with the message ready (browsers block opening many chats at
+  // once, so the queue advances press by press).
   const handleSendToAll = () => {
     if (sendIndex >= reachableRecipients.length) {
       setSendIndex(0);
@@ -128,25 +179,30 @@ function Messages() {
     setSendIndex(sendIndex + 1);
   };
 
-  // Volunteers matching the single-mode search box.
-  const singleMatches = useMemo(() => {
-    const text = singleSearch.trim().toLowerCase();
-    if (!text) return [];
-
-    return volunteers
-      .filter((volunteer) => getDisplayName(volunteer).toLowerCase().includes(text))
-      .slice(0, 8);
-  }, [singleSearch, volunteers]);
-
   // Copy the composed message for use in any other channel.
   const handleCopyMessage = async () => {
     try {
       await navigator.clipboard.writeText(messageText);
-      alert('ההודעה הועתקה!');
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
     } catch {
-      alert('ההעתקה נכשלה — סמנו והעתיקו ידנית.');
+      // Clipboard blocked — leave the button as-is; the text is still on screen.
     }
   };
+
+  // The label on the "send to everyone" button, which reflects queue progress.
+  const sendAllLabel = sendIndex === 0
+    ? `שליחה לכולם (${reachableCount})`
+    : sendIndex >= reachableCount
+      ? 'נשלח לכולם — התחלה מחדש'
+      : `לנמען הבא (${sendIndex}/${reachableCount})`;
+
+  // The empty-state line under the recipients, tailored to the current mode.
+  const emptyMessage = audienceMode === 'search'
+    ? (searchText.trim() ? 'לא נמצאו אנשים תואמים לחיפוש.' : 'הקלידו שם, טלפון או קבוצה כדי לחפש מתנדב או מדריך.')
+    : audienceMode === 'groups'
+      ? 'בחרו קבוצה אחת או יותר כדי לראות נמענים.'
+      : 'עדיין אין מתנדבים.';
 
   return (
     <main className="mgmt-container" dir="rtl">
@@ -156,47 +212,59 @@ function Messages() {
           <div>
             <h1 className="msg-title">מערכת הודעות</h1>
             <p className="mgmt-subtitle">
-              כותבים פעם אחת, בוחרים נמענים — ולכל נמען נפתחת וואטסאפ עם ההודעה מוכנה.
+              כותבים הודעה פעם אחת, בוחרים למי לשלוח — ולכל אדם נפתחת וואטסאפ עם ההודעה מוכנה.
             </p>
           </div>
         </header>
 
         {/* ---------- Step 1: compose ---------- */}
-        <section className="mgmt-section">
-          <h2>1. כתיבת ההודעה</h2>
+        <section className="msg-step">
+          <div className="msg-step-head">
+            <span className="msg-step-num">1</span>
+            <h2 className="msg-step-title">כתיבת ההודעה</h2>
+          </div>
 
           {/* Quick templates fill the textarea; everything stays editable. */}
           <div className="msg-templates">
-            <button type="button" className="mgmt-secondary-btn" onClick={() => setMessageText(greetingMessage(''))}>
-              תבנית: מה שלומך
+            <button type="button" className="msg-chip" onClick={() => setMessageText(greetingMessage(''))}>
+              מה שלומך
             </button>
-            <button type="button" className="mgmt-secondary-btn" onClick={() => setMessageText(birthdayMessage(''))}>
-              תבנית: יום הולדת
+            <button type="button" className="msg-chip" onClick={() => setMessageText(birthdayMessage(''))}>
+              יום הולדת
             </button>
-            <button type="button" className="mgmt-secondary-btn" onClick={() => setMessageText('')}>
-              ניקוי
-            </button>
+            {messageText && (
+              <button type="button" className="msg-chip msg-chip--clear" onClick={() => setMessageText('')}>
+                ניקוי
+              </button>
+            )}
           </div>
 
           <textarea
-            className="styled-input msg-textarea"
+            className="msg-textarea"
             value={messageText}
             onChange={(event) => setMessageText(event.target.value)}
             placeholder="כתבו כאן את ההודעה (עדכון, תזכורת, ברכה...)"
             rows={5}
           />
+
+          <div className="msg-charcount">{messageText.length} תווים</div>
         </section>
 
         {/* ---------- Step 2: audience ---------- */}
-        <section className="mgmt-section">
-          <h2>2. בחירת נמענים</h2>
+        <section className="msg-step">
+          <div className="msg-step-head">
+            <span className="msg-step-num">2</span>
+            <h2 className="msg-step-title">בחירת נמענים</h2>
+          </div>
 
           {/* Mode tabs. */}
-          <div className="msg-modes">
+          <div className="msg-modes" role="tablist" aria-label="בחירת קהל">
             {AUDIENCE_MODES.map((mode) => (
               <button
                 key={mode.id}
                 type="button"
+                role="tab"
+                aria-selected={audienceMode === mode.id}
                 className={`msg-mode-btn ${audienceMode === mode.id ? 'is-active' : ''}`}
                 onClick={() => setAudienceMode(mode.id)}
               >
@@ -207,104 +275,97 @@ function Messages() {
 
           {/* Group multi-select (only in groups mode). */}
           {audienceMode === 'groups' && (
-            <div className="msg-groups">
-              {groups.map((group) => (
-                <label key={group.id} className="msg-group-check">
-                  <input
-                    type="checkbox"
-                    checked={selectedGroupIds.includes(group.id)}
-                    onChange={() => toggleGroup(group.id)}
-                  />
-                  {group.groupName || group.name || 'קבוצה ללא שם'}
-                </label>
-              ))}
-            </div>
+            groups.length > 0 ? (
+              <div className="msg-groups">
+                {groups.map((group) => (
+                  <label key={group.id} className="msg-group-check">
+                    <input
+                      type="checkbox"
+                      checked={selectedGroupIds.includes(group.id)}
+                      onChange={() => toggleGroup(group.id)}
+                    />
+                    <span>{group.groupName || group.name || 'קבוצה ללא שם'}</span>
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <p className="msg-hint">עדיין אין קבוצות.</p>
+            )
           )}
 
-          {/* Single-volunteer picker (only in single mode). */}
-          {audienceMode === 'single' && (
-            <div className="msg-single">
-              <input
-                type="search"
-                className="mgmt-search"
-                value={singleSearch}
-                onChange={(event) => setSingleSearch(event.target.value)}
-                placeholder="🔍 חיפוש מתנדב לפי שם..."
-              />
-              {singleMatches.map((volunteer) => (
-                <button
-                  key={volunteer.id}
-                  type="button"
-                  className={`msg-single-option ${singleVolunteerId === volunteer.id ? 'is-active' : ''}`}
-                  onClick={() => setSingleVolunteerId(volunteer.id)}
-                >
-                  {getDisplayName(volunteer)}
-                </button>
-              ))}
-            </div>
+          {/* Person search (only in search mode) — finds volunteers AND guides. */}
+          {audienceMode === 'search' && (
+            <input
+              type="search"
+              className="msg-search"
+              value={searchText}
+              onChange={(event) => setSearchText(event.target.value)}
+              placeholder="🔍 חיפוש מתנדב או מדריך לפי שם, טלפון או קבוצה..."
+            />
           )}
         </section>
 
         {/* ---------- Step 3: send ---------- */}
-        <section className="mgmt-section">
-          <h2>3. שליחה</h2>
+        <section className="msg-step">
+          <div className="msg-step-head">
+            <span className="msg-step-num">3</span>
+            <h2 className="msg-step-title">שליחה</h2>
+          </div>
 
+          {/* Counts + the bulk send / copy actions. */}
           <div className="msg-summary">
-            <span><strong>{recipients.length}</strong> נמענים נבחרו</span>
-            <span><strong>{reachableCount}</strong> עם מספר וואטסאפ תקין</span>
+            <span className="msg-stat"><strong>{recipients.length}</strong> נמענים</span>
+            <span className="msg-stat msg-stat--ok"><strong>{reachableCount}</strong> עם וואטסאפ</span>
 
-            {/* One send button for everyone selected — advances the queue. */}
-            <button
-              type="button"
-              className="msg-send-all-btn"
-              onClick={handleSendToAll}
-              disabled={!messageText.trim() || reachableCount === 0}
-            >
-              {sendIndex === 0
-                ? `📤 שליחה לכל הנמענים (${reachableCount})`
-                : sendIndex >= reachableCount
-                  ? '✅ נשלח לכולם — לחיצה להתחלה מחדש'
-                  : `📤 לנמען הבא (${sendIndex}/${reachableCount})`}
-            </button>
-            <button type="button" className="mgmt-secondary-btn" onClick={handleCopyMessage} disabled={!messageText.trim()}>
-              📋 העתקת ההודעה
-            </button>
+            <div className="msg-summary-actions">
+              <button
+                type="button"
+                className="msg-send-all-btn"
+                onClick={handleSendToAll}
+                disabled={!messageText.trim() || reachableCount === 0}
+              >
+                {sendAllLabel}
+              </button>
+              <button
+                type="button"
+                className="msg-copy-btn"
+                onClick={handleCopyMessage}
+                disabled={!messageText.trim()}
+              >
+                {copied ? '✓ הועתק' : 'העתקת ההודעה'}
+              </button>
+            </div>
           </div>
 
-          {/* One row per recipient with a pre-filled WhatsApp button. */}
-          <div className="mgmt-table-wrap">
-            <table className="mgmt-table">
-              <thead>
-                <tr>
-                  <th>שם</th>
-                  <th>קבוצה</th>
-                  <th>שליחה</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recipients.length > 0 ? (
-                  recipients.map((volunteer) => (
-                    <tr key={volunteer.id}>
-                      <td data-label="שם">{getDisplayName(volunteer)}</td>
-                      <td data-label="קבוצה">{volunteer.groupName || 'ללא קבוצה'}</td>
-                      <td data-label="שליחה">
-                        <WhatsAppButton
-                          phone={volunteer.phone}
-                          message={messageText}
-                          label="שליחה"
-                          compact
-                        />
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="3" className="mgmt-empty">בחרו נמענים כדי לשלוח.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          {/* One card per recipient, each with a pre-filled WhatsApp button. */}
+          {recipients.length > 0 ? (
+            <div className="msg-recipients">
+              {recipients.map((person) => (
+                <article className="msg-recipient" key={person._key}>
+                  <span className="msg-recipient-avatar">{initialOf(getDisplayName(person))}</span>
+
+                  <div className="msg-recipient-info">
+                    <span className="msg-recipient-name">{getDisplayName(person)}</span>
+                    <span className="msg-recipient-meta">
+                      <span className={`msg-role ${person._kind === 'guide' ? 'msg-role--guide' : 'msg-role--vol'}`}>
+                        {person._role}
+                      </span>
+                      {person.groupName && <span className="msg-recipient-group">{person.groupName}</span>}
+                    </span>
+                  </div>
+
+                  <WhatsAppButton
+                    phone={person.phone}
+                    message={messageText}
+                    label="שליחה"
+                    compact
+                  />
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="msg-empty">{emptyMessage}</div>
+          )}
         </section>
       </section>
     </main>

@@ -29,6 +29,16 @@ service firebase.storage {
                    && request.resource.contentType.matches('image/(jpeg|png|webp)');
     }
 
+    // Signed volunteer forms. The public signing page may upload one PDF, and
+    // admins may open it from registrations management.
+    match /signedForms/{formId}/{fileName} {
+      allow create: if fileName.matches('shalva-signed-form-[A-Za-z0-9]+[.]pdf')
+                    && request.resource.size <= 8 * 1024 * 1024
+                    && request.resource.contentType == 'application/pdf';
+      allow read, delete: if isActiveAdmin();
+      allow update: if false;
+    }
+
     // Everything else stays denied by default.
     match /{allPaths=**} {
       allow read, write: if false;

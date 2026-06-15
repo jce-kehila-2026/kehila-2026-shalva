@@ -1,7 +1,10 @@
 /* Root wrapper for the whole birthdays screen (right-aligned, RTL). */
 .birthdays {
+  width: 100%;
+  max-width: 100%;
   margin-top: 24px;
   text-align: right;
+  overflow-x: hidden;
 }
 
 
@@ -267,6 +270,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
 }
 
 /* Centers the WhatsApp button under its card. */
@@ -279,6 +283,7 @@
 .birthday-card {
   position: relative;
   width: 100%;
+  min-width: 0;
   height: 100%;
   box-sizing: border-box;
   display: flex;
@@ -353,14 +358,15 @@
 .birthday-card-info {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
   min-width: 0;
-  margin-inline-end: auto;
 }
 
 /* Person's name (truncated with an ellipsis if too long). */
 .birthday-name {
   font-weight: 700;
   color: var(--text);
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -388,8 +394,33 @@
 
 /* On small screens: one card per row and hide some decorations. */
 @media (max-width: 600px) {
+  .birthdays {
+    margin-top: 14px;
+  }
+
+  .birthday-months {
+    padding: 12px;
+    overflow: hidden;
+  }
+
   .birthday-grid {
     grid-template-columns: 1fr;
+  }
+
+  .birthday-card {
+    gap: 10px;
+    padding: 14px 12px;
+  }
+
+  .birthday-emoji {
+    width: 46px;
+    height: 46px;
+    font-size: 24px;
+  }
+
+  .birthday-age {
+    padding: 5px 10px;
+    font-size: 12.5px;
   }
 
   .bday-deco-2,

@@ -105,6 +105,13 @@ body {
   min-height: 100vh;
 }
 
+@media (max-width: 760px) {
+  body,
+  #root {
+    min-height: 100svh;
+  }
+}
+
 
 /* Shared heading defaults. */
 h1,

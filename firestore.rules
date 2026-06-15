@@ -104,6 +104,81 @@ service cloud.firestore {
       allow read, update, delete: if isAdmin();
     }
 
+    // Public signed volunteer forms: anyone with the link may submit one signed
+    // form (create only); only an admin may read them. A strict field allowlist
+    // + size caps keep this safe as a public endpoint. NOTE: requires deploying
+    // these rules (firebase deploy --only firestore:rules) before submissions
+    // can be stored on the server.
+    match /signedForms/{id} {
+      allow create: if request.resource.data.keys().hasOnly([
+            'registrantId', 'fullName', 'firstName', 'lastName',
+            'idNumber', 'age', 'birthDateGreg', 'birthDateHeb',
+            'address', 'phone', 'email', 'school', 'shirtSize',
+            'groupName', 'activityDays', 'agreed', 'signature',
+            'pdfStoragePath', 'pdfFileName', 'createdAt'
+          ])
+        && request.resource.data.keys().hasAll([
+            'registrantId', 'fullName', 'firstName', 'lastName',
+            'idNumber', 'age', 'birthDateGreg', 'birthDateHeb',
+            'address', 'phone', 'email', 'school', 'shirtSize',
+            'groupName', 'activityDays', 'agreed', 'signature',
+            'pdfStoragePath', 'pdfFileName', 'createdAt'
+          ])
+        && request.resource.data.registrantId is string
+        && request.resource.data.registrantId.size() <= 120
+        && request.resource.data.fullName is string
+        && request.resource.data.fullName.size() > 0
+        && request.resource.data.fullName.size() <= 120
+        && request.resource.data.firstName is string
+        && request.resource.data.firstName.size() > 0
+        && request.resource.data.firstName.size() <= 60
+        && request.resource.data.lastName is string
+        && request.resource.data.lastName.size() > 0
+        && request.resource.data.lastName.size() <= 60
+        && request.resource.data.idNumber is string
+        && request.resource.data.idNumber.matches('[0-9]{9}')
+        && request.resource.data.age is number
+        && request.resource.data.age >= 0
+        && request.resource.data.age <= 120
+        && request.resource.data.birthDateGreg is string
+        && request.resource.data.birthDateGreg.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        // Hebrew date is optional in the UI; an empty string is valid.
+        && request.resource.data.birthDateHeb is string
+        && request.resource.data.birthDateHeb.size() <= 80
+        && request.resource.data.address is string
+        && request.resource.data.address.size() > 0
+        && request.resource.data.address.size() <= 180
+        && request.resource.data.phone is string
+        && request.resource.data.phone.size() >= 9
+        && request.resource.data.phone.size() <= 25
+        && request.resource.data.email is string
+        && request.resource.data.email.size() > 0
+        && request.resource.data.email.size() <= 120
+        && request.resource.data.email.matches('.+@.+[.].+')
+        && request.resource.data.school is string
+        && request.resource.data.school.size() > 0
+        && request.resource.data.school.size() <= 160
+        && request.resource.data.shirtSize in ['XS', 'S', 'M', 'L', 'XL', 'XXL']
+        && request.resource.data.groupName is string
+        && request.resource.data.groupName.size() > 0
+        && request.resource.data.groupName.size() <= 120
+        && request.resource.data.activityDays is list
+        && request.resource.data.activityDays.size() > 0
+        && request.resource.data.activityDays.size() <= 5
+        && request.resource.data.pdfFileName is string
+        && request.resource.data.pdfFileName.matches('shalva-signed-form-[A-Za-z0-9]+[.]pdf')
+        && request.resource.data.pdfStoragePath is string
+        && request.resource.data.pdfStoragePath.matches('signedForms/[A-Za-z0-9]+/shalva-signed-form-[A-Za-z0-9]+[.]pdf')
+        // The drawn signature (a PNG data-URL) is required, capped in size.
+        && request.resource.data.signature is string
+        && request.resource.data.signature.size() > 0
+        && request.resource.data.signature.size() <= 300000
+        // The volunteer must have ticked the agreement box.
+        && request.resource.data.agreed == true
+        && request.resource.data.createdAt is timestamp;
+      allow read, update, delete: if isAdmin();
+    }
+
     // Volunteers: active users may read (the guide screens read the whole list
     // and filter client-side). Only an admin may write — guides never edit
     // volunteers in the app, so this stays admin-only on the server too.

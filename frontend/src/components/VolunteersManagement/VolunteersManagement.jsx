@@ -17,6 +17,9 @@ import BirthDatePicker from '../shared/BirthDatePicker/BirthDatePicker';
 // Button that opens a pre-filled WhatsApp message.
 import WhatsAppButton from '../shared/WhatsAppButton/WhatsAppButton';
 
+// Shared collapsible advanced-search bar (free text + per-field filters).
+import SearchFilters from '../shared/SearchFilters/SearchFilters';
+
 // Builds the greeting text for WhatsApp.
 import { greetingMessage } from '../../utils/whatsapp';
 
@@ -52,7 +55,51 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
 
   const [volunteers, setVolunteers] = useState([]);
   const [groups, setGroups] = useState([]);
+
+  // Signed forms that came back from the public digital form (admin-readable),
+  // matched to a volunteer by the registrant id they were approved from.
+  const [signedForms, setSignedForms] = useState([]);
+
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Structured "advanced filters" — every field can narrow the list further,
+  // on top of the free-text search above. Empty string means "don't filter".
+  const [filters, setFilters] = useState({
+    groupId: '',
+    activityTime: '',
+    ageMin: '',
+    ageMax: '',
+  });
+
+  // Update one filter by name (handed to the shared SearchFilters component).
+  const updateFilter = (name, value) => {
+    setFilters((current) => ({ ...current, [name]: value }));
+  };
+
+  // Reset every structured filter back to "don't filter".
+  const clearFilters = () => {
+    setFilters({ groupId: '', activityTime: '', ageMin: '', ageMax: '' });
+  };
+
+  // Which column the table is sorted by ('name' or 'group') and its direction.
+  // Defaults to the volunteer name, A→Z.
+  const [sortBy, setSortBy] = useState('name');
+  const [sortDir, setSortDir] = useState('asc');
+
+  // Click a column header: toggle direction if it's already the sort column,
+  // otherwise switch to that column starting A→Z.
+  const handleSort = (column) => {
+    if (sortBy === column) {
+      setSortDir((dir) => (dir === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(column);
+      setSortDir('asc');
+    }
+  };
+
+  // On phones the list collapses to names only; this is the row tapped open.
+  const [expandedId, setExpandedId] = useState(null);
+  const toggleExpand = (id) => setExpandedId((current) => (current === id ? null : id));
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingVolunteer, setEditingVolunteer] = useState(null);
@@ -77,6 +124,8 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
     school: '',
     experience: '',
     groupId: passedGroup?.id || '',
+    // A scanned / photographed signed form (stored as a data URL on the doc).
+    signedFormImage: '',
   };
 
   const [formData, setFormData] = useState(defaultFormData);
@@ -111,10 +160,50 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
 
       setVolunteers(volunteersSnap.docs.map(toRecord));
       setGroups(groupsSnap.docs.map(toRecord));
+
+      // Signed digital forms (best-effort: a missing collection / permission
+      // issue must not break the volunteers list, so it has its own catch).
+      const signedSnap = await getDocs(collection(db, 'signedForms')).catch(() => null);
+      if (signedSnap) {
+        setSignedForms(signedSnap.docs.map(toRecord));
+      }
     } catch (error) {
       console.error('שגיאה בשליפת נתונים:', error);
     }
   }, []);
+
+  // Digital signed forms indexed by the volunteer they belong to (a volunteer
+  // approved from a registration shares that registrant's id as its doc id).
+  const signedByVolunteer = useMemo(() => {
+    const map = {};
+    signedForms.forEach((signed) => {
+      if (signed.registrantId) {
+        map[signed.registrantId] = signed;
+      }
+    });
+    return map;
+  }, [signedForms]);
+
+  // Attach a scanned / photographed signed form to the volunteer being edited.
+  // Stored inline as a data URL (kept small — Firestore documents cap at ~1MB).
+  const handleSignedFormUpload = (event) => {
+    const file = event.target.files && event.target.files[0];
+    if (!file) {
+      return;
+    }
+
+    // Guard the document size: reject anything over ~900KB.
+    if (file.size > 900 * 1024) {
+      alert('הקובץ גדול מדי (עד 900KB). צלמו/סרקו באיכות נמוכה יותר.');
+      event.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => setFormData((previous) => ({ ...previous, signedFormImage: reader.result }));
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  };
 
   useEffect(() => {
     fetchData();
@@ -129,26 +218,100 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
   const filteredAndSortedVolunteers = useMemo(() => {
     const search = searchQuery.trim().toLowerCase();
 
+    // Parse the age range once (empty boxes mean "no bound").
+    const ageMin = filters.ageMin !== '' ? Number(filters.ageMin) : null;
+    const ageMax = filters.ageMax !== '' ? Number(filters.ageMax) : null;
+
     return volunteers
       .filter((volunteer) => {
-        const matchesGroup = !passedGroup || (
+        // When opened from a guide's dashboard, only their own group is shown.
+        const matchesLockedGroup = !passedGroup || (
           volunteer.groupId === passedGroup.id ||
           volunteer.groupName === passedGroup.groupName
         );
+        if (!matchesLockedGroup) return false;
 
-        const searchableText = [
-          volunteer.name,
-          volunteer.firstName,
-          volunteer.lastName,
-          volunteer.email,
-          volunteer.phone,
-          volunteer.idNumber,
-        ].filter(Boolean).join(' ').toLowerCase();
+        // Advanced filter — group dropdown (a sentinel matches the unassigned).
+        if (filters.groupId) {
+          if (filters.groupId === '__none__') {
+            if (volunteer.groupId || volunteer.groupName) return false;
+          } else if (volunteer.groupId !== filters.groupId) {
+            return false;
+          }
+        }
 
-        return matchesGroup && (!search || searchableText.includes(search));
+        // Advanced filter — activity time (בוקר / צהריים / ערב).
+        if (filters.activityTime && volunteer.activityTime !== filters.activityTime) {
+          return false;
+        }
+
+        // Advanced filter — age range (a volunteer with no age is excluded
+        // once any bound is set, since we can't tell if they qualify).
+        if (ageMin !== null || ageMax !== null) {
+          const age = Number(volunteer.age);
+          if (!Number.isFinite(age)) return false;
+          if (ageMin !== null && age < ageMin) return false;
+          if (ageMax !== null && age > ageMax) return false;
+        }
+
+        // Free-text search — matches across EVERY text column of the record.
+        if (search) {
+          const searchableText = [
+            volunteer.name,
+            volunteer.firstName,
+            volunteer.lastName,
+            volunteer.email,
+            volunteer.phone,
+            volunteer.idNumber,
+            volunteer.address,
+            volunteer.school,
+            volunteer.experience,
+            volunteer.activityTime,
+            volunteer.age,
+            getGroupName(volunteer.groupId, volunteer.groupName),
+          ].filter(Boolean).join(' ').toLowerCase();
+
+          if (!searchableText.includes(search)) return false;
+        }
+
+        return true;
       })
-      .sort((a, b) => getGroupName(a.groupId, a.groupName).localeCompare(getGroupName(b.groupId, b.groupName), 'he'));
-  }, [getGroupName, passedGroup, searchQuery, volunteers]);
+      .sort((a, b) => {
+        // Sort by the chosen column — the volunteer's name or their group —
+        // honouring the direction the header toggles.
+        const valueA = sortBy === 'group' ? getGroupName(a.groupId, a.groupName) : getVolunteerName(a);
+        const valueB = sortBy === 'group' ? getGroupName(b.groupId, b.groupName) : getVolunteerName(b);
+        const comparison = valueA.localeCompare(valueB, 'he');
+        return sortDir === 'asc' ? comparison : -comparison;
+      });
+  }, [getGroupName, passedGroup, searchQuery, filters, volunteers, sortBy, sortDir]);
+
+  // The fields shown inside the advanced filter panel. The group dropdown is
+  // dropped when the screen is already locked to a single group (guide view).
+  const volunteerFilterFields = [
+    ...(passedGroup ? [] : [{
+      name: 'groupId',
+      label: 'קבוצה',
+      type: 'select',
+      placeholder: 'כל הקבוצות',
+      options: [
+        { value: '__none__', label: 'ללא קבוצה' },
+        ...groups.map((group) => ({
+          value: group.id,
+          label: group.groupName || group.name || 'קבוצה ללא שם',
+        })),
+      ],
+    }]),
+    {
+      name: 'activityTime',
+      label: 'זמן פעילות',
+      type: 'select',
+      placeholder: 'כל הזמנים',
+      options: GROUP_TIMES,
+    },
+    { name: 'ageMin', label: 'גיל מינימום', type: 'number', placeholder: 'מ-' },
+    { name: 'ageMax', label: 'גיל מקסימום', type: 'number', placeholder: 'עד' },
+  ];
 
   const handleOpenAdd = () => {
     setEditingVolunteer(null);
@@ -172,6 +335,7 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
       school: volunteer.school || '',
       experience: volunteer.experience || '',
       groupId: volunteer.groupId || passedGroup?.id || '',
+      signedFormImage: volunteer.signedFormImage || '',
     });
     setIsModalOpen(true);
   };
@@ -208,6 +372,7 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
       experience: formData.experience.trim(),
       groupId: formData.groupId,
       groupName: selectedGroup?.groupName || selectedGroup?.name || passedGroup?.groupName || '',
+      signedFormImage: formData.signedFormImage || '',
     };
 
     setSaving(true);
@@ -316,7 +481,7 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
         const notes = String(row['הערות'] || row['notes'] || '').trim();
         const address = String(row['כתובת'] || row['address'] || '').trim();
         const email = String(row['אימייל'] || row['דוא"ל'] || row['email'] || '').trim();
-        const experience = String(row['ניסיון'] || row['experience'] || '').trim();
+        const experience = String(row['ניסיון קודם'] || row['ניסיון'] || row['experience'] || '').trim();
         const school = String(row['בית ספר'] || row['school'] || '').trim();
 
         // Group column: match the name against the live groups list so the
@@ -373,7 +538,17 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
         alert(`בהצלחה! יובאו ${addedCount} מתנדבים מהקובץ.`);
         await fetchData();
       } else {
-        alert('לא נמצאו נתונים תקינים בקובץ. ודא שקיימת עמודה בשם "שם מלא" או "שם פרטי".');
+        // No usable rows. A common mistake is importing the GROUPS template on
+        // this (volunteers) screen — detect that and point to the right place.
+        const looksLikeGroupsFile = jsonRows.some(
+          (row) => row['שם קבוצה *'] !== undefined || row['שם קבוצה'] !== undefined,
+        );
+
+        if (looksLikeGroupsFile) {
+          alert('נראה שזהו קובץ קבוצות, ולא מתנדבים. כדי לייבא קבוצות עברו למסך "ניהול קבוצות" ← "ייבוא קבוצות".');
+        } else {
+          alert('לא נמצאו נתונים תקינים בקובץ. ודא שקיימת עמודה בשם "שם מלא" או "שם פרטי".');
+        }
       }
 
     } catch (error) {
@@ -391,41 +566,33 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
     <main className="mgmt-container" dir="rtl">
       <section className="mgmt-card">
 
+        {/* Header: the volunteers count on the right + the action buttons
+            raised up onto the same row (left side). */}
         <header className="mgmt-header">
-          <div>
-            {passedGroup && (
-              <p className="mgmt-subtitle">מסונן עבור קבוצה: <strong>{passedGroup.groupName || getGroupName(passedGroup.id)}</strong></p>
-            )}
+          <div className="mgmt-count">
+            <span>{filteredAndSortedVolunteers.length}</span>
+            <small>מתנדבים</small>
           </div>
 
-          <div className="mgmt-header-side">
+          <div className="mgmt-toolbar" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             {typeof onBack === 'function' && (
               <button className="mgmt-secondary-btn" onClick={onBack}>חזרה</button>
             )}
-            <div className="mgmt-count">
-              <span>{filteredAndSortedVolunteers.length}</span>
-              <small>מתנדבים</small>
-            </div>
-          </div>
-        </header>
-
-        <section className="mgmt-section">
-          <div className="mgmt-toolbar" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             <button className="mgmt-primary-btn" onClick={handleOpenAdd}>+ הוסף מתנדב חדש</button>
-            
-            <input 
-              type="file" 
-              accept=".xlsx, .xls, .csv" 
-              style={{ display: 'none' }} 
+
+            <input
+              type="file"
+              accept=".xlsx, .xls, .csv"
+              style={{ display: 'none' }}
               ref={fileInputRef}
-              onChange={handleFileUpload} 
+              onChange={handleFileUpload}
             />
-            <button 
-              className="mgmt-secondary-btn" 
+            <button
+              className="mgmt-secondary-btn"
               onClick={() => fileInputRef.current?.click()}
               disabled={isImporting}
             >
-              {isImporting ? '⏳ מייבא...' : '📥 ייבא מאקסל'}
+              {isImporting ? '⏳ מייבא...' : '📥 ייבא מתנדבים'}
             </button>
 
             {/* Downloads the import template. The groups list is pulled fresh
@@ -439,14 +606,28 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
             >
               ⬇️ הורדת תבנית אקסל
             </button>
+          </div>
+        </header>
 
-            <input
-              type="search"
-              className="mgmt-search"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="🔍 חפש מתנדב לפי שם או ת.ז..."
-              style={{ flexGrow: 1 }}
+        {/* When opened from a guide's dashboard: a note that the list is scoped. */}
+        {passedGroup && (
+          <section className="mgmt-section">
+            <p className="mgmt-subtitle">מסונן עבור קבוצה: <strong>{passedGroup.groupName || getGroupName(passedGroup.id)}</strong></p>
+          </section>
+        )}
+
+        <section className="mgmt-section">
+          {/* Free-text search + collapsible advanced filters (group, activity
+              time, age range). The free text searches every column. */}
+          <div className="mgmt-filters-row">
+            <SearchFilters
+              searchValue={searchQuery}
+              onSearchChange={setSearchQuery}
+              searchPlaceholder="🔍 חיפוש מתנדב לפי שם, ת.ז, טלפון, כתובת..."
+              fields={volunteerFilterFields}
+              values={filters}
+              onChange={updateFilter}
+              onClear={clearFilters}
             />
           </div>
         </section>
@@ -458,10 +639,33 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
 
           <div className="mgmt-table-wrap">
             <table className="mgmt-table">
+              {/* Name + group headers are buttons that sort the list A↔Z. */}
               <thead>
                 <tr>
-                  <th>שם המתנדב</th>
-                  <th>שיוך לקבוצה</th>
+                  <th>
+                    <button
+                      type="button"
+                      className={`mgmt-sort ${sortBy === 'name' ? 'is-active' : ''}`}
+                      onClick={() => handleSort('name')}
+                    >
+                      שם המתנדב
+                      {sortBy === 'name' && (
+                        <span className="mgmt-sort-arrow" aria-hidden="true">{sortDir === 'asc' ? '▲' : '▼'}</span>
+                      )}
+                    </button>
+                  </th>
+                  <th>
+                    <button
+                      type="button"
+                      className={`mgmt-sort ${sortBy === 'group' ? 'is-active' : ''}`}
+                      onClick={() => handleSort('group')}
+                    >
+                      שיוך לקבוצה
+                      {sortBy === 'group' && (
+                        <span className="mgmt-sort-arrow" aria-hidden="true">{sortDir === 'asc' ? '▲' : '▼'}</span>
+                      )}
+                    </button>
+                  </th>
                   <th>טלפון</th>
                   <th>פעולות</th>
                 </tr>
@@ -469,8 +673,14 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
               <tbody>
                 {filteredAndSortedVolunteers.length > 0 ? (
                   filteredAndSortedVolunteers.map((volunteer) => (
-                    <tr key={volunteer.id}>
-                      <td data-label="שם המתנדב"><strong>{getVolunteerName(volunteer)}</strong></td>
+                    <tr key={volunteer.id} className={expandedId === volunteer.id ? 'is-expanded' : ''}>
+                      <td
+                        data-label="שם המתנדב"
+                        className="mgmt-name-cell"
+                        onClick={() => toggleExpand(volunteer.id)}
+                      >
+                        <strong>{getVolunteerName(volunteer)}</strong>
+                      </td>
                       <td data-label="שיוך לקבוצה">{getGroupName(volunteer.groupId, volunteer.groupName)}</td>
                       <td data-label="טלפון">
                         {volunteer.phone
@@ -522,6 +732,39 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
               <div><strong>בית ספר:</strong> {viewingVolunteer.school || '—'}</div>
               <div><strong>ניסיון קודם:</strong> {viewingVolunteer.experience || '—'}</div>
               <div><strong>קבוצה נוכחית:</strong> {getGroupName(viewingVolunteer.groupId, viewingVolunteer.groupName)}</div>
+            </div>
+
+            {/* Signed form — a digital submission and/or a scanned/attached copy. */}
+            <div style={{ borderTop: '1px solid #eee', paddingTop: '14px', marginBottom: '16px' }}>
+              <strong>טופס חתום:</strong>
+              {!signedByVolunteer[viewingVolunteer.id] && !viewingVolunteer.signedFormImage ? (
+                <span className="mgmt-muted"> טרם התקבל טופס חתום.</span>
+              ) : (
+                <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  {signedByVolunteer[viewingVolunteer.id] && (
+                    <div>
+                      <div style={{ color: '#15803d', fontWeight: 700, marginBottom: '6px' }}>✓ נחתם דיגיטלית</div>
+                      {signedByVolunteer[viewingVolunteer.id].signature && (
+                        <img
+                          src={signedByVolunteer[viewingVolunteer.id].signature}
+                          alt="חתימה דיגיטלית"
+                          style={{ maxWidth: '100%', border: '1px solid var(--border)', borderRadius: '10px', background: '#fff' }}
+                        />
+                      )}
+                    </div>
+                  )}
+                  {viewingVolunteer.signedFormImage && (
+                    <div>
+                      <div style={{ fontWeight: 700, marginBottom: '6px' }}>טופס שצורף</div>
+                      <img
+                        src={viewingVolunteer.signedFormImage}
+                        alt="טופס חתום שצורף"
+                        style={{ maxWidth: '100%', border: '1px solid var(--border)', borderRadius: '10px' }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="modal-actions" style={{ marginTop: '20px', borderTop: '1px solid #eee', paddingTop: '15px' }}>
@@ -595,11 +838,11 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
                 </div>
 
                 <div className="form-group">
-                  <label>תאריך לידה:</label>
                   <BirthDatePicker
                     key={editingVolunteer ? editingVolunteer.id : 'new'}
                     value={formData.birthDate}
                     onChange={(birthDate) => setFormData({ ...formData, birthDate })}
+                    label="תאריך לידה"
                     showPreview
                   />
                 </div>
@@ -685,6 +928,31 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
                       <option key={group.id} value={group.id}>{group.groupName || group.name || 'קבוצה ללא שם'}</option>
                     ))}
                   </select>
+                </div>
+
+                {/* Attach a signed form (scan / photo) for an existing volunteer. */}
+                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                  <label>טופס חתום (סריקה / צילום):</label>
+                  <input type="file" accept="image/*" onChange={handleSignedFormUpload} />
+                  {formData.signedFormImage && (
+                    <div style={{ marginTop: '10px' }}>
+                      <img
+                        src={formData.signedFormImage}
+                        alt="טופס חתום"
+                        style={{ maxWidth: '100%', maxHeight: '220px', border: '1px solid var(--border)', borderRadius: '10px' }}
+                      />
+                      <div>
+                        <button
+                          type="button"
+                          className="btn btn-outline"
+                          style={{ marginTop: '8px' }}
+                          onClick={() => setFormData((previous) => ({ ...previous, signedFormImage: '' }))}
+                        >
+                          הסרת הטופס
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
               </div>

@@ -15,6 +15,22 @@
   box-sizing: border-box;
 }
 
+/* The public HOME page fills the viewport edge to edge (no outer padding and no
+   width cap), so the landing can use the WHOLE screen and lock itself to the
+   screen height with no scroll. It also paints an on-brand backdrop — soft
+   purple + cyan corner glows over a gentle tinted wash — that fills the full
+   screen behind the cards, so the whole screen feels designed, not just white. */
+.public-layout.public-home {
+  width: 100%;
+  max-width: none;
+  padding: 0;
+  background:
+    radial-gradient(1200px 640px at 100% -8%, rgba(158, 33, 136, 0.14), transparent 58%),
+    radial-gradient(1000px 560px at -8% 110%, rgba(82, 167, 221, 0.18), transparent 55%),
+    radial-gradient(720px 520px at 50% 130%, rgba(214, 97, 191, 0.10), transparent 60%),
+    linear-gradient(165deg, #faf4fa 0%, #f1f6fc 100%);
+}
+
 
 /* The shared header shown to signed-in users. */
 .authenticated-header {
@@ -263,13 +279,36 @@
 /* On phones the public pages go edge to edge — no outer gap — so the home
    page's header and showcase can fill the whole screen width. */
 @media (max-width: 760px) {
+  .app-shell {
+    min-height: 100svh;
+  }
+
   .public-layout {
     padding: 0;
+  }
+
+  .public-layout.public-home {
+    height: 100svh;
+    min-height: 100svh;
+    overflow: hidden;
+  }
+
+  .public-layout.public-login {
+    min-height: 100svh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
   }
 
   /* The login / registration cards still want some breathing room, though. */
   .public-layout > .public-card {
     margin: 16px;
+  }
+
+  .public-layout.public-login > .public-card {
+    width: min(460px, 100%);
+    margin: 0;
   }
 }
 

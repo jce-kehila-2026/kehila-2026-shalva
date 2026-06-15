@@ -311,7 +311,7 @@ function RegistrationScreen() {
         >
 
           {/* First name. */}
-          <div className="reg-field">
+          <div className="regform-field">
             <label htmlFor="reg-firstName">שם פרטי</label>
             <input
               id="reg-firstName"
@@ -324,7 +324,7 @@ function RegistrationScreen() {
           </div>
 
           {/* Last name. */}
-          <div className="reg-field">
+          <div className="regform-field">
             <label htmlFor="reg-lastName">שם משפחה</label>
             <input
               id="reg-lastName"
@@ -337,7 +337,7 @@ function RegistrationScreen() {
           </div>
 
           {/* Email. dir="ltr" because an email is Latin text inside an RTL form. */}
-          <div className="reg-field">
+          <div className="regform-field">
             <label htmlFor="reg-email">אימייל</label>
             <input
               id="reg-email"
@@ -356,7 +356,7 @@ function RegistrationScreen() {
           </div>
 
           {/* Phone — digits, so also left-to-right; inputMode opens the dialpad. */}
-          <div className="reg-field">
+          <div className="regform-field">
             <label htmlFor="reg-phone">טלפון</label>
             <input
               id="reg-phone"
@@ -373,7 +373,7 @@ function RegistrationScreen() {
           </div>
 
           {/* Age. */}
-          <div className="reg-field">
+          <div className="regform-field">
             <label htmlFor="reg-age">גיל</label>
             <input
               id="reg-age"
@@ -390,17 +390,18 @@ function RegistrationScreen() {
           {/* Birth date — a fieldset so the day/month/year selects share one
               group label (legend). */}
           <fieldset className="reg-bday">
-            <legend className="reg-bday-label">תאריך לידה</legend>
+            <legend className="reg-bday-label reg-bday-label-hidden">תאריך לידה</legend>
             <BirthDatePicker
               value={formData.birthDate}
               onChange={(birthDate) => setFormData((prev) => ({ ...prev, birthDate }))}
+              label="תאריך לידה"
               required
               showPreview
             />
           </fieldset>
 
           {/* Previous experience (optional). */}
-          <div className="reg-field">
+          <div className="regform-field">
             <label htmlFor="reg-experience">
               ניסיון קודם <span className="reg-optional">(לא חובה)</span>
             </label>
@@ -414,7 +415,7 @@ function RegistrationScreen() {
           </div>
 
           {/* Address (optional). */}
-          <div className="reg-field">
+          <div className="regform-field">
             <label htmlFor="reg-address">
               כתובת <span className="reg-optional">(לא חובה)</span>
             </label>
@@ -428,7 +429,7 @@ function RegistrationScreen() {
           </div>
 
           {/* School / institution (optional). */}
-          <div className="reg-field">
+          <div className="regform-field">
             <label htmlFor="reg-school">
               בית ספר / מוסד לימודים <span className="reg-optional">(לא חובה)</span>
             </label>

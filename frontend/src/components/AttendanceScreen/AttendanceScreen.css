@@ -4,11 +4,13 @@
 
 /* Full-page wrapper that centers the card. */
 .attendance-page {
-  min-height: 100vh;
+  min-height: auto;
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: 24px;
+  max-width: none;
+  margin: 8px auto 40px;
+  padding: 0;
   width: 100%;
 }
 
@@ -159,144 +161,99 @@
 }
 
 
-/* ---------- Week Navigation ---------- */
-.week-nav {
+/* ---------- Bulk actions ---------- */
+.att-bulk-actions {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
+  margin: -4px 0 18px;
+}
+
+.att-mark-all-present {
+  padding: 10px 18px;
+  border-radius: var(--radius-pill);
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  color: #15803d;
+  box-shadow: none;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.att-mark-all-present:hover {
+  background: #dcfce7;
+  border-color: #86efac;
+  box-shadow: var(--shadow-sm);
+}
+
+.att-mark-all-present:disabled {
+  opacity: 0.78;
   background: var(--surface-2);
-  border: 1px solid var(--border);
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+
+
+/* ---------- Today banner ---------- */
+/* A single prominent line stating which day is being marked. There is no week
+   navigation any more — only today can be marked, so history can't be changed. */
+.att-today-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: linear-gradient(135deg, var(--brand-50), rgba(82, 167, 221, 0.06));
+  border: 1px solid var(--brand-200);
   padding: 12px 18px;
   border-radius: var(--radius);
-  margin-bottom: 22px;
-  gap: 10px;
-  flex-wrap: wrap;
+  margin-bottom: 18px;
+  text-align: center;
 }
 
-.week-nav-btn {
-  padding: 10px 18px;
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-pill);
+.att-today-eyebrow {
+  font-size: 13px;
+  font-weight: 700;
   color: var(--brand-700);
-  font-weight: 700;
-  font-size: 14.5px;
-  cursor: pointer;
-  transition: all 0.2s ease;
 }
 
-.week-nav-btn:hover {
-  background: var(--brand-50);
-  border-color: var(--brand-200);
-}
-
-.week-nav-today-btn {
-  padding: 10px 18px;
-  background: var(--brand-600);
-  border: none;
-  border-radius: var(--radius-pill);
-  color: white;
-  font-weight: 700;
-  font-size: 14.5px;
-  cursor: pointer;
-  transition: background 0.2s ease;
-}
-
-.week-nav-today-btn:hover {
-  background: var(--brand-700);
-}
-
-.week-label {
+.att-today-date {
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 800;
   color: var(--text);
 }
 
 
-/* ---------- Weekly Table ---------- */
-.attendance-table-container {
-  width: 100%;
-  overflow-x: auto;
+/* ---------- Volunteer list (today only) ---------- */
+.att-list {
+  list-style: none;
+  margin: 0 0 22px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* One volunteer: name on the right, the two toggles on the left. */
+.att-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
-  margin-bottom: 22px;
-  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.02);
+  transition: border-color 0.18s ease, background 0.18s ease;
 }
 
-.attendance-table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 650px;
-  text-align: right;
+/* A faint tint once a choice is made, so marked rows read at a glance. */
+.att-row--present {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
 }
 
-.attendance-table th,
-.attendance-table td {
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--border);
-  vertical-align: middle;
-}
-
-.attendance-table tr:hover {
-  background: rgba(82, 167, 221, 0.02);
-}
-
-.sticky-col {
-  position: sticky;
-  right: 0; /* RTL page: stick column to the right side */
-  background: var(--surface);
-  z-index: 2;
-  border-left: 2px solid var(--border-strong) !important;
-  min-width: 160px;
-}
-
-.attendance-table th.sticky-col {
-  background: var(--surface-2);
-}
-
-.attendance-table tr:hover td.sticky-col {
-  background: var(--surface-2);
-}
-
-.attendance-table th {
-  background: var(--surface-2);
-  color: var(--text-soft);
-  font-weight: 700;
-  font-size: 14px;
-  border-bottom: 2px solid var(--border-strong);
-}
-
-.attendance-table th.is-today {
-  background: var(--brand-50);
-  color: var(--brand-700);
-}
-
-/* Tint the whole "today" column (cells too) so the guide's eye lands on it. */
-.attendance-table td.is-today {
-  background: rgba(158, 33, 136, 0.04);
-}
-
-.attendance-table tr:hover td.is-today {
-  background: var(--brand-50);
-}
-
-.th-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-
-.day-name {
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.day-date {
-  font-size: 12px;
-  color: var(--text-muted);
-  font-weight: 600;
+.att-row--absent {
+  background: #fef2f2;
+  border-color: #fecaca;
 }
 
 .volunteer-name-cell {
@@ -312,21 +269,22 @@
 }
 
 
-/* ---------- Cell Toggle Buttons ---------- */
-.attendance-cell {
-  text-align: center;
-}
-
+/* ---------- Toggle buttons (present / absent) ---------- */
 .att-cell-actions {
   display: inline-flex;
-  gap: 8px;
+  gap: 10px;
   justify-content: center;
   align-items: center;
 }
 
+/* The round toggle. The check / X inside it is DRAWN in CSS (below) rather than
+   typed as a ✓/✗ character: the app font (Assistant) has no glyph for those
+   symbols, so a typed character would fall back to a different font and look
+   inconsistent. Drawing them keeps every mark identical and on-brand. */
 .att-action-toggle {
-  width: 32px;
-  height: 32px;
+  position: relative;
+  width: 38px;
+  height: 38px;
   /* Override the global button padding (10px 22px), which would otherwise
      stretch these into ovals — they must stay perfect circles. */
   padding: 0;
@@ -336,13 +294,45 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
-  font-weight: 800;
-  line-height: 1;
   cursor: pointer;
   transition: transform 0.15s ease, background 0.18s ease,
     border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
   color: var(--text-soft);
+}
+
+/* The check mark (present): a small box showing only its right + bottom
+   borders, rotated 45° so the two strokes read as a ✓. */
+.att-action-toggle.present::before {
+  content: '';
+  position: absolute;
+  top: 46%;
+  left: 50%;
+  width: 7px;
+  height: 12px;
+  border: solid currentColor;
+  border-width: 0 2.5px 2.5px 0;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+/* The X (absent): two thin bars crossed at ±45°. */
+.att-action-toggle.absent::before,
+.att-action-toggle.absent::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 16px;
+  height: 2.5px;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+.att-action-toggle.absent::before {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.att-action-toggle.absent::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
 }
 
 /* A small lift on hover makes the toggles feel tactile. */
@@ -426,25 +416,44 @@
 
 /* ---------- Phone tweaks ---------- */
 @media (max-width: 600px) {
-  /* No tweaks needed for the action toggles as they are already round and compact */
-  .week-nav {
-    flex-direction: column;
-    align-items: stretch;
-    text-align: center;
+  .attendance-page {
+    padding: 0;
   }
-  .week-nav-btn,
-  .week-nav-today-btn {
-    width: 100%;
+
+  /* Match the "my group" screen dimensions while keeping the inner list roomy. */
+  .attendance-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px 16px;
+  }
+
+  /* Slightly bigger touch targets for the toggles on a phone. */
+  .att-action-toggle {
+    width: 42px;
+    height: 42px;
   }
 }
 
 @media (max-width: 480px) {
+  /* Keep the title and the back button on the SAME row (title on the right,
+     back on the left) so the back button doesn't take a whole extra row. */
   .attendance-header-row {
-    flex-direction: column;
-    align-items: stretch;
+    align-items: center;
   }
 
+  /* A compact back button that only takes the space it needs. */
   .attendance-back-button {
+    flex: none;
+    padding: 8px 14px;
+    font-size: 14px;
+  }
+
+  .att-row {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .att-mark-all-present {
     width: 100%;
   }
 

@@ -1,0 +1,479 @@
+/* ============================================================
+   SignatureForm — the digital new-volunteer signing form.
+   Document-like but modern, on-brand, and mobile-first.
+   ============================================================ */
+
+.sig-form {
+  font-family: var(--font);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  text-align: right;
+}
+
+
+/* ---------- Title ---------- */
+
+.sig-head {
+  text-align: center;
+}
+
+.sig-title {
+  margin: 0;
+  color: var(--brand-700);
+  font-size: clamp(22px, 4vw, 30px);
+  font-weight: 800;
+}
+
+.sig-subtitle {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: 15px;
+}
+
+
+/* ---------- Sections ---------- */
+
+.sig-section {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  padding: clamp(16px, 3vw, 22px);
+}
+
+.sig-section-title {
+  margin: 0 0 14px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid var(--brand-100);
+  color: var(--brand-700);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+
+/* ---------- Ten commandments ---------- */
+
+.sig-commandments {
+  margin: 0;
+  padding-inline-start: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sig-commandments li {
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+
+/* ---------- Details grid ---------- */
+
+.sig-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+/* A labelled field (label stacked over its input). */
+.sig-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Some fields span the whole row. */
+.sig-field--wide {
+  grid-column: 1 / -1;
+}
+
+.sig-field span {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.sig-field input,
+.sig-field select {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 15px;
+  background: var(--surface);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sig-field input:focus,
+.sig-field select:focus {
+  border-color: var(--brand-500);
+  box-shadow: 0 0 0 3px var(--brand-50);
+}
+
+
+/* ---------- Activity days ---------- */
+
+.sig-days {
+  margin-top: 16px;
+}
+
+.sig-days-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.sig-days-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* A toggleable day chip. */
+.sig-day {
+  padding: 9px 16px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text-muted);
+  font: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.sig-day.is-on {
+  background: var(--brand-600);
+  border-color: var(--brand-600);
+  color: #ffffff;
+}
+
+
+/* ---------- Confidentiality text ---------- */
+
+.sig-legal {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+
+
+/* ---------- Agreement + signature ---------- */
+
+.sig-sign-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* The "I agree" row. */
+.sig-agree {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.sig-agree input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  accent-color: var(--brand-600);
+}
+
+.sig-sign-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* The signature pad: a bordered, dashed box the volunteer draws inside. */
+.sig-pad-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sig-pad {
+  width: 100%;
+  height: 180px;
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  /* Stop the page from scrolling while signing with a finger. */
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.sig-pad-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+/* Clear-signature button. */
+.sig-clear {
+  padding: 7px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text-muted);
+  font: inherit;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.sig-clear:hover {
+  background: var(--surface-2);
+}
+
+
+/* ---------- Errors + submit ---------- */
+
+.sig-error {
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.sig-submit {
+  padding: 15px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--brand-600);
+  color: #ffffff;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.sig-submit:hover {
+  background: var(--brand-700);
+}
+
+.sig-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+
+/* ---------- Thank-you screen ---------- */
+
+.sig-done {
+  text-align: center;
+  padding: 30px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.sig-done-mark {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: #16a34a;
+  color: #ffffff;
+  font-size: 34px;
+  font-weight: 800;
+}
+
+.sig-done h2 {
+  margin: 6px 0 0;
+  color: var(--brand-700);
+}
+
+.sig-done p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.sig-print-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 8px;
+  padding: 11px 20px;
+  border: 1px solid var(--brand-200);
+  border-radius: var(--radius-pill);
+  background: var(--brand-50);
+  color: var(--brand-700);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+
+/* ---------- Hidden PDF document ---------- */
+
+.sig-pdf-document {
+  position: fixed;
+  inset-block-start: 0;
+  inset-inline-start: -10000px;
+  width: 794px;
+  background: #ffffff;
+  color: #111827;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.sig-pdf-page {
+  box-sizing: border-box;
+  width: 794px;
+  padding: 34px;
+  background: #ffffff;
+  color: #111827;
+  direction: rtl;
+  text-align: right;
+  font-family: Arial, sans-serif;
+}
+
+.sig-pdf-head {
+  padding: 20px 24px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #a41491 0%, #6aaee8 100%);
+  color: #ffffff;
+}
+
+.sig-pdf-head h1 {
+  margin: 0;
+  font-size: 25px;
+  font-weight: 800;
+}
+
+.sig-pdf-head p {
+  margin: 6px 0 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.sig-pdf-section {
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px solid #eaddea;
+  border-radius: 14px;
+  background: #ffffff;
+  break-inside: avoid;
+}
+
+.sig-pdf-section h2 {
+  margin: 0 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f0e3ef;
+  color: #8a0f78;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.sig-pdf-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 12px;
+}
+
+.sig-pdf-field {
+  min-height: 48px;
+  padding: 9px 10px;
+  border: 1px solid #f0e3ef;
+  border-radius: 10px;
+  background: #fffafd;
+}
+
+.sig-pdf-field span {
+  display: block;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sig-pdf-field strong {
+  display: block;
+  margin-top: 3px;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.sig-pdf-commandments {
+  margin: 0;
+  padding-inline-start: 22px;
+}
+
+.sig-pdf-commandments li {
+  margin-bottom: 7px;
+  color: #1f2937;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.sig-pdf-legal,
+.sig-pdf-sign p {
+  margin: 0;
+  color: #1f2937;
+  font-size: 12.8px;
+  line-height: 1.65;
+}
+
+.sig-pdf-sign img {
+  display: block;
+  width: 320px;
+  max-width: 100%;
+  min-height: 94px;
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #ffffff;
+  object-fit: contain;
+}
+
+
+/* ---------- Phone ---------- */
+
+@media (max-width: 560px) {
+  /* One field per row on a narrow screen. */
+  .sig-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* ---------- Print (save as PDF) ---------- */
+
+@media print {
+  /* Hide the interactive controls; show a clean printable document. */
+  .sig-clear,
+  .sig-submit,
+  .sig-print-btn {
+    display: none;
+  }
+
+  .sig-section {
+    break-inside: avoid;
+    box-shadow: none;
+  }
+}

@@ -468,11 +468,11 @@ function Birthdays({ onBack, editable = false }) {
 
               {/* Birth date field (custom picker). */}
               <div className="bday-field">
-                <label>תאריך לידה</label>
                 <BirthDatePicker
                   key={editing.docId}
                   value={form.birthDate}
                   onChange={(birthDate) => setForm((prev) => ({ ...prev, birthDate }))}
+                  label="תאריך לידה"
                   required
                   showPreview
                 />

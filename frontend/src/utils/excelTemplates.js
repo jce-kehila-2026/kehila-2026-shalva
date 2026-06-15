@@ -113,7 +113,7 @@ function fillHiddenList(lists, columnLetter, values) {
 export async function downloadVolunteersTemplate(groups = []) {
   const headers = [
     'שם פרטי *', 'שם משפחה *', 'תעודת זהות', 'טלפון', 'אימייל',
-    'תאריך לידה', 'גיל (אוטומטי)', 'קבוצה', 'זמן פעילות', 'כתובת', 'בית ספר', 'הערות',
+    'תאריך לידה', 'גיל (אוטומטי)', 'קבוצה', 'זמן פעילות', 'כתובת', 'בית ספר', 'ניסיון קודם', 'הערות',
   ];
 
   const { workbook, sheet, lists } = await createTemplate('מתנדבים', headers);

@@ -134,6 +134,10 @@
   gap: 4px;
 }
 
+.reports-filter-field .birth-date-picker {
+  width: min(100%, 310px);
+}
+
 /* Field label. */
 .reports-filter-field label {
   font-size: 12.5px;

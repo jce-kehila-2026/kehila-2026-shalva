@@ -2,18 +2,24 @@
 // the public form (WhatsApp / email / copied link) and view every submission
 // that came back, with all the details the volunteer filled in.
 
-// React hooks for state and side effects.
-import { useEffect, useState } from 'react';
+// React hooks for state, memoized derivations and side effects.
+import { useEffect, useMemo, useState } from 'react';
 
 // Firestore helpers. A writeBatch makes "approve" atomic — the new volunteer
 // and the registration removal succeed or fail together.
 import { collection, deleteDoc, doc, getDocs, writeBatch } from 'firebase/firestore';
 
-// Our Firestore database instance.
-import { db } from '../../firebase';
+// Storage helper for opening the uploaded signed-form PDF.
+import { getDownloadURL, ref as storageRef } from 'firebase/storage';
+
+// Our Firebase instances.
+import { db, storage } from '../../firebase';
 
 // Shared display-name helper.
 import { getDisplayName } from '../../utils/people';
+
+// Shared collapsible advanced-search bar (free text + per-field filters).
+import SearchFilters from '../shared/SearchFilters/SearchFilters';
 
 // Shared management-screen styles + this screen's own styles.
 import '../shared/ManagementScreen.css';
@@ -72,6 +78,36 @@ const DETAIL_FIELDS = [
 ];
 
 
+// Birth dates are stored ISO (YYYY-MM-DD), which reads "backwards" in Hebrew.
+// Flip them to the day-first form (e.g. "2000-01-05" → "05/01/2000"). Anything
+// that isn't a plain ISO date is returned untouched, so odd values aren't mangled.
+function formatBirthDate(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value).trim());
+
+  if (!match) {
+    return String(value);
+  }
+
+  const [, year, month, day] = match;
+  return `${day}/${month}/${year}`;
+}
+
+
+// Show a detail field's value: a dash for empties, the day-first form for the
+// birth date, and the plain text for everything else.
+function formatFieldValue(key, value) {
+  if (value === '' || value === null || value === undefined) {
+    return '—';
+  }
+
+  if (key === 'birthDate') {
+    return formatBirthDate(value);
+  }
+
+  return String(value);
+}
+
+
 function RegistrationsManagement() {
   // The loaded registrants.
   const [registrants, setRegistrants] = useState([]);
@@ -91,6 +127,130 @@ function RegistrationsManagement() {
 
   // The registrant currently being approved (guards against double-clicks).
   const [approvingId, setApprovingId] = useState(null);
+
+  // Signed forms that came back, and the one currently open in the view modal.
+  const [signedForms, setSignedForms] = useState([]);
+  const [viewingForm, setViewingForm] = useState(null);
+
+  // On phones each card collapses to its name; this is the one tapped open.
+  const [expandedId, setExpandedId] = useState(null);
+  const toggleExpand = (id) => setExpandedId((current) => (current === id ? null : id));
+
+  // Free-text search + structured "advanced filters" for the registrations list.
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filters, setFilters] = useState({ ageMin: '', ageMax: '' });
+
+  // Update one structured filter by name.
+  const updateFilter = (name, value) => {
+    setFilters((current) => ({ ...current, [name]: value }));
+  };
+
+  // Reset every structured filter.
+  const clearFilters = () => {
+    setFilters({ ageMin: '', ageMax: '' });
+  };
+
+  // Registrants narrowed by the free-text search AND the age range.
+  const filteredRegistrants = useMemo(() => {
+    const search = searchQuery.trim().toLowerCase();
+    const ageMin = filters.ageMin !== '' ? Number(filters.ageMin) : null;
+    const ageMax = filters.ageMax !== '' ? Number(filters.ageMax) : null;
+
+    return registrants.filter((registrant) => {
+      // Advanced filter — age range (a registrant with no age is excluded
+      // once any bound is set, since we can't tell if they qualify).
+      if (ageMin !== null || ageMax !== null) {
+        const age = Number(registrant.age);
+        if (!Number.isFinite(age)) return false;
+        if (ageMin !== null && age < ageMin) return false;
+        if (ageMax !== null && age > ageMax) return false;
+      }
+
+      // Free-text search — across the name and every detail field.
+      if (search) {
+        const text = [
+          getFullName(registrant),
+          registrant.firstName,
+          registrant.lastName,
+          registrant.email,
+          registrant.phone,
+          registrant.address,
+          registrant.school,
+          registrant.experience,
+          registrant.age,
+          registrant.status,
+        ].filter(Boolean).join(' ').toLowerCase();
+
+        if (!text.includes(search)) return false;
+      }
+
+      return true;
+    });
+  }, [registrants, searchQuery, filters]);
+
+  // Signed forms indexed by the registrant they belong to (for the "signed"
+  // badge + the view modal).
+  const signedByRegistrant = useMemo(() => {
+    const map = {};
+    signedForms.forEach((signed) => {
+      if (signed.registrantId) {
+        map[signed.registrantId] = signed;
+      }
+    });
+    return map;
+  }, [signedForms]);
+
+  // A public link that opens the digital signing form for this registrant.
+  const buildSignLink = (registrant) => {
+    const name = encodeURIComponent(getFullName(registrant));
+    return `${window.location.origin}${window.location.pathname}?sign=1&rid=${registrant.id}&name=${name}`;
+  };
+
+  // A WhatsApp link that sends the registrant their signing-form link.
+  const signFormWhatsappHref = (registrant) => {
+    const message = `שלום ${getFullName(registrant)},\nלפני אישור ההתנדבות בעמותת שלווה — נא למלא ולחתום על טופס המתנדב/ת בקישור:\n${buildSignLink(registrant)}`;
+
+    // 0xx → 972xx so the chat opens with the right contact when there's a phone.
+    let digits = String(registrant.phone || '').replace(/\D/g, '');
+    if (digits.startsWith('0')) {
+      digits = `972${digits.slice(1)}`;
+    }
+
+    return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
+  };
+
+  // Open the completed signed form PDF uploaded by the public signing form.
+  const openSignedPdf = async (signedForm) => {
+    if (!signedForm?.pdfStoragePath) {
+      alert('לטופס הזה עדיין אין קובץ PDF שמור.');
+      return;
+    }
+
+    const pdfWindow = window.open('', '_blank', 'noopener,noreferrer');
+
+    try {
+      const url = await getDownloadURL(storageRef(storage, signedForm.pdfStoragePath));
+
+      if (pdfWindow) {
+        pdfWindow.location.replace(url);
+      } else {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (pdfError) {
+      if (pdfWindow) {
+        pdfWindow.close();
+      }
+
+      console.error('פתיחת קובץ PDF חתום נכשלה:', pdfError);
+      alert('לא ניתן לפתוח את קובץ ה-PDF כרגע.');
+    }
+  };
+
+  // The advanced-panel fields: a minimum / maximum age range.
+  const registrantFilterFields = [
+    { name: 'ageMin', label: 'גיל מינימום', type: 'number', placeholder: 'מ-' },
+    { name: 'ageMax', label: 'גיל מקסימום', type: 'number', placeholder: 'עד' },
+  ];
 
   // Load the registrants once on mount.
   useEffect(() => {
@@ -113,6 +273,13 @@ function RegistrationsManagement() {
 
         setRegistrants(list);
         setGroups(groupsSnapshot.docs.map(toRecord));
+
+        // Signed forms (best-effort): a missing collection or permission issue
+        // here must never blank the registrations list, so it has its own catch.
+        const signedSnapshot = await getDocs(collection(db, 'signedForms')).catch(() => null);
+        if (isMounted && signedSnapshot) {
+          setSignedForms(signedSnapshot.docs.map(toRecord));
+        }
       } catch (loadError) {
         if (isMounted) setError(loadError.message);
       } finally {
@@ -231,20 +398,14 @@ function RegistrationsManagement() {
     <main className="mgmt-container" dir="rtl">
       <section className="mgmt-card">
 
-        {/* Header: just the registrations count (the sidebar labels the screen). */}
+        {/* Header: the registrations count on the right + the "share the form"
+            buttons raised up onto the same row (left side). */}
         <header className="mgmt-header">
           <div className="mgmt-count">
             <span>{registrants.length}</span>
             <small>הרשמות</small>
           </div>
-        </header>
 
-        {/* Share the public form via WhatsApp / email / copied link. */}
-        <section className="mgmt-section">
-          <h2>שליחת טופס הרשמה</h2>
-          <p className="mgmt-subtitle-inline">
-            שלחו את הקישור לטופס למי שתרצו. לאחר שהמועמד/ת ימלא וישלח — ההרשמה תופיע למטה עם כל הפרטים.
-          </p>
           <div className="mgmt-toolbar mgmt-share-toolbar">
             <a className="mgmt-primary-btn" href={whatsappHref} target="_blank" rel="noreferrer">
               שליחה בוואטסאפ
@@ -256,13 +417,29 @@ function RegistrationsManagement() {
               {copied ? 'הקישור הועתק ✓' : 'העתקת קישור'}
             </button>
           </div>
-        </section>
+        </header>
 
         {/* The list of received registrations. */}
         <section className="mgmt-section">
           <div className="mgmt-list-header">
             <h2>הרשמות שהתקבלו</h2>
           </div>
+
+          {/* Free-text search (all fields) + collapsible age-range filter —
+              only worth showing once at least one registration exists. */}
+          {!loading && !error && registrants.length > 0 && (
+            <div className="mgmt-filters-row reg-filters-row">
+              <SearchFilters
+                searchValue={searchQuery}
+                onSearchChange={setSearchQuery}
+                searchPlaceholder="🔍 חיפוש לפי שם, אימייל, טלפון, כתובת..."
+                fields={registrantFilterFields}
+                values={filters}
+                onChange={updateFilter}
+                onClear={clearFilters}
+              />
+            </div>
+          )}
 
           {/* Loading / error / empty states, otherwise the cards. */}
           {loading ? (
@@ -271,19 +448,31 @@ function RegistrationsManagement() {
             <div className="mgmt-empty">לא ניתן לטעון הרשמות כרגע.</div>
           ) : registrants.length === 0 ? (
             <div className="mgmt-empty">עדיין לא התקבלו הרשמות. שלחו את הטופס כדי להתחיל.</div>
+          ) : filteredRegistrants.length === 0 ? (
+            <div className="mgmt-empty">אין הרשמות התואמות לחיפוש.</div>
           ) : (
             <div className="reg-list">
-              {registrants.map((registrant) => (
-                <article className="reg-card" key={registrant.id}>
+              {filteredRegistrants.map((registrant) => (
+                <article className={`reg-card ${expandedId === registrant.id ? 'is-expanded' : ''}`} key={registrant.id}>
 
-                  {/* Card header: avatar, name, date, status badge. */}
-                  <header className="reg-card-head">
+                  {/* Card header: avatar, name, date, status badge. On phones it
+                      doubles as the tap target that expands the card. */}
+                  <header className="reg-card-head" onClick={() => toggleExpand(registrant.id)}>
                     <span className="reg-card-avatar">{getFullName(registrant).charAt(0)}</span>
                     <div className="reg-card-title">
                       <h3>{getFullName(registrant)}</h3>
                       <span className="reg-card-date">נרשם/ה: {formatCreatedAt(registrant.createdAt)}</span>
                     </div>
                     <span className="reg-card-status">{registrant.status || 'ממתין לאישור'}</span>
+                    {signedByRegistrant[registrant.id] && (
+                      <span
+                        className="reg-card-status"
+                        style={{ background: '#dcfce7', color: '#15803d', borderColor: '#bbf7d0' }}
+                        title="טופס החתימה התקבל"
+                      >
+                        ✓ נחתם
+                      </span>
+                    )}
                   </header>
 
                   {/* All the registrant's detail fields. */}
@@ -291,7 +480,7 @@ function RegistrationsManagement() {
                     {DETAIL_FIELDS.map(([key, label]) => (
                       <div className="reg-field" key={key}>
                         <dt>{label}</dt>
-                        <dd>{registrant[key] ? String(registrant[key]) : '—'}</dd>
+                        <dd>{formatFieldValue(key, registrant[key])}</dd>
                       </div>
                     ))}
                   </dl>
@@ -336,6 +525,39 @@ function RegistrationsManagement() {
                         ✉️ מייל
                       </a>
                     )}
+
+                    {/* Send the digital signing form to the registrant (before approval). */}
+                    <a
+                      className="reg-foot-btn"
+                      href={signFormWhatsappHref(registrant)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      📝 שליחת טופס לחתימה
+                    </a>
+
+                    {/* View the signed form once it has come back. */}
+                    {signedByRegistrant[registrant.id] && (
+                      <>
+                        <button
+                          type="button"
+                          className="reg-foot-btn"
+                          onClick={() => setViewingForm(signedByRegistrant[registrant.id])}
+                        >
+                          ✓ צפייה בטופס החתום
+                        </button>
+                        {signedByRegistrant[registrant.id].pdfStoragePath && (
+                          <button
+                            type="button"
+                            className="reg-foot-btn"
+                            onClick={() => openSignedPdf(signedByRegistrant[registrant.id])}
+                          >
+                            פתיחת PDF
+                          </button>
+                        )}
+                      </>
+                    )}
+
                     <button
                       type="button"
                       className="reg-foot-btn reg-foot-delete"
@@ -350,6 +572,50 @@ function RegistrationsManagement() {
           )}
         </section>
       </section>
+
+      {/* View a signed form (details + the drawn signature). */}
+      {viewingForm && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => setViewingForm(null)}>
+          <div className="modal-content" style={{ maxWidth: '620px' }} onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">טופס חתום — {viewingForm.fullName}</div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', lineHeight: 1.6, marginBottom: '16px' }}>
+              <div><strong>שם מלא:</strong> {viewingForm.fullName || '—'}</div>
+              <div><strong>תעודת זהות:</strong> {viewingForm.idNumber || '—'}</div>
+              <div><strong>גיל:</strong> {viewingForm.age || '—'}</div>
+              <div><strong>תאריך לידה (לועזי):</strong> {viewingForm.birthDateGreg || '—'}</div>
+              <div><strong>תאריך לידה (עברי):</strong> {viewingForm.birthDateHeb || '—'}</div>
+              <div><strong>טלפון:</strong> <span dir="ltr">{viewingForm.phone || '—'}</span></div>
+              <div><strong>מייל:</strong> <span dir="ltr">{viewingForm.email || '—'}</span></div>
+              <div><strong>כתובת:</strong> {viewingForm.address || '—'}</div>
+              <div><strong>בית ספר / עיסוק:</strong> {viewingForm.school || '—'}</div>
+              <div><strong>מידה בחולצה:</strong> {viewingForm.shirtSize || '—'}</div>
+              <div><strong>קבוצה:</strong> {viewingForm.groupName || '—'}</div>
+              <div><strong>ימי התנדבות:</strong> {(viewingForm.activityDays || []).join(', ') || '—'}</div>
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <strong>חתימה:</strong>
+              {viewingForm.signature ? (
+                <img
+                  src={viewingForm.signature}
+                  alt="חתימת המתנדב"
+                  style={{ display: 'block', marginTop: '8px', maxWidth: '100%', border: '1px solid var(--border)', borderRadius: '10px', background: '#fff' }}
+                />
+              ) : <span> —</span>}
+            </div>
+
+            <div className="modal-actions">
+              {viewingForm.pdfStoragePath && (
+                <button type="button" className="btn btn-outline" onClick={() => openSignedPdf(viewingForm)}>
+                  פתיחת PDF
+                </button>
+              )}
+              <button type="button" className="btn btn-outline" onClick={() => setViewingForm(null)}>סגירה</button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

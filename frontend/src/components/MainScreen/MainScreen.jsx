@@ -1,197 +1,283 @@
-/* MainScreen — the public landing page (shown to logged-out visitors). */
+/* MainScreen — public landing page for logged-out visitors.
+   This screen owns the page shell: header, hero text, loading groups from
+   Firestore, and handing the loaded groups to GroupShowcase. */
 
-// React hooks for state and side effects.
-import { useEffect, useState } from 'react';
-
-// Firestore helpers for reading collections.
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 
-// Our Firestore database instance.
 import { db } from '../../firebase';
-
-// The cinematic, auto-playing presentation of the groups.
 import GroupShowcase from './GroupShowcase/GroupShowcase';
-
-// Styles for this screen.
 import './MainScreen.css';
 
 
-// Kept out of the component so they aren't recreated on every render, and so
-// the "magic strings" all sit in one obvious place.
 const GROUPS_COLLECTION = 'groups';
+
 const REGISTER_URL = '?register=1';
 const LOGO_URL =
   'https://www.shalva.org/wp-content/uploads/2025/02/Logo-Hebrew-1024x488-1.png';
 
-// Shown if the groups fail to load (a real failure, not an empty list).
+const GROUPS_STATUS = Object.freeze({
+  LOADING: 'loading',
+  SUCCESS: 'success',
+  ERROR: 'error',
+});
+
 const GROUPS_LOAD_ERROR_MESSAGE =
   'לא ניתן לטעון את הקבוצות כרגע. נסו לרענן את הדף.';
 
+// Some mobile browsers restore scroll after paint. These delayed resets keep
+// the full-screen landing pinned to the top even after late layout changes.
+const SCROLL_RESET_DELAYS_MS = Object.freeze([120, 350, 700]);
 
-function MainScreen({ onNavigateLogin }) {
-  // The public groups to preview.
-  const [groups, setGroups] = useState([]);
+const noop = () => {};
 
-  // True while the groups are loading.
-  const [isLoadingGroups, setIsLoadingGroups] = useState(true);
 
-  // Keep a failed load separate from a real "no groups" state.
-  const [groupsErrorMessage, setGroupsErrorMessage] = useState('');
+function canUseDOM() {
+  return typeof window !== 'undefined' && typeof document !== 'undefined';
+}
 
-  // Load the public groups once, on mount.
-  useEffect(() => {
-    // Guards against updating state after the component unmounts mid-request.
-    let isComponentMounted = true;
 
-    const fetchGroups = async () => {
-      try {
-        // Read the groups collection.
-        const groupsSnapshot = await getDocs(collection(db, GROUPS_COLLECTION));
+function resetDocumentScroll() {
+  if (!canUseDOM()) {
+    return;
+  }
 
-        // Spread the document data first, then set the id last — so a stray
-        // "id" field inside a document can never overwrite the real one.
-        const groupsData = groupsSnapshot.docs.map((groupDoc) => ({
-          ...groupDoc.data(),
-          id: groupDoc.id,
-        }));
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
+  window.scrollTo(0, 0);
+}
 
-        if (isComponentMounted) {
-          setGroups(groupsData);
-          setGroupsErrorMessage('');
-        }
-      } catch (fetchError) {
-        console.error('Error fetching public groups:', fetchError);
 
-        if (isComponentMounted) {
-          setGroupsErrorMessage(GROUPS_LOAD_ERROR_MESSAGE);
-        }
-      } finally {
-        if (isComponentMounted) {
-          setIsLoadingGroups(false);
-        }
-      }
-    };
+function normalizeGroup(groupDoc) {
+  const groupData = groupDoc.data();
 
-    fetchGroups();
+  return {
+    ...groupData,
 
-    // Cleanup: flip the flag so a late response is ignored.
+    // Firestore's document id stays authoritative even if the document itself
+    // contains an "id" field.
+    id: groupDoc.id,
+  };
+}
+
+
+// The landing page intentionally shows every group in the collection.
+// Filtering or limiting should only be added if the product requirement changes.
+async function fetchGroups() {
+  const groupsSnapshot = await getDocs(collection(db, GROUPS_COLLECTION));
+  return groupsSnapshot.docs.map(normalizeGroup);
+}
+
+
+function MainScreen({
+  onNavigateLogin = noop,
+  homeHref = '/',
+  registerHref = REGISTER_URL,
+}) {
+  const [groupsState, setGroupsState] = useState({
+    status: GROUPS_STATUS.LOADING,
+    groups: [],
+    errorMessage: '',
+  });
+
+  // Reset before paint to avoid a visible jump from a restored scroll position.
+  useLayoutEffect(() => {
+    if (!canUseDOM()) {
+      return undefined;
+    }
+
+    const canRestoreScroll = 'scrollRestoration' in window.history;
+    const previousScrollRestoration = canRestoreScroll
+      ? window.history.scrollRestoration
+      : undefined;
+
+    if (canRestoreScroll) {
+      window.history.scrollRestoration = 'manual';
+    }
+
+    resetDocumentScroll();
+
+    const frameId = window.requestAnimationFrame(resetDocumentScroll);
+    const timeoutIds = SCROLL_RESET_DELAYS_MS.map((delay) =>
+      window.setTimeout(resetDocumentScroll, delay),
+    );
+
     return () => {
-      isComponentMounted = false;
+      window.cancelAnimationFrame(frameId);
+      timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
+
+      if (canRestoreScroll) {
+        window.history.scrollRestoration = previousScrollRestoration;
+      }
     };
   }, []);
 
-  // Decide what fills the groups panel: loading, error, empty, or the showcase.
-  const renderGroupsContent = () => {
-    // Still loading — announce it politely to screen readers (role="status").
-    if (isLoadingGroups) {
-      return (
-        <p className="groups-message" role="status">
-          טוען קבוצות...
-        </p>
-      );
+  // Load all groups once. The ignore flag prevents state updates after unmount.
+  useEffect(() => {
+    let shouldIgnoreResult = false;
+
+    async function loadGroups() {
+      try {
+        const groups = await fetchGroups();
+
+        if (!shouldIgnoreResult) {
+          setGroupsState({
+            status: GROUPS_STATUS.SUCCESS,
+            groups,
+            errorMessage: '',
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching groups:', error);
+
+        if (!shouldIgnoreResult) {
+          setGroupsState({
+            status: GROUPS_STATUS.ERROR,
+            groups: [],
+            errorMessage: GROUPS_LOAD_ERROR_MESSAGE,
+          });
+        }
+      }
     }
 
-    // The load failed — announce it assertively (role="alert").
-    if (groupsErrorMessage) {
-      return (
-        <p className="groups-error" role="alert">
-          {groupsErrorMessage}
-        </p>
-      );
+    loadGroups();
+
+    return () => {
+      shouldIgnoreResult = true;
+    };
+  }, []);
+
+  // Loading completion can change the layout height. Reset once more so the
+  // full-screen landing stays visually anchored at the top.
+  useEffect(() => {
+    if (groupsState.status === GROUPS_STATUS.LOADING) {
+      return undefined;
     }
 
-    // Loaded fine, but there are simply no groups to show.
-    if (groups.length === 0) {
-      return (
-        <p className="groups-message">
-          כרגע אין קבוצות פעילות להצגה.
-        </p>
-      );
+    if (!canUseDOM()) {
+      return undefined;
     }
 
-    // We have groups — hand them to the cinematic showcase.
-    return <GroupShowcase groups={groups} />;
-  };
+    const frameId = window.requestAnimationFrame(resetDocumentScroll);
+    return () => window.cancelAnimationFrame(frameId);
+  }, [groupsState.status]);
 
   return (
     <div className="main-container">
+      <MainHeader
+        homeHref={homeHref}
+        registerHref={registerHref}
+        onNavigateLogin={onNavigateLogin}
+      />
 
-      {/* Top header: logo + login / signup actions. */}
-      <header className="main-header">
-        {/* Clicking the logo returns to the home page (the site root). */}
-        <a href="/" className="main-logo-link" aria-label="לדף הבית">
-          <img
-            src={LOGO_URL}
-            alt="שלוה"
-            className="main-logo"
-            width="101"
-            height="48"
-            decoding="async"
-          />
-        </a>
+      <main className="main-content">
+        <HeroSection />
 
-        <div className="header-buttons">
-          {/* Volunteer signup opens the public registration form (?register=1). */}
-          <a className="btn-register" href={REGISTER_URL}>הרשמה להתנדבות</a>
-
-          {/* Login switches the public view to the sign-in card.
-              type="button" stops it ever submitting a surrounding <form>. */}
-          <button type="button" className="btn-login" onClick={onNavigateLogin}>
-            כניסה למערכת
-          </button>
-        </div>
-      </header>
-
-      {/* Everything below the header is the page's main landmark. */}
-      <main>
-
-        {/* Hero section: headline, intro text and a decorative visual.
-            aria-labelledby reuses the visible <h1> as this section's name. */}
-        <section className="main-hero" aria-labelledby="main-hero-title">
-          <div className="hero-content">
-            <span className="hero-badge">פורטל הקהילה</span>
-            <h1 id="main-hero-title">נותנים תקווה. משנים חיים.</h1>
-            <p className="hero-text">
-              ברוכים הבאים למערכת הקהילתית של שלוה. כאן אנו מחברים בין מתנדבים, מדריכים ורכזי פעילויות
-              בכדי להעניק את הטיפול והשילוב המיטבי בקהילה.
-            </p>
-          </div>
-
-          {/* Purely decorative: aria-hidden so screen readers skip it, and the
-              words are <span>s (not headings) so they don't pollute the outline. */}
-          <div className="hero-visual" aria-hidden="true">
-            <div className="visual-card">
-              <div className="visual-glow-purple"></div>
-              <div className="visual-glow-cyan"></div>
-              <div className="visual-text-overlay">
-                <span>קהילה.</span>
-                <span>שילוב.</span>
-                <span>שלוה.</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Active groups. aria-busy tells assistive tech the region is loading. */}
-        <section
-          className="groups-section"
-          aria-labelledby="groups-section-title"
-          aria-busy={isLoadingGroups}
-        >
-          <h2 id="groups-section-title">הקבוצות הפעילות שלנו</h2>
-
-          {/* Short description under the heading. */}
-          <p className="groups-intro">
-            הצצה לקבוצות הפעילות בקהילה — בכל קבוצה מדריך/ה מסור/ה ומפגשים קבועים.
-            בחרו את הקבוצה שמתאימה לכם והצטרפו אלינו.
-          </p>
-
-          {/* Loading, an error, empty, or the cinematic group showcase. */}
-          {renderGroupsContent()}
-        </section>
+        <GroupsSection
+          status={groupsState.status}
+          groups={groupsState.groups}
+          errorMessage={groupsState.errorMessage}
+        />
       </main>
     </div>
   );
 }
+
+
+function MainHeader({ homeHref, registerHref, onNavigateLogin }) {
+  return (
+    <header className="main-header">
+      <a href={homeHref} className="main-logo-link" aria-label="שלוה - לדף הבית">
+        <img
+          src={LOGO_URL}
+          alt=""
+          className="main-logo"
+          width="101"
+          height="48"
+          decoding="async"
+        />
+      </a>
+
+      <div className="header-buttons">
+        <a className="btn-register" href={registerHref}>
+          הרשמה להתנדבות
+        </a>
+
+        <button type="button" className="btn-login" onClick={onNavigateLogin}>
+          כניסה למערכת
+        </button>
+      </div>
+    </header>
+  );
+}
+
+
+function HeroSection() {
+  return (
+    <section className="main-hero" aria-labelledby="main-hero-title">
+      <div className="hero-content">
+        <h1 id="main-hero-title">נותנים תקווה. משנים חיים.</h1>
+
+        <p className="hero-text">
+          ברוכים הבאים למערכת הקהילתית של שלוה.
+          <span className="hero-text-tail">
+            {' '}
+            כאן אנו מחברים בין מתנדבים, מדריכים ורכזי פעילויות
+            כדי להעניק טיפול, שילוב ותמיכה מיטביים בקהילה.
+          </span>
+        </p>
+      </div>
+    </section>
+  );
+}
+
+
+function GroupsSection({ status, groups, errorMessage }) {
+  return (
+    <section
+      className="groups-section"
+      aria-labelledby="groups-section-title"
+      aria-busy={status === GROUPS_STATUS.LOADING}
+    >
+      <h2 id="groups-section-title">הקבוצות שלנו</h2>
+
+      <GroupsContent
+        status={status}
+        groups={groups}
+        errorMessage={errorMessage}
+      />
+    </section>
+  );
+}
+
+
+function GroupsContent({ status, groups, errorMessage }) {
+  if (status === GROUPS_STATUS.LOADING) {
+    return (
+      <p className="groups-message" role="status">
+        טוען קבוצות...
+      </p>
+    );
+  }
+
+  if (status === GROUPS_STATUS.ERROR) {
+    return (
+      <p className="groups-error" role="alert">
+        {errorMessage}
+      </p>
+    );
+  }
+
+  if (groups.length === 0) {
+    return (
+      <p className="groups-message">
+        כרגע אין קבוצות להצגה.
+      </p>
+    );
+  }
+
+  return <GroupShowcase groups={groups} variant="landing" />;
+}
+
 
 export default MainScreen;

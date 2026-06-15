@@ -2,16 +2,16 @@
    GuideDashboard — guide home: branded hero + action cards.
    ============================================================ */
 
-/* The dashboard card that holds the whole screen. */
+/* A plain, full-width wrapper for the whole screen — NOT a card.
+   We deliberately drop the old card chrome (background / border / padding /
+   shadow). That inner padding used to push the hero and the action cards
+   inward, so they looked narrower than the top header bar. With no padding
+   here, the hero and cards stretch to the full layout width and line up
+   edge-to-edge with the header bar above them. */
 .guide-dashboard-container {
   font-family: var(--font);
-  max-width: 760px;
-  margin: 8px auto 40px;
-  padding: clamp(16px, 4vw, 32px);
-  background-color: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow);
+  max-width: none;
+  margin: 0 0 40px;
   display: flex;
   flex-direction: column;
 }
@@ -110,6 +110,14 @@
   font-weight: 800;
 }
 
+/* Today's date line under the greeting. */
+.guide-hero-date {
+  margin: 8px 0 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
 
 /* ---------- Action cards ---------- */
 
@@ -119,18 +127,38 @@
   gap: 14px;
 }
 
+/* Both cards share this white, bordered surface. They stay uniform in colour;
+   the interest comes from the icon badge, the hover motion and the chevron. */
 .guide-action-card {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   width: 100%;
   text-align: right;
-  padding: 18px;
+  padding: 18px 20px;
   border-radius: var(--radius-lg);
   border: 1.5px solid var(--border);
-  background: var(--surface-2);
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
   cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  overflow: hidden;
+  transition: transform 0.18s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+/* A thin brand bar on the leading (right, in RTL) edge that grows on hover —
+   a subtle accent that keeps the card white while adding life. */
+.guide-action-card::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--brand-600);
+  transform: scaleY(0);
+  transform-origin: center;
+  transition: transform 0.22s ease;
 }
 
 .guide-action-card:hover {
@@ -139,8 +167,43 @@
   border-color: var(--brand-200);
 }
 
+.guide-action-card:hover::before {
+  transform: scaleY(1);
+}
+
 .guide-action-card:active {
-  transform: translateY(0);
+  transform: translateY(-1px);
+}
+
+/* ---- Icon badge ---- */
+
+/* The rounded square that holds the card's icon. */
+.guide-action-icon {
+  flex: none;
+  width: 50px;
+  height: 50px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.18s ease;
+}
+
+/* A gentle pop on the icon when the card is hovered. */
+.guide-action-card:hover .guide-action-icon {
+  transform: scale(1.06);
+}
+
+/* Group card: brand (purple) icon. */
+.guide-action-icon--group {
+  background: var(--brand-50);
+  color: var(--brand-600);
+}
+
+/* Attendance card: info (blue) icon — a second accent for variety. */
+.guide-action-icon--attendance {
+  background: rgba(82, 167, 221, 0.12);
+  color: var(--info);
 }
 
 .guide-action-text {
@@ -162,21 +225,20 @@
   color: var(--text-muted);
 }
 
-/* Primary card: filled brand. */
-.guide-action-card--primary {
-  background: var(--brand-600);
-  border-color: var(--brand-600);
+/* ---- Chevron ---- */
+
+/* Muted by default; it slides toward the leading edge on hover to invite a tap. */
+.guide-action-chevron {
+  flex: none;
+  display: flex;
+  align-items: center;
+  color: var(--text-muted);
+  transition: transform 0.18s ease, color 0.18s ease;
 }
-.guide-action-card--primary .guide-action-title {
-  color: #ffffff;
-}
-.guide-action-card--primary .guide-action-sub {
-  color: #ffffff;
-  opacity: 0.9;
-}
-.guide-action-card--primary:hover {
-  background: var(--brand-700);
-  border-color: var(--brand-700);
+
+.guide-action-card:hover .guide-action-chevron {
+  color: var(--brand-600);
+  transform: translateX(-4px);
 }
 
 
@@ -195,9 +257,10 @@
 /* ---------- Phone ---------- */
 
 @media (max-width: 600px) {
+  /* The outer layout already supplies the side gutter on phones, so the
+     wrapper itself stays paddingless here too (same reasoning as desktop). */
   .guide-dashboard-container {
-    margin: 12px;
-    padding: 16px;
+    margin: 0 0 24px;
   }
 
   .guide-hero-content {

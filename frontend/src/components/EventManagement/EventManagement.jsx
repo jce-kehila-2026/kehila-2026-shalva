@@ -30,6 +30,9 @@ import './EventManagement.css'
 // Shared event status helper (so all screens show the same status).
 import { computeEventStatus } from '../../utils/eventStatus'
 
+// Shared collapsible advanced-search bar (free text + per-field filters).
+import SearchFilters from '../shared/SearchFilters/SearchFilters'
+
 
 // Firestore collection used for storing and reading events.
 const EVENTS_COLLECTION_NAME = 'events'
@@ -160,9 +163,25 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
   // Search text used to filter the event table.
   const [searchTerm, setSearchTerm] = useState('')
 
+  // Structured "advanced filters" (empty string means "don't filter").
+  const [filters, setFilters] = useState({ status: '', assignedGroup: '' })
+
+  // Update one filter by name (handed to the shared SearchFilters component).
+  const updateFilter = (name, value) => {
+    setFilters((current) => ({ ...current, [name]: value }))
+  }
+
+  // Reset every structured filter.
+  const clearFilters = () => {
+    setFilters({ status: '', assignedGroup: '' })
+  }
+
   // Whether the add/edit form is open. The list always shows first; the form
   // opens only via the "הוספת אירוע" button or when editing an event.
   const [showForm, setShowForm] = useState(false)
+
+  // On phones event cards start collapsed, like the other management lists.
+  const [expandedEventId, setExpandedEventId] = useState(null)
 
   // Dashboard back button: an open form returns to the list first.
   useEffect(() => {
@@ -269,30 +288,64 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
     }
   }, [])
 
-  // Events filtered by the search box (recomputed only when inputs change).
+  // Events filtered by the free-text search AND the structured filters
+  // (recomputed only when inputs change).
   const filteredEvents = useMemo(() => {
     // Normalize the search text.
     const searchValue = searchTerm.trim().toLowerCase()
 
-    // No search: show everything.
-    if (!searchValue) {
-      return events
-    }
-
-    // Match the search against the event's combined text.
     return events.filter((event) => {
-      const searchableText = [
-        event.name,
-        event.location,
-        event.assignedGroup,
-        event.status,
-      ]
-        .join(' ')
-        .toLowerCase()
+      // Advanced filter — status, matched against the DISPLAYED (derived from
+      // the date) status, so it lines up with the badge the admin sees.
+      if (filters.status && computeEventStatus(event) !== filters.status) {
+        return false
+      }
 
-      return searchableText.includes(searchValue)
+      // Advanced filter — assigned group.
+      if (filters.assignedGroup && event.assignedGroup !== filters.assignedGroup) {
+        return false
+      }
+
+      // Free-text search — across every text column of the event.
+      if (searchValue) {
+        const searchableText = [
+          event.name,
+          event.location,
+          event.assignedGroup,
+          event.status,
+          event.date,
+          event.description,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+
+        if (!searchableText.includes(searchValue)) {
+          return false
+        }
+      }
+
+      return true
     })
-  }, [events, searchTerm])
+  }, [events, searchTerm, filters])
+
+  // The advanced-panel fields: filter by status and by assigned group.
+  const eventFilterFields = [
+    {
+      name: 'status',
+      label: 'סטטוס',
+      type: 'select',
+      placeholder: 'כל הסטטוסים',
+      options: STATUSES,
+    },
+    {
+      name: 'assignedGroup',
+      label: 'קבוצה משויכת',
+      type: 'select',
+      placeholder: 'כל הקבוצות',
+      options: [...groupOptions, NO_GROUP],
+    },
+  ]
 
   // Dropdown options: live groups + "no group", plus the currently selected
   // value (so editing an old event keeps its group even if it's gone now).
@@ -431,16 +484,22 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
   const eventListSection = (
     <section className="event-management-list-section">
 
-      {/* Section title + search. */}
+      {/* Section title. */}
       <div className="event-management-list-header">
         <h2>רשימת אירועים</h2>
+      </div>
 
-        <input
-          type="search"
-          className="event-management-search"
-          value={searchTerm}
-          onChange={(event) => setSearchTerm(event.target.value)}
-          placeholder="חיפוש לפי שם, מיקום, קבוצה או סטטוס"
+      {/* Free-text search (name / location / group / status / date) +
+          collapsible advanced filters (status, assigned group). */}
+      <div className="event-management-filters">
+        <SearchFilters
+          searchValue={searchTerm}
+          onSearchChange={setSearchTerm}
+          searchPlaceholder="🔍 חיפוש לפי שם, מיקום, קבוצה או סטטוס..."
+          fields={eventFilterFields}
+          values={filters}
+          onChange={updateFilter}
+          onClear={clearFilters}
         />
       </div>
 
@@ -453,21 +512,32 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
         <div className="event-cards">
           {/* A card per event, or an empty-state note. */}
           {filteredEvents.length > 0 ? (
-            filteredEvents.map((eventItem) => (
-              <article className="event-card" key={eventItem.id}>
+            filteredEvents.map((eventItem) => {
+              const isExpanded = expandedEventId === eventItem.id
+              const detailsId = `event-card-details-${eventItem.id}`
+
+              return (
+              <article className={`event-card ${isExpanded ? 'is-expanded' : ''}`} key={eventItem.id}>
 
                 {/* Card header: name + status badge. */}
-                <div className="event-card-head">
+                <button
+                  type="button"
+                  className="event-card-head"
+                  onClick={() => setExpandedEventId((currentId) => (currentId === eventItem.id ? null : eventItem.id))}
+                  aria-expanded={isExpanded}
+                  aria-controls={detailsId}
+                >
                   <h3 className="event-card-name">{eventItem.name}</h3>
                   <span
                     className={`event-management-status ${statusClass(computeEventStatus(eventItem))}`}
                   >
                     {computeEventStatus(eventItem)}
                   </span>
-                </div>
+                  <span className="event-card-chevron" aria-hidden="true" />
+                </button>
 
                 {/* Key details (label + value rows). */}
-                <dl className="event-card-details">
+                <dl className="event-card-details" id={detailsId}>
                   <div className="event-card-row">
                     <dt>תאריך</dt>
                     <dd>{eventItem.date || '—'}</dd>
@@ -503,7 +573,8 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
                   )}
                 </div>
               </article>
-            ))
+              )
+            })
           ) : (
             <div className="event-management-empty">אין אירועים להצגה כרגע.</div>
           )}
@@ -542,180 +613,174 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
           </div>
         )}
 
-        {/* Add / edit event form — opens only via the add/edit buttons. */}
+        {/* Add / edit event — opens in a modal window, matching the other
+            management screens (volunteers / guides) so it looks uniform. */}
         {!readOnly && showForm && (
-        <form className="event-management-form" onSubmit={handleSubmit}>
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal-content" style={{ maxWidth: '700px' }}>
 
-          {/* Title changes between add and edit mode. */}
-          <h2>
-            {isEditing ? 'עריכת אירוע' : 'הוספת אירוע חדש'}
-          </h2>
+            {/* Title changes between add and edit mode. */}
+            <div className="modal-header">
+              {isEditing ? 'עריכת אירוע' : 'הוספת אירוע חדש'}
+            </div>
 
-          {/* Two-column grid of the main fields. */}
-          <div className="event-management-form-grid">
+            {/* `volunteer-form` is the shared modal-form layout (a vertical
+                stack). The inner grid keeps the fields in two compact columns,
+                exactly like the volunteers modal. */}
+            <form className="volunteer-form" onSubmit={handleSubmit}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
 
-            {/* Event name. */}
-            <label>
-              שם האירוע
+                {/* Event name. */}
+                <div className="form-group">
+                  <label>שם האירוע</label>
+                  <input
+                    className="styled-input full-width-input"
+                    type="text"
+                    name="name"
+                    value={form.name}
+                    onChange={handleChange}
+                    placeholder="לדוגמה: יום ספורט קהילתי"
+                  />
+                </div>
 
-              <input
-                type="text"
-                name="name"
-                value={form.name}
-                onChange={handleChange}
-                placeholder="לדוגמה: יום ספורט קהילתי"
-              />
-            </label>
+                {/* Event date (custom picker). */}
+                <div className="form-group">
+                  <BirthDatePicker
+                    key={editingEventId ?? `new-${formResetKey}`}
+                    value={form.date}
+                    onChange={(date) => setForm((currentForm) => ({ ...currentForm, date }))}
+                    label="תאריך"
+                    pastYears={3}
+                    futureYears={6}
+                  />
+                </div>
 
-            {/* Event date (custom picker). */}
-            <label>
-              תאריך
+                {/* Location. */}
+                <div className="form-group">
+                  <label>מיקום</label>
+                  <input
+                    className="styled-input full-width-input"
+                    type="text"
+                    name="location"
+                    value={form.location}
+                    onChange={handleChange}
+                    placeholder="לדוגמה: מרכז שלווה, ירושלים"
+                  />
+                </div>
 
-              <BirthDatePicker
-                key={editingEventId ?? `new-${formResetKey}`}
-                value={form.date}
-                onChange={(date) => setForm((currentForm) => ({ ...currentForm, date }))}
-                pastYears={3}
-                futureYears={6}
-              />
-            </label>
+                {/* Assigned group dropdown. */}
+                <div className="form-group">
+                  <label>שיוך קבוצה</label>
+                  <select
+                    className="styled-input full-width-input"
+                    name="assignedGroup"
+                    value={form.assignedGroup}
+                    onChange={handleChange}
+                  >
+                    {selectableGroups.map((group) => (
+                      <option key={group} value={group}>
+                        {group}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            {/* Location. */}
-            <label>
-              מיקום
+                {/* Status dropdown. */}
+                <div className="form-group">
+                  <label>סטטוס</label>
+                  <select
+                    className="styled-input full-width-input"
+                    name="status"
+                    value={form.status}
+                    onChange={handleChange}
+                  >
+                    {STATUSES.map((status) => (
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-              <input
-                type="text"
-                name="location"
-                value={form.location}
-                onChange={handleChange}
-                placeholder="לדוגמה: מרכז שלווה, ירושלים"
-              />
-            </label>
+                {/* Contact name. */}
+                <div className="form-group">
+                  <label>איש קשר</label>
+                  <input
+                    className="styled-input full-width-input"
+                    type="text"
+                    name="contactName"
+                    value={form.contactName}
+                    onChange={handleChange}
+                    placeholder="שם איש קשר"
+                  />
+                </div>
 
-            {/* Assigned group dropdown. */}
-            <label>
-              שיוך קבוצה
+                {/* Contact phone. */}
+                <div className="form-group">
+                  <label>טלפון איש קשר</label>
+                  <input
+                    className="styled-input full-width-input"
+                    type="tel"
+                    name="contactPhone"
+                    value={form.contactPhone}
+                    onChange={handleChange}
+                    placeholder="050-0000000"
+                    dir="ltr"
+                  />
+                </div>
 
-              <select
-                name="assignedGroup"
-                value={form.assignedGroup}
-                onChange={handleChange}
-              >
-                {selectableGroups.map((group) => (
-                  <option key={group} value={group}>
-                    {group}
-                  </option>
-                ))}
-              </select>
-            </label>
+                {/* Contact email. */}
+                <div className="form-group">
+                  <label>אימייל איש קשר</label>
+                  <input
+                    className="styled-input full-width-input"
+                    type="email"
+                    name="contactEmail"
+                    value={form.contactEmail}
+                    onChange={handleChange}
+                    placeholder="name@example.com"
+                    dir="ltr"
+                  />
+                </div>
 
-            {/* Status dropdown. */}
-            <label>
-              סטטוס
+                {/* Full-width description field. */}
+                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                  <label>תיאור האירוע</label>
+                  <textarea
+                    className="styled-input full-width-input"
+                    name="description"
+                    value={form.description}
+                    onChange={handleChange}
+                    placeholder="כתוב תיאור קצר של האירוע"
+                    rows="4"
+                  />
+                </div>
+              </div>
 
-              <select
-                name="status"
-                value={form.status}
-                onChange={handleChange}
-              >
-                {STATUSES.map((status) => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            {/* Contact name. */}
-            <label>
-              איש קשר
-
-              <input
-                type="text"
-                name="contactName"
-                value={form.contactName}
-                onChange={handleChange}
-                placeholder="שם איש קשר"
-              />
-            </label>
-
-            {/* Contact phone. */}
-            <label>
-              טלפון איש קשר
-
-              <input
-                type="tel"
-                name="contactPhone"
-                value={form.contactPhone}
-                onChange={handleChange}
-                placeholder="050-0000000"
-                dir="ltr"
-              />
-            </label>
-
-            {/* Contact email. */}
-            <label>
-              אימייל איש קשר
-
-              <input
-                type="email"
-                name="contactEmail"
-                value={form.contactEmail}
-                onChange={handleChange}
-                placeholder="name@example.com"
-                dir="ltr"
-              />
-            </label>
+              {/* Cancel (closes the modal) + submit — same order and style as
+                  the other modals. */}
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => {
+                    handleCancelEdit()
+                    setShowForm(false)
+                  }}
+                >
+                  ביטול
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-success"
+                  disabled={saving}
+                >
+                  {getSubmitButtonText({ saving, isEditing })}
+                </button>
+              </div>
+            </form>
           </div>
-
-          {/* Full-width description field. */}
-          <label className="event-management-description-label">
-            תיאור האירוע
-
-            <textarea
-              name="description"
-              value={form.description}
-              onChange={handleChange}
-              placeholder="כתוב תיאור קצר של האירוע"
-              rows="4"
-            />
-          </label>
-
-          {/* Submit + list-toggle + cancel buttons. */}
-          <div className="event-management-actions">
-            <button
-              type="submit"
-              className="event-management-primary-btn"
-              disabled={saving}
-            >
-              {getSubmitButtonText({ saving, isEditing })}
-            </button>
-
-            {/* Close the form and return to the list. */}
-            <button
-              type="button"
-              className="event-management-secondary-btn"
-              onClick={() => {
-                handleCancelEdit()
-                setShowForm(false)
-              }}
-            >
-              סגירה
-            </button>
-
-            {/* Cancel only appears while editing (spans the full row). */}
-            {isEditing && (
-              <button
-                type="button"
-                className="event-management-secondary-btn event-management-cancel-btn"
-                onClick={handleCancelEdit}
-              >
-                ביטול עריכה
-              </button>
-            )}
-          </div>
-        </form>
+        </div>
         )}
 
         {/* The events list is the screen's main view, for everyone. */}

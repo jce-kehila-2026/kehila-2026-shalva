@@ -49,4 +49,15 @@ export default defineConfig({
     //   - localtunnel (fallback)    ->  *.loca.lt
     allowedHosts: ['.trycloudflare.com', '.lhr.life', '.loca.lt'],
   },
+
+  // Preview server (serves the production build via `vite preview`). Use this —
+  // not the dev server — when sharing a stable public link through a tunnel: it
+  // has NO live-reload (HMR), so the page never refreshes on its own. Same port
+  // + allowed tunnel hosts as the dev server, so the same tunnel keeps working.
+  preview: {
+    host: true,
+    port: 5173,
+    strictPort: true,
+    allowedHosts: ['.trycloudflare.com', '.lhr.life', '.loca.lt'],
+  },
 })

@@ -58,6 +58,30 @@ const validRegistrant = () => ({
   createdAt: new Date(),
 });
 
+// A valid public signed volunteer form, including the generated PDF reference.
+const validSignedForm = (formId = 'formA') => ({
+  registrantId: 'reg1',
+  fullName: 'דנה לוי',
+  firstName: 'דנה',
+  lastName: 'לוי',
+  idNumber: '123456789',
+  age: 20,
+  birthDateGreg: '2006-01-01',
+  birthDateHeb: '',
+  address: 'רחוב הדוגמה 1',
+  phone: '0521234567',
+  email: 'dana@example.com',
+  school: 'בית ספר לדוגמה',
+  shirtSize: 'M',
+  groupName: 'נועם',
+  activityDays: ['ראשון'],
+  agreed: true,
+  signature: 'data:image/png;base64,abc',
+  pdfStoragePath: `signedForms/${formId}/shalva-signed-form-${formId}.pdf`,
+  pdfFileName: `shalva-signed-form-${formId}.pdf`,
+  createdAt: new Date(),
+});
+
 
 // Start the emulator test environment once, loading both rules files.
 beforeAll(async () => {
@@ -171,6 +195,21 @@ describe('logged-out user (no auth)', () => {
   it('cannot submit a registration with an invalid email', async () => {
     await assertFails(
       anonDb().collection('registrants').add({ ...validRegistrant(), email: 'not-an-email' }),
+    );
+  });
+
+  it('CAN submit a valid signed volunteer form with an empty Hebrew date', async () => {
+    await assertSucceeds(
+      anonDb().collection('signedForms').doc('formA').set(validSignedForm('formA')),
+    );
+  });
+
+  it('cannot submit a signed volunteer form without the PDF reference', async () => {
+    const withoutPdf = validSignedForm('formMissingPdf');
+    delete withoutPdf.pdfStoragePath;
+
+    await assertFails(
+      anonDb().collection('signedForms').doc('formMissingPdf').set(withoutPdf),
     );
   });
 });
@@ -345,5 +384,27 @@ describe('storage rules (group cover images)', () => {
   it('nobody can write outside the groups/ folder (default deny)', async () => {
     const fileRef = testEnv.authenticatedContext(ADMIN_UID).storage().ref('avatars/x.png');
     await assertFails(fileRef.put(smallImage, { contentType: 'image/png' }));
+  });
+});
+
+
+describe('storage rules (signed volunteer PDFs)', () => {
+  // A tiny fake PDF payload is enough for rules tests; content-type is what the
+  // rule validates.
+  const smallPdf = new Uint8Array([37, 80, 68, 70]);
+
+  it('anonymous users CAN upload a signed form PDF', async () => {
+    const fileRef = testEnv.unauthenticatedContext().storage().ref('signedForms/formA/shalva-signed-form-formA.pdf');
+    await assertSucceeds(fileRef.put(smallPdf, { contentType: 'application/pdf' }));
+  });
+
+  it('anonymous users cannot upload a signed form with a non-PDF content type', async () => {
+    const fileRef = testEnv.unauthenticatedContext().storage().ref('signedForms/formB/shalva-signed-form-formB.pdf');
+    await assertFails(fileRef.put(smallPdf, { contentType: 'image/png' }));
+  });
+
+  it('anonymous users cannot upload outside the signedForms PDF pattern', async () => {
+    const fileRef = testEnv.unauthenticatedContext().storage().ref('signedForms/formC/random.pdf');
+    await assertFails(fileRef.put(smallPdf, { contentType: 'application/pdf' }));
   });
 });

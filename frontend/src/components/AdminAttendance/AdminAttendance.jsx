@@ -74,6 +74,13 @@ function getWeekRangeLabel(sunday) {
 }
 
 
+function getStatusLabel(status) {
+  if (status === 'present') return 'נוכח';
+  if (status === 'absent') return 'חסר';
+  return 'לא סומן';
+}
+
+
 function AdminAttendance({ registerBack }) {
   // The raw collections.
   const [groups, setGroups] = useState([]);
@@ -273,107 +280,113 @@ function AdminAttendance({ registerBack }) {
         else unmarkedCount++;
       });
     });
+    const volunteerCount = activeSelectedGroup.people.length;
 
     return (
       <div className="adm-att" dir="rtl">
-        {/* Header row with back button */}
-        <div className="adm-att-header-row">
-          <div className="adm-att-title-block">
-            <h2>נוכחות שבועית</h2>
-            <p>קבוצת {activeSelectedGroup.groupName} · מדריך/ה: {activeSelectedGroup.guideName}</p>
-          </div>
-          <button type="button" className="adm-att-back-btn" onClick={() => setSelectedGroup(null)}>
-            חזרה לרשימה
-          </button>
-        </div>
+        <section className="adm-att-review-card">
+          <header className="adm-att-review-head">
+            <div className="adm-att-title-block">
+              <span className="adm-att-eyebrow">מעקב שבועי</span>
+              <h2>נוכחות {activeSelectedGroup.groupName}</h2>
+              <p>מדריך/ה: {activeSelectedGroup.guideName}</p>
+            </div>
 
-        {/* Week Navigation */}
-        <div className="week-nav">
-          <button type="button" className="week-nav-btn" onClick={goToNextWeek}>
-            שבוע הבא ◀
-          </button>
-          <span className="week-label">{getWeekRangeLabel(currentWeekStart)}</span>
-          <button type="button" className="week-nav-today-btn" onClick={goToCurrentWeek}>
-            השבוע הנוכחי
-          </button>
-          <button type="button" className="week-nav-btn" onClick={goToPrevWeek}>
-            ▶ שבוע קודם
-          </button>
-        </div>
+            <button type="button" className="adm-att-back-btn" onClick={() => setSelectedGroup(null)}>
+              חזרה לרשימה
+            </button>
+          </header>
 
-        {/* Summary stats tiles */}
-        <div className="adm-att-summary-row">
-          <div className="adm-att-stat-tile is-present">
-            <span>{presentCount}</span>
-            <p>נוכחים</p>
-          </div>
-          <div className="adm-att-stat-tile is-absent">
-            <span>{absentCount}</span>
-            <p>חסרים</p>
-          </div>
-          <div className="adm-att-stat-tile is-unmarked">
-            <span>{unmarkedCount}</span>
-            <p>לא סומנו</p>
-          </div>
-        </div>
+          <div className="adm-att-top-grid">
+            <div className="adm-att-week-switcher" aria-label="ניווט שבוע">
+              <button type="button" className="week-nav-btn" onClick={goToNextWeek}>
+                שבוע הבא
+              </button>
+              <div className="adm-att-week-label">
+                <span>השבוע</span>
+                <strong>{getWeekRangeLabel(currentWeekStart)}</strong>
+              </div>
+              <button type="button" className="week-nav-today-btn" onClick={goToCurrentWeek}>
+                הנוכחי
+              </button>
+              <button type="button" className="week-nav-btn" onClick={goToPrevWeek}>
+                קודם
+              </button>
+            </div>
 
-        {/* Weekly table container */}
-        <div className="adm-att-table-container" style={{ borderTop: 'none', padding: 0 }}>
-          <table className="adm-att-table">
-            <thead>
-              <tr>
-                <th className="sticky-col">שם המתנדב</th>
-                {weekDays.map((day) => {
-                  const dKey = getDayKey(day);
-                  const dayName = day.toLocaleDateString('he-IL', { weekday: 'long' }).replace('יום ', '');
-                  const dateStr = day.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' });
-                  return (
-                    <th key={dKey}>
-                      <div className="th-content">
-                        <span className="day-name">{dayName}</span>
-                        <span className="day-date">{dateStr}</span>
-                      </div>
-                    </th>
-                  );
-                })}
-              </tr>
-            </thead>
-            <tbody>
+            <div className="adm-att-summary-row" aria-label="סיכום נוכחות שבועי">
+              <div className="adm-att-stat-tile is-volunteers">
+                <span>{volunteerCount}</span>
+                <p>מתנדבים</p>
+              </div>
+              <div className="adm-att-stat-tile is-present">
+                <span>{presentCount}</span>
+                <p>נוכחים</p>
+              </div>
+              <div className="adm-att-stat-tile is-absent">
+                <span>{absentCount}</span>
+                <p>חסרים</p>
+              </div>
+              <div className="adm-att-stat-tile is-unmarked">
+                <span>{unmarkedCount}</span>
+                <p>לא סומנו</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="adm-att-legend" aria-label="מקרא">
+            <span><i className="adm-week-dot is-present" /> נוכח</span>
+            <span><i className="adm-week-dot is-absent" /> חסר</span>
+            <span><i className="adm-week-dot is-unmarked" /> לא סומן</span>
+          </div>
+
+          <div className="adm-week-board">
+            <div className="adm-week-grid adm-week-grid-head">
+              <div className="adm-week-person-head">מתנדב</div>
+              {weekDays.map((day) => {
+                const dKey = getDayKey(day);
+                const dayName = day.toLocaleDateString('he-IL', { weekday: 'short' }).replace('יום ', '');
+                const dateStr = day.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' });
+
+                return (
+                  <div className="adm-week-day-head" key={dKey}>
+                    <span>{dayName}</span>
+                    <small>{dateStr}</small>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="adm-week-body">
               {activeSelectedGroup.people.length > 0 ? (
                 activeSelectedGroup.people.map((person) => (
-                  <tr key={person.id}>
-                    <td className="sticky-col">
-                      <span className="adm-att-person-name">{person.name}</span>
-                    </td>
+                  <div className="adm-week-grid adm-week-row" key={person.id}>
+                    <div className="adm-week-person">
+                      <span>{person.name}</span>
+                    </div>
                     {weekDaysKeys.map((dKey) => {
                       const status = person.weeklyStatus[dKey];
                       return (
-                        <td key={dKey} className="adm-att-cell">
-                          {status === 'present' && (
-                            <span className="adm-cell-status is-present" title="נוכח">✓</span>
-                          )}
-                          {status === 'absent' && (
-                            <span className="adm-cell-status is-absent" title="חסר">✗</span>
-                          )}
-                          {status === 'unmarked' && (
-                            <span className="adm-cell-status is-unmarked" title="לא סומן">-</span>
-                          )}
-                        </td>
+                        <div className="adm-week-cell" key={dKey}>
+                          <span
+                            className={`adm-week-dot is-${status}`}
+                            title={getStatusLabel(status)}
+                            aria-label={getStatusLabel(status)}
+                          />
+                        </div>
                       );
                     })}
-                  </tr>
+                  </div>
                 ))
               ) : (
-                <tr>
-                  <td colSpan={8} className="adm-att-empty-row">
-                    אין מתנדבים בקבוצה זו.
-                  </td>
-                </tr>
+                <div className="adm-att-empty-row">
+                  אין מתנדבים בקבוצה זו.
+                </div>
               )}
-            </tbody>
-          </table>
+            </div>
+          </div>
+        </section>
         </div>
-      </div>
     );
   }
 
@@ -417,11 +430,14 @@ function AdminAttendance({ registerBack }) {
             <button
               key={group.id}
               type="button"
-              className="adm-att-group-card"
+              className={`adm-att-group-card ${group.totalAbsent > 0 ? 'has-absence' : ''}`}
               onClick={() => setSelectedGroup(group)}
             >
               <div className="adm-att-group-info">
-                <span className="adm-att-group-name">{group.groupName}</span>
+                <div className="adm-att-group-main">
+                  <span className="adm-att-group-name">{group.groupName}</span>
+                  <span className="adm-att-volunteers-count">{group.total} מתנדבים</span>
+                </div>
                 <span className="adm-att-group-guide">מדריך/ה: {group.guideName}</span>
               </div>
 
@@ -430,10 +446,6 @@ function AdminAttendance({ registerBack }) {
                 <span className="adm-att-stat-chip is-present">{group.totalPresent} נוכחים</span>
                 <span className="adm-att-stat-chip is-absent">{group.totalAbsent} חסרים</span>
                 <span className="adm-att-stat-chip is-unmarked">{group.totalUnmarked} לא סומנו</span>
-              </div>
-
-              <div className="adm-att-group-meta">
-                <span className="adm-att-volunteers-count">{group.total} מתנדבים</span>
               </div>
             </button>
           ))}

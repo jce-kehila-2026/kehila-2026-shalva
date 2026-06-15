@@ -21,6 +21,9 @@ import { computeEventStatus } from '../../utils/eventStatus'
 // Shared attendance normalization (kept in one place across screens).
 import { normalizeAttendanceStatus, getRecordStatus } from '../../utils/attendance'
 
+// Shared day / month / year date selector.
+import BirthDatePicker from '../shared/BirthDatePicker/BirthDatePicker'
+
 
 // Firestore collection names used by the reports screen.
 const COLLECTION_NAMES = {
@@ -267,9 +270,12 @@ function getAttendanceDate(attendanceItem) {
     return 'ללא תאריך'
   }
 
-  // Plain string date (e.g. "2026-05-31").
+  // Plain string date (e.g. "2026-05-31") — format it like the Timestamp dates
+  // so the whole column reads consistently (and the same day from different
+  // sources collapses into one meeting row instead of two).
   if (typeof value === 'string') {
-    return value
+    const parsed = new Date(value)
+    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString('he-IL')
   }
 
   // Firestore Timestamp.
@@ -494,8 +500,9 @@ export default function Reports({ registerBack }) {
   // UI states for loading, errors, selected tab, and search.
   const [loading, setLoading] = useState(true)
   const [errors, setErrors] = useState([])
-  // Step 1 state: no report chosen yet — the picker screen shows first.
-  const [activeReport, setActiveReport] = useState(null)
+  // The currently shown report. Defaults straight to the attendance report —
+  // the separate "pick a report" screen was removed (the tabs already switch).
+  const [activeReport, setActiveReport] = useState(REPORT_TYPES.ATTENDANCE)
   const [searchTerm, setSearchTerm] = useState('')
 
   // Date-range filter (inclusive). Empty strings mean "no bound on that side".
@@ -505,17 +512,12 @@ export default function Reports({ registerBack }) {
   // Group filter ('' means all groups).
   const [groupFilter, setGroupFilter] = useState('')
 
-  // Dashboard back button: an open report returns to the picker first.
+  // No internal back layer anymore (the report picker was removed), so the
+  // dashboard back button exits Reports directly.
   useEffect(() => {
     if (!registerBack) return
-    registerBack(() => {
-      if (activeReport) {
-        setActiveReport(null)
-        return true
-      }
-      return false
-    })
-  }, [registerBack, activeReport])
+    registerBack(() => false)
+  }, [registerBack])
 
 
   // Load report data once when the screen opens.
@@ -659,57 +661,46 @@ export default function Reports({ registerBack }) {
     window.print()
   }
 
-  // Export all report types into one CSV file ("Excel" because CSV opens in Excel).
+  // Export ONLY the active report, with the same columns and the same filtered
+  // rows shown on screen (so the date range, group filter and search all apply).
   const handleExportExcel = () => {
-    // Header row, then one block of rows per report type.
-    const rows = [
-      [
-        'סוג דוח',
-        'שם / קבוצה',
-        'תאריך',
-        'מיקום',
-        'סטטוס',
-        'נוכחים',
-        'חסרים',
-        'הערות',
-      ],
+    let rows
 
-      // Event rows (within the selected date range).
-      ...dateFilteredEvents.map((event) => [
-        'דוח אירועים',
-        safeText(event.name),
-        safeText(event.date),
-        safeText(event.location),
-        safeText(computeEventStatus(event)),
-        '',
-        '',
-        `קבוצה: ${getEventGroup(event)}`,
-      ]),
-
-      // Group rows.
-      ...groupRows.map((group) => [
-        'דוח קבוצות',
-        group.name,
-        '',
-        '',
-        '',
-        group.present,
-        group.absent,
-        `מתנדבים: ${group.volunteers}, אירועים: ${group.events}, מפגשי נוכחות: ${group.attendanceMeetings}`,
-      ]),
-
-      // Attendance rows.
-      ...attendanceRows.map((attendanceItem) => [
-        'דוח נוכחות',
-        attendanceItem.group,
-        attendanceItem.date,
-        '',
-        '',
-        attendanceItem.present,
-        attendanceItem.absent,
-        `לא ידוע: ${attendanceItem.unknown}`,
-      ]),
-    ]
+    if (activeReport === REPORT_TYPES.GROUPS) {
+      rows = [
+        ['קבוצה', 'מתנדבים', 'אירועים', 'מפגשי נוכחות', 'נוכחים', 'חסרים'],
+        ...filteredGroups.map((group) => [
+          group.name,
+          group.volunteers,
+          group.events,
+          group.attendanceMeetings,
+          group.present,
+          group.absent,
+        ]),
+      ]
+    } else if (activeReport === REPORT_TYPES.ATTENDANCE) {
+      rows = [
+        ['תאריך', 'קבוצה', 'נוכחים', 'חסרים', 'לא ידוע'],
+        ...filteredAttendance.map((attendanceItem) => [
+          attendanceItem.date,
+          attendanceItem.group,
+          attendanceItem.present,
+          attendanceItem.absent,
+          attendanceItem.unknown,
+        ]),
+      ]
+    } else {
+      rows = [
+        ['שם אירוע', 'תאריך', 'מיקום', 'קבוצה', 'סטטוס'],
+        ...filteredEvents.map((event) => [
+          safeText(event.name),
+          safeText(event.date),
+          safeText(event.location),
+          getEventGroup(event),
+          safeText(computeEventStatus(event)),
+        ]),
+      ]
+    }
 
     downloadCsv(rows)
   }
@@ -849,41 +840,6 @@ export default function Reports({ registerBack }) {
     return renderEventsReport()
   }
 
-  // ----- Step 1: pick a report (nothing chosen yet) -----
-  if (!activeReport) {
-    return (
-      <main className="reports-container" dir="rtl">
-        <section className="reports-card reports-picker">
-
-          <h1 className="reports-picker-title">בחירת דוח</h1>
-          <p className="reports-picker-sub">
-            שלב 1: בוחרים דוח · שלב 2: מסננים (תאריכים / קבוצה) · שלב 3: מייצאים או מדפיסים
-          </p>
-
-          <div className="reports-picker-grid">
-            <button type="button" className="reports-picker-card" onClick={() => setActiveReport(REPORT_TYPES.EVENTS)}>
-              <span className="reports-picker-emoji" aria-hidden="true">📅</span>
-              <span className="reports-picker-name">דוח אירועים</span>
-              <span className="reports-picker-desc">כל האירועים: תאריך, מיקום, קבוצה וסטטוס</span>
-            </button>
-
-            <button type="button" className="reports-picker-card" onClick={() => setActiveReport(REPORT_TYPES.GROUPS)}>
-              <span className="reports-picker-emoji" aria-hidden="true">👥</span>
-              <span className="reports-picker-name">דוח קבוצות</span>
-              <span className="reports-picker-desc">סיכום לכל קבוצה: מתנדבים, אירועים ונוכחות</span>
-            </button>
-
-            <button type="button" className="reports-picker-card" onClick={() => setActiveReport(REPORT_TYPES.ATTENDANCE)}>
-              <span className="reports-picker-emoji" aria-hidden="true">✅</span>
-              <span className="reports-picker-name">דוח נוכחות</span>
-              <span className="reports-picker-desc">מפגשים: נוכחים, חסרים ולא ידוע</span>
-            </button>
-          </div>
-        </section>
-      </main>
-    )
-  }
-
   return (
     <main className="reports-container" dir="rtl">
       <section className="reports-card">
@@ -905,10 +861,6 @@ export default function Reports({ registerBack }) {
 
         {/* Report names (tabs) at the top — pick which report to view. */}
         <div className="reports-tabs">
-          {/* Back to the report picker (step 1). */}
-          <button type="button" className="reports-back-btn" onClick={() => setActiveReport(null)}>
-            ↩ כל הדוחות
-          </button>
           <button
             type="button"
             className={activeReport === REPORT_TYPES.EVENTS ? 'active' : ''}
@@ -955,23 +907,27 @@ export default function Reports({ registerBack }) {
 
           {/* From date. */}
           <div className="reports-filter-field">
-            <label htmlFor="reports-from">מתאריך</label>
-            <input
+            <BirthDatePicker
+              key={`from-${fromDate || 'empty'}`}
               id="reports-from"
-              type="date"
               value={fromDate}
-              onChange={(event) => setFromDate(event.target.value)}
+              onChange={setFromDate}
+              label="מתאריך"
+              pastYears={10}
+              futureYears={3}
             />
           </div>
 
           {/* To date. */}
           <div className="reports-filter-field">
-            <label htmlFor="reports-to">עד תאריך</label>
-            <input
+            <BirthDatePicker
+              key={`to-${toDate || 'empty'}`}
               id="reports-to"
-              type="date"
               value={toDate}
-              onChange={(event) => setToDate(event.target.value)}
+              onChange={setToDate}
+              label="עד תאריך"
+              pastYears={10}
+              futureYears={3}
             />
           </div>
 

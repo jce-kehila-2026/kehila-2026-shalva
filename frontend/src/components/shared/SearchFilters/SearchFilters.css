@@ -1,0 +1,176 @@
+/* SearchFilters — styles for the shared collapsible advanced-search bar.
+   Uses the same design tokens as the rest of the admin screens so it blends in. */
+
+/* Outer wrapper: stacks the search bar over the (optional) open panel. */
+.sf-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+
+/* ---------- Top bar (always visible) ---------- */
+
+/* Search box + toggle button on one line; wraps on very narrow screens. */
+.sf-bar {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+
+/* The free-text search box grows to fill the row. */
+.sf-search {
+  flex: 1 1 240px;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  padding: 11px 14px;
+  font: inherit;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Search focus ring — matches the shared management inputs. */
+.sf-search:focus {
+  border-color: var(--brand-500);
+  box-shadow: 0 0 0 4px var(--brand-50);
+}
+
+/* The "advanced filters" open/close button. */
+.sf-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 11px 18px;
+  border: 1px solid var(--brand-200);
+  border-radius: var(--radius-sm);
+  background: var(--brand-50);
+  color: var(--brand-700);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+/* Hover + open states deepen the button a touch. */
+.sf-toggle:hover,
+.sf-toggle.is-open {
+  background: var(--brand-100);
+  border-color: var(--brand-300, var(--brand-200));
+}
+
+/* The little count badge of active filters. */
+.sf-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-600);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+/* The open/closed chevron. */
+.sf-chevron {
+  font-size: 10px;
+  line-height: 1;
+}
+
+
+/* ---------- Advanced panel ---------- */
+
+/* The panel that opens below the bar. */
+.sf-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  padding: 16px;
+}
+
+/* Responsive grid of filter fields — as many columns as fit. */
+.sf-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+/* One labelled filter field. */
+.sf-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Field label. */
+.sf-field-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+/* Shared look for every control (select / text / number). */
+.sf-control {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  padding: 9px 12px;
+  font: inherit;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Control focus ring. */
+.sf-control:focus {
+  border-color: var(--brand-500);
+  box-shadow: 0 0 0 4px var(--brand-50);
+}
+
+/* Footer holding the "clear filters" action. */
+.sf-panel-footer {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 14px;
+}
+
+/* The clear-all button (text-style, brand coloured). */
+.sf-clear {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--brand-700);
+  padding: 8px 16px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.sf-clear:hover {
+  background: var(--brand-50);
+}
+
+
+/* ---------- Phone ---------- */
+
+@media (max-width: 640px) {
+  /* Let the toggle button sit full width under the search box. */
+  .sf-toggle {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+}

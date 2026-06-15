@@ -46,15 +46,21 @@
   gap: 18px;
 }
 
-/* One labelled field — the label sits above its input. */
-.reg-field {
+/* One labelled field — the label sits above its input.
+   NOTE: this class is intentionally NOT called ".reg-field". The admin screen
+   (RegistrationsManagement.css) defines a global ".reg-field" for a horizontal
+   label/value row (align-items: baseline, a dashed divider, etc.). Since these
+   stylesheets are global, that rule used to leak onto this form and squash the
+   labels to the left — making the whole form look left-to-right. A unique name
+   keeps the two layouts from colliding. */
+.regform-field {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
 /* Field labels (and the birth-date group label) share one look. */
-.reg-field label,
+.regform-field label,
 .reg-bday-label {
   font-weight: 700;
   font-size: 14px;
@@ -110,6 +116,20 @@
 /* The <legend> has default padding — clear it so it lines up like a field label. */
 .reg-bday-label {
   padding: 0;
+}
+
+/* Keep the fieldset's accessible name while the shared picker renders the
+   visible date label in the unified style. */
+.reg-bday-label-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* Inline submit error (full width) — replaces a blocking alert(). */

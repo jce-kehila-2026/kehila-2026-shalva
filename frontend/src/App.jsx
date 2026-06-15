@@ -26,10 +26,14 @@ import Login from './components/Login/Login';
 import MainScreen from './components/MainScreen/MainScreen';
 import RegistrationScreen from './components/RegistrationScreen/RegistrationScreen';
 import Reports from './components/Reports/Reports';
+import SignatureForm from './components/SignatureForm/SignatureForm';
 import ResetPassword from './components/ResetPassword/ResetPassword';
 import UserList from './components/UserList/UserList';
 import VolunteerDetails from './components/VolunteerDetails/VolunteerDetails';
 
+
+const PUBLIC_HOME_URL = '/?public=1';
+const PUBLIC_LOGIN_URL = '/?login=1';
 
 // Hebrew labels for the system roles shown in the header.
 const ROLE_LABELS = {
@@ -189,6 +193,45 @@ function App() {
     };
   }, [user]);
 
+  // ----- Device / browser back button -----
+  // The app navigates by STATE (not the URL), so the phone's built-in back
+  // button (notably on iPhone) would otherwise do nothing or leave the app. We
+  // keep a history entry while the user is on any non-home screen; pressing the
+  // device back then pops it and returns to the role's home view.
+
+  // True when the signed-in user is on their role's home screen.
+  const onHomeView = !user
+    || (user.role === 'admin' && adminView === 'overview' && !selectedEvent && !selectedVolunteer)
+    || (user.role === 'guide' && guideView === 'menu')
+    || (user.role !== 'admin' && user.role !== 'guide'
+        && activeScreen === 'users' && !selectedEvent && !selectedVolunteer);
+
+  // The device back button steps back to the home view inside the app.
+  useEffect(() => {
+    if (!user) {
+      return undefined;
+    }
+
+    const handlePopState = () => {
+      setSelectedEvent(null);
+      setSelectedVolunteer(null);
+      setAdminView('overview');
+      setGuideView('menu');
+      setActiveScreen('users');
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [user]);
+
+  // Add a history entry whenever the user moves onto a non-home screen, so the
+  // device back button has something to pop.
+  useEffect(() => {
+    if (user && !onHomeView) {
+      window.history.pushState({ kehilaDeep: true }, '');
+    }
+  }, [user, onHomeView]);
+
   // Sign out and reset all view state back to defaults.
   const handleLogout = async () => {
     try {
@@ -314,6 +357,8 @@ function App() {
   // (Firebase's action URL is pointed at the app). Handle them with our own
   // Hebrew, styled reset page before any of the normal app rendering.
   const urlParams = new URLSearchParams(window.location.search);
+  const isForcedPublicHome = urlParams.get('public') === '1';
+  const isForcedPublicLogin = urlParams.get('login') === '1';
 
   if (urlParams.get('mode') === 'resetPassword' && urlParams.get('oobCode')) {
     return (
@@ -340,7 +385,7 @@ function App() {
 
           {/* Logo at the top — clicking it leaves the form and returns to the
               public home page (the site root clears the ?register=1 link). */}
-          <a href="/" className="public-home-logo" aria-label="חזרה לדף הבית">
+          <a href={PUBLIC_HOME_URL} className="public-home-logo" aria-label="חזרה לדף הבית">
             <img
               src="https://www.shalva.org/wp-content/uploads/2025/02/Logo-Hebrew-1024x488-1.png"
               alt="שלוה"
@@ -350,6 +395,51 @@ function App() {
           <section className="public-card public-card-wide" aria-label="הרשמה להתנדבות">
             <RegistrationScreen />
           </section>
+        </div>
+      </div>
+    );
+  }
+
+  // A "sign this form" link (?sign=1&rid=...&name=...) opens the public digital
+  // signing form for a volunteer — sent by the admin from the registrations
+  // screen, filled in before the volunteer is approved.
+  if (urlParams.get('sign') === '1') {
+    return (
+      <div className="app-shell" dir="rtl">
+        <div className="public-layout">
+
+          {/* Logo at the top — clicking it returns to the public home page. */}
+          <a href={PUBLIC_HOME_URL} className="public-home-logo" aria-label="חזרה לדף הבית">
+            <img
+              src="https://www.shalva.org/wp-content/uploads/2025/02/Logo-Hebrew-1024x488-1.png"
+              alt="שלוה"
+            />
+          </a>
+
+          <section className="public-card public-card-wide" aria-label="טופס חתימה למתנדב/ת">
+            <SignatureForm
+              registrantId={urlParams.get('rid') || ''}
+              prefillName={urlParams.get('name') || ''}
+            />
+          </section>
+        </div>
+      </div>
+    );
+  }
+
+  // A forced public home is used when leaving public forms via the logo. This
+  // keeps that route public even on a browser that already has an admin session.
+  if (isForcedPublicHome) {
+    return (
+      <div className="app-shell" dir="rtl">
+        <div className="public-layout public-home">
+          <MainScreen
+            homeHref={PUBLIC_HOME_URL}
+            registerHref="/?register=1"
+            onNavigateLogin={() => {
+              window.location.assign(PUBLIC_LOGIN_URL);
+            }}
+          />
         </div>
       </div>
     );
@@ -369,7 +459,15 @@ function App() {
       {user ? (
 
         // ----- Signed-in layout -----
-        <div className="authenticated-layout">
+        // On the admin HOME view we add `authenticated-layout--fit`, which locks
+        // the admin area to the viewport height so the overview (stats, calendar,
+        // חמ״ל, birthdays) fits with no page scroll. Other screens are untouched.
+        <div
+          className={[
+            'authenticated-layout',
+            user.role === 'admin' && adminView === 'overview' ? 'authenticated-layout--fit' : '',
+          ].filter(Boolean).join(' ')}
+        >
 
           {/* Shared top header: greeting on the right, actions on the left.
               (In RTL the first child sits on the right, so the greeting block
@@ -428,17 +526,30 @@ function App() {
       ) : (
 
         // ----- Public (logged-out) layout -----
-        <div className="public-layout">
+        // On the home page we add `public-home`, which lets the landing fill the
+        // whole viewport (no outer padding) so it can fit with no page scroll.
+        <div className={[
+          'public-layout',
+          publicView === 'main' && !isForcedPublicLogin ? 'public-home' : '',
+          publicView === 'login' || isForcedPublicLogin ? 'public-login' : '',
+        ].filter(Boolean).join(' ')}>
 
           {/* Home page. */}
-          {publicView === 'main' && (
+          {publicView === 'main' && !isForcedPublicLogin && (
             <MainScreen onNavigateLogin={() => setPublicView('login')} />
           )}
 
           {/* Login page. */}
-          {publicView === 'login' && (
+          {(publicView === 'login' || isForcedPublicLogin) && (
             <section className="public-card" aria-label="כניסה למערכת">
-              <button className="link-button" onClick={() => setPublicView('main')}>חזרה לדף הבית</button>
+              <button
+                className="link-button"
+                onClick={() => {
+                  window.location.assign(PUBLIC_HOME_URL);
+                }}
+              >
+                חזרה לדף הבית
+              </button>
               <Login />
             </section>
           )}

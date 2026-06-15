@@ -220,6 +220,14 @@ body {
   flex-wrap: wrap;
 }
 
+/* Print/export: the back button + breadcrumb are app chrome, not report
+   content — hide them so an exported PDF is just the report itself. */
+@media print {
+  .admin-nav-row {
+    display: none !important;
+  }
+}
+
 /* "ראשי ‹ module" trail. */
 .admin-breadcrumb {
   display: inline-flex;

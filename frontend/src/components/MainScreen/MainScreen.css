@@ -1,279 +1,253 @@
-/* ---------- Page layout ---------- */
+/* ---------- Layout ---------- */
 
-/* Outer page wrapper (centered, right-aligned, offset for the fixed header). */
+/* Full-screen landing shell.
+   The page itself does not scroll; the showcase handles internal overflow
+   where needed, such as many thumbnails. */
 .main-container {
-  width: min(1180px, 100%);
-  margin: 0 auto;
-  padding: 110px 20px 56px;
-  box-sizing: border-box;
-  direction: rtl; /* Hebrew site — keep natural RTL flow of text and elements. */
+  --main-header-height: 66px;
+
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  direction: rtl;
   text-align: right;
+  box-sizing: border-box;
+  background:
+    radial-gradient(900px 500px at 100% 0%, rgba(158, 33, 136, 0.07), transparent 60%),
+    radial-gradient(740px 420px at 0% 100%, rgba(82, 167, 221, 0.08), transparent 56%),
+    linear-gradient(180deg, rgba(158, 33, 136, 0.045), rgba(82, 167, 221, 0.035));
+}
+
+/* Scope box sizing to the landing page so nested layout math stays predictable. */
+.main-container *,
+.main-container *::before,
+.main-container *::after {
+  box-sizing: border-box;
+}
+
+/* Main content stacks the compact hero above the groups panel. */
+.main-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: calc(var(--main-header-height) + 16px) clamp(20px, 4vw, 56px) 16px;
 }
 
 
 /* ---------- Header ---------- */
 
-/* Fixed website-replica header at the top of the page. */
+/* Fixed desktop header.
+   On mobile it becomes static so it remains part of the compact vertical flow. */
 .main-header {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 85px;
-  background: #ffffff;
-  border-bottom: 3.5px solid var(--brand-600); /* Shalva's official purple line. */
-  box-shadow: 0 4px 20px rgba(158, 33, 136, 0.04);
+  inset: 0 0 auto;
   z-index: 1000;
+
+  min-height: var(--main-header-height);
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+
   padding: 0 clamp(20px, 5vw, 60px);
+  background: var(--surface);
+  border-bottom: 3px solid var(--brand-600);
+  box-shadow: 0 4px 20px rgba(158, 33, 136, 0.04);
 }
 
-/* Clickable logo wrapper — gives the focus outline a rounded, sized target. */
 .main-logo-link {
   display: inline-flex;
   align-items: center;
+  flex: 0 0 auto;
   border-radius: var(--radius-pill);
 }
 
-/* Header logo image. */
 .main-logo {
   display: block;
-  height: 48px;
   width: auto;
+  height: 50px;
   object-fit: contain;
 }
 
-/* Group of header buttons (wraps if the row gets tight). */
 .header-buttons {
   display: flex;
-  gap: 12px;
   align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
 
-/* ---------- Header buttons ---------- */
+/* ---------- Buttons ---------- */
 
-/* Shared base for both pill buttons — keeps them identical in shape and size.
-   inline-flex (on BOTH) is what makes justify-content actually centre the
-   label, including in the mobile layout further down. */
+/* Shared pill-button base for the register link and login button. */
 .btn-register,
 .btn-login {
+  min-height: 38px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
+
+  padding: 9px 20px;
   border: 1.5px solid var(--brand-600);
   border-radius: var(--radius-pill);
-  padding: 9px 22px;
-  font-family: inherit; /* <button> would otherwise use the browser's UI font. */
-  font-weight: 700;
+
+  font-family: inherit;
   font-size: 14.5px;
+  font-weight: 700;
+  line-height: 1;
   text-decoration: none;
+
   cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
 }
 
-/* Filled brand button — the "register to volunteer" action. */
 .btn-register {
   background: var(--brand-600);
   color: #ffffff;
 }
 
-/* Register hover: deepen the brand colour. */
-.btn-register:hover {
-  background: var(--brand-700);
-  border-color: var(--brand-700);
-  color: #ffffff;
-}
-
-/* Outline button — the "login" action. */
 .btn-login {
   background: var(--surface);
   color: var(--brand-600);
-  box-shadow: none;
 }
 
-/* Login hover: fill with the brand colour (inverts the text to white). */
-.btn-login:hover {
-  background: var(--brand-600);
-  color: #ffffff;
+@media (hover: hover) {
+  .btn-register:hover {
+    background: var(--brand-700);
+    border-color: var(--brand-700);
+    color: #ffffff;
+    transform: translateY(-1px);
+  }
+
+  .btn-login:hover {
+    background: var(--brand-600);
+    color: #ffffff;
+    transform: translateY(-1px);
+  }
 }
 
-/* Keyboard focus ring — only shows for keyboard users, not on mouse click. */
+.btn-register:active,
+.btn-login:active {
+  transform: translateY(0);
+}
+
+/* Keyboard-only focus ring for the logo link and main actions. */
 .main-logo-link:focus-visible,
 .btn-register:focus-visible,
 .btn-login:focus-visible {
-  outline: 3px solid rgba(82, 167, 221, 0.45); /* --info at 45% opacity. */
+  outline: 3px solid rgba(82, 167, 221, 0.45);
   outline-offset: 3px;
 }
 
 
 /* ---------- Hero ---------- */
 
-/* Hero section imitating the official homepage banner. */
+/* Compact brand intro.
+   It stays intentionally small so the groups showcase remains the main focus. */
 .main-hero {
-  display: grid;
-  grid-template-columns: 1.25fr 0.75fr;
-  gap: 40px;
-  background: linear-gradient(135deg, rgba(158, 33, 136, 0.04) 0%, rgba(82, 167, 221, 0.04) 100%);
-  padding: 48px;
-  border-radius: 28px;
-  border: 1px solid rgba(158, 33, 136, 0.08);
-  align-items: center;
-  margin-top: 10px;
-  margin-bottom: 36px;
-}
-
-/* Hero text column: stacks the badge, headline and intro copy. */
-.hero-content {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-}
-
-/* Small pill label above the headline ("community portal"). */
-.hero-badge {
-  display: inline-block;
-  padding: 6px 14px;
-  border-radius: var(--radius-pill);
-  background: var(--brand-100);
-  color: var(--brand-600);
-  font-weight: 700;
-  font-size: 13px;
-  margin-bottom: 16px;
-}
-
-/* Hero headline — large, bold, in the deep brand colour. */
-.hero-content h1 {
-  font-size: clamp(28px, 4.2vw, 44px);
-  font-weight: 800;
-  color: var(--brand-700);
-  margin: 0 0 16px;
-  line-height: 1.2;
-}
-
-/* Hero intro paragraph under the headline. */
-.hero-text {
-  font-size: 17.5px;
-  line-height: 1.65;
-  color: var(--text-muted);
-  margin: 0;
-}
-
-
-/* ---------- Hero visual ---------- */
-
-/* Right-hand decorative graphic in the hero (purely cosmetic). */
-.hero-visual {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  pointer-events: none; /* It's decoration — don't capture clicks. */
-}
-
-/* Decorative card that holds the corner glows and the gradient words. */
-.visual-card {
-  position: relative;
   width: 100%;
-  max-width: 280px;
-  height: 220px;
-  background: #ffffff;
-  border: 1px solid rgba(158, 33, 136, 0.08);
-  border-radius: 24px;
-  box-shadow: var(--shadow-lg);
-  overflow: hidden;
+  max-width: 1160px;
+  flex: 0 0 auto;
   display: flex;
-  align-items: center;
   justify-content: center;
+
+  margin: 0 auto;
+  padding: 8px 22px;
+  border: 1px solid rgba(158, 33, 136, 0.08);
+  border-radius: 22px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(158, 33, 136, 0.04) 0%,
+      rgba(82, 167, 221, 0.04) 100%
+    );
 }
 
-/* Purple glow blurred into the top-right corner of the card. */
-.visual-glow-purple {
-  position: absolute;
-  top: -40px;
-  right: -40px;
-  width: 180px;
-  height: 180px;
-  background: radial-gradient(circle, rgba(158, 33, 136, 0.12) 0%, transparent 70%);
-}
-
-/* Cyan glow blurred into the bottom-left corner of the card. */
-.visual-glow-cyan {
-  position: absolute;
-  bottom: -40px;
-  left: -40px;
-  width: 180px;
-  height: 180px;
-  background: radial-gradient(circle, rgba(82, 167, 221, 0.12) 0%, transparent 70%);
-}
-
-/* The three stacked words, centered over the glows. */
-.visual-text-overlay {
+.hero-content {
+  max-width: 860px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  align-items: center;
   text-align: center;
 }
 
-/* Gradient-filled decorative words (קהילה / שילוב / שלוה). */
-.visual-text-overlay span {
-  font-size: clamp(24px, 3.2vw, 30px);
+.hero-content h1 {
+  margin: 0 0 4px;
+  color: var(--brand-700);
+  font-size: clamp(19px, 2vw, 24px);
   font-weight: 800;
+  line-height: 1.2;
+}
+
+/* One-line intro on larger screens; the longer tail is hidden on mobile below. */
+.hero-text {
+  max-width: 820px;
   margin: 0;
-  background: linear-gradient(135deg, var(--brand-600), var(--info));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: var(--brand-600);
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 
-/* ---------- Groups section ---------- */
+/* ---------- Groups ---------- */
 
-/* The "active groups" panel. */
+/* The groups panel fills the remaining screen height.
+   The internal showcase layout belongs to GroupShowcase.css. */
 .groups-section {
-  padding: 32px;
+  width: 100%;
+  max-width: 1160px;
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+
+  margin: 0 auto;
+  padding: 18px 30px;
   border: 1px solid var(--border);
   border-radius: 24px;
-  background: #ffffff;
+
+  background: var(--surface);
   box-shadow: var(--shadow);
 }
 
-/* Heading of the groups panel. */
 .groups-section h2 {
-  margin-top: 0;
-  margin-bottom: 20px;
+  margin: 0 0 8px;
   color: var(--text);
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 800;
+  text-align: center;
 }
 
-/* Short description under the groups heading. */
-.groups-intro {
-  margin: -6px 0 24px;
-  color: var(--text-muted);
-  font-size: 16px;
-  line-height: 1.6;
-  max-width: 720px;
-}
-
-/* Neutral status line — "loading..." and the empty "no groups" message. */
 .groups-message {
   margin: 0;
   color: var(--text-muted);
   font-size: 16px;
   line-height: 1.6;
+  text-align: center;
 }
 
-/* Failed-to-load box (distinct from the empty "no groups" message above). */
 .groups-error {
   margin: 0;
   padding: 12px 14px;
   border: 1px solid var(--danger);
   border-radius: 12px;
+
   background: var(--danger-bg);
   color: var(--danger);
   font-size: 16px;
@@ -281,82 +255,128 @@
 }
 
 
-/* ---------- Responsive ---------- */
+/* ---------- Desktop frame ---------- */
 
-/* Tablet and down: collapse the hero to a single column. */
-@media (max-width: 900px) {
-  .main-hero {
-    grid-template-columns: 1fr;
-    gap: 30px;
-    padding: 32px;
+/* Wider screens use a framed, centered layout while keeping the showcase dominant. */
+@media (min-width: 761px) {
+  .main-content {
+    gap: 8px;
+    padding: calc(var(--main-header-height) + 10px) 0 10px;
   }
 
-  .hero-visual {
-    display: none; /* Hide the decorative graphic to save space. */
+  .main-hero,
+  .groups-section {
+    width: min(1424px, calc(100% - 108px));
+    max-width: none;
+  }
+
+  .groups-section {
+    padding-block: 14px;
+  }
+
+  .groups-section h2 {
+    margin-bottom: 6px;
+    font-size: 19px;
   }
 }
 
-/* Phones: full-bleed layout with an app-style stacked header. */
+
+/* ---------- Responsive ---------- */
+
+/* Phones: compact app-like layout.
+   The header becomes part of the flow and the showcase gets the remaining space. */
 @media (max-width: 760px) {
-  /* On phones the header flows normally (not fixed), so no overlap math.
-     Zero outer padding makes the page full-bleed: the header and the sections
-     below stretch the entire screen width with no gap on the sides or top. */
   .main-container {
-    padding: 0 0 32px;
+    height: 100vh;
+    height: 100svh;
+    max-height: 100svh;
   }
 
-  /* Header sits flush at the very top, edge to edge, like an app's top bar. */
   .main-header {
     position: static;
-    flex-direction: column;
-    height: auto;
-    padding: 14px 16px;
-    gap: 10px;
-    border-radius: 0;
+    min-height: auto;
+    padding: 8px 12px;
+    gap: 8px;
   }
 
-  /* Slightly smaller logo so the stacked header stays compact. */
   .main-logo {
-    height: 44px;
+    height: 40px;
   }
 
-  /* Buttons fill the row and stay side by side (no wrapping). */
   .header-buttons {
-    width: 100%;
-    justify-content: center;
-    gap: 10px;
+    width: auto;
     flex-wrap: nowrap;
+    gap: 8px;
   }
 
-  /* Each button takes an equal half of the row so the filled "register" and
-     outline "login" look like a matched pair instead of two different widths.
-     (Centering already comes from the shared base above.) */
   .btn-register,
   .btn-login {
-    flex: 1 1 0;
-    padding: 11px 12px;
-    font-size: 14px;
+    min-height: 34px;
+    padding: 6px 11px;
+    font-size: 12.5px;
   }
 
-  /* The hero band: flush under the header, full width, tighter padding. */
+  .main-content {
+    padding: 10px 10px 12px;
+    gap: 10px;
+  }
+
   .main-hero {
-    margin-top: 0;
-    margin-bottom: 16px;
-    padding: 30px 18px;
-    border-radius: 0;
+    width: 100%;
+    padding: 12px 16px;
+    border-radius: 16px;
   }
 
-  /* Groups panel fills the width too; trim its padding for the big showcase. */
+  .hero-content h1 {
+    margin-bottom: 4px;
+    font-size: 19px;
+  }
+
+  .hero-text {
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  /* Keep the mobile hero short so the stage remains the visual center. */
+  .hero-text-tail {
+    display: none;
+  }
+
   .groups-section {
-    padding: 20px 12px;
-    border-radius: 0;
+    width: 100%;
+    padding: 12px;
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  .groups-section h2 {
+    margin-bottom: 8px;
+    font-size: 18px;
+  }
+}
+
+/* Very narrow phones: give the action buttons a little extra room. */
+@media (max-width: 420px) {
+  .main-header {
+    align-items: stretch;
+  }
+
+  .header-buttons {
+    flex: 1 1 auto;
+    justify-content: flex-end;
+  }
+
+  .btn-register,
+  .btn-login {
+    padding-inline: 9px;
+    font-size: 12px;
   }
 }
 
 
 /* ---------- Motion preferences ---------- */
 
-/* Respect users who ask the OS to reduce motion: drop the hover transitions. */
+/* Respect reduced-motion users by removing hover transitions on main actions. */
 @media (prefers-reduced-motion: reduce) {
   .btn-register,
   .btn-login {

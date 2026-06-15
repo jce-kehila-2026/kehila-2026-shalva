@@ -19,6 +19,24 @@ const firebaseConfig = {
 };
 
 
+// During development, fail loudly and clearly if any config value is missing
+// (a forgotten or incomplete .env.local). Without this, the app would start and
+// only later crash with Firebase's cryptic "auth/invalid-api-key" error.
+if (import.meta.env.DEV) {
+  // Collect the names of every config field that came back empty.
+  const missingKeys = Object.entries(firebaseConfig)
+    .filter(([, value]) => !value)
+    .map(([key]) => key);
+
+  if (missingKeys.length > 0) {
+    console.warn(
+      'Firebase config is missing: ' + missingKeys.join(', ') +
+      '. Check that frontend/.env.local exists and has all the VITE_FIREBASE_* values.'
+    );
+  }
+}
+
+
 // One app instance shared by the whole frontend.
 const app = initializeApp(firebaseConfig);
 
