@@ -145,6 +145,51 @@ export default function EventDetails({ event = null, onBack }) {
           <p>{description}</p>
         </section>
 
+        {/* Event pictures (if any) */}
+        {event?.imageUrls && event.imageUrls.length > 0 && (
+          <section className="event-details-description" aria-label="תמונות מהאירוע" style={{ marginTop: '20px' }}>
+            <h3>תמונות מהאירוע ({event.imageUrls.length})</h3>
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', 
+              gap: '12px',
+              marginTop: '12px'
+            }}>
+              {event.imageUrls.map((url, idx) => (
+                <a 
+                  key={idx} 
+                  href={url} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  style={{ 
+                    borderRadius: '12px', 
+                    overflow: 'hidden', 
+                    border: '1px solid var(--border)', 
+                    display: 'block', 
+                    height: '140px',
+                    boxShadow: 'var(--shadow-sm)',
+                    position: 'relative'
+                  }}
+                >
+                  <img 
+                    src={url} 
+                    alt={`תמונה מהאירוע ${idx + 1}`} 
+                    style={{ 
+                      width: '100%', 
+                      height: '100%', 
+                      objectFit: 'cover',
+                      display: 'block',
+                      transition: 'transform 0.2s'
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                    onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                  />
+                </a>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Screen actions */}
         <div className="event-details-actions">
           <button

@@ -88,8 +88,16 @@ const preparePayload = (data) => {
   const cleanData = getCleanFormData(data);
   const ageNumber = Number(cleanData.age);
 
-  if (!cleanData.firstName || !cleanData.lastName || !cleanData.email || !cleanData.phone) {
-    return { payload: null, error: "יש למלא שם פרטי, שם משפחה, אימייל וטלפון." };
+  if (
+    !cleanData.firstName ||
+    !cleanData.lastName ||
+    !cleanData.email ||
+    !cleanData.phone ||
+    !cleanData.address ||
+    !cleanData.school ||
+    !cleanData.experience
+  ) {
+    return { payload: null, error: "נא למלא את כל השדות בטופס." };
   }
 
   if (cleanData.age === "" || !Number.isFinite(ageNumber) || ageNumber < 0) {
@@ -400,45 +408,42 @@ function RegistrationScreen() {
             />
           </fieldset>
 
-          {/* Previous experience (optional). */}
+          {/* Previous experience. */}
           <div className="regform-field">
-            <label htmlFor="reg-experience">
-              ניסיון קודם <span className="reg-optional">(לא חובה)</span>
-            </label>
+            <label htmlFor="reg-experience">ניסיון קודם</label>
             <input
               id="reg-experience"
               name="experience"
               value={formData.experience}
               onChange={handleChange}
               autoComplete="off"
+              required
             />
           </div>
 
-          {/* Address (optional). */}
+          {/* Address. */}
           <div className="regform-field">
-            <label htmlFor="reg-address">
-              כתובת <span className="reg-optional">(לא חובה)</span>
-            </label>
+            <label htmlFor="reg-address">כתובת</label>
             <input
               id="reg-address"
               name="address"
               value={formData.address}
               onChange={handleChange}
               autoComplete="street-address"
+              required
             />
           </div>
 
-          {/* School / institution (optional). */}
+          {/* School / institution. */}
           <div className="regform-field">
-            <label htmlFor="reg-school">
-              בית ספר / מוסד לימודים <span className="reg-optional">(לא חובה)</span>
-            </label>
+            <label htmlFor="reg-school">בית ספר / מוסד לימודים</label>
             <input
               id="reg-school"
               name="school"
               value={formData.school}
               onChange={handleChange}
               autoComplete="organization"
+              required
             />
           </div>
 

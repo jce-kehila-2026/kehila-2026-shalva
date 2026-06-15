@@ -15,11 +15,13 @@ import {
   getDocs,
   onSnapshot,
   serverTimestamp,
+  setDoc,
   updateDoc,
 } from 'firebase/firestore'
 
-// Our Firestore database instance.
-import { db } from '../../firebase'
+// Our Firestore database + Storage instances.
+import { db, storage } from '../../firebase'
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 
 // Date picker used for the event date field.
 import BirthDatePicker from '../shared/BirthDatePicker/BirthDatePicker'
@@ -59,7 +61,26 @@ const EMPTY_FORM = {
   contactName: '',
   contactPhone: '',
   contactEmail: '',
+  imageUrls: [],
 }
+
+
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+const isValidImage = (file) => {
+  if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+    alert(`הקובץ ${file.name} אינו תמונה מסוג JPG, PNG או WEBP.`);
+    return false;
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    alert(`התמונה ${file.name} גדולה מדי (מקסימום 5MB).`);
+    return false;
+  }
+
+  return true;
+};
+
 
 
 // Map an event status to a CSS class (status colours live in the CSS file).
@@ -95,6 +116,7 @@ function createFormFromEvent(event) {
     contactName: event.contact?.name || '',
     contactPhone: event.contact?.phone || '',
     contactEmail: event.contact?.email || '',
+    imageUrls: event.imageUrls || [],
   }
 }
 
@@ -113,6 +135,7 @@ function createEventFromForm(form) {
       phone: form.contactPhone.trim(),
       email: form.contactEmail.trim(),
     },
+    imageUrls: form.imageUrls || [],
   }
 }
 
@@ -130,6 +153,7 @@ function normalizeEvent(documentSnapshot) {
     assignedGroup: data.assignedGroup || 'ללא שיוך',
     status: data.status || 'מתוכנן',
     contact: data.contact || {},
+    imageUrls: data.imageUrls || [],
   }
 }
 
@@ -159,6 +183,15 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
 
   // Holds the selected event id while editing; null means add mode.
   const [editingEventId, setEditingEventId] = useState(null)
+
+  // Holds the event ID for upload/saving purposes (pre-generated for additions).
+  const [currentEventId, setCurrentEventId] = useState('')
+
+  // True while files are uploading to storage.
+  const [uploading, setUploading] = useState(false)
+
+  // Holds the event whose pictures we are viewing in the modal (null when none).
+  const [viewingPicturesEvent, setViewingPicturesEvent] = useState(null)
 
   // Search text used to filter the event table.
   const [searchTerm, setSearchTerm] = useState('')
@@ -190,12 +223,21 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
       if (showForm) {
         setForm(EMPTY_FORM)
         setEditingEventId(null)
+        setCurrentEventId('')
         setShowForm(false)
         return true
       }
       return false
     })
   }, [registerBack, showForm])
+
+  // Opens the form for creating a new event, pre-generating a Firestore ID.
+  const handleOpenAddForm = () => {
+    setForm(EMPTY_FORM)
+    setEditingEventId(null)
+    setCurrentEventId(doc(collection(db, EVENTS_COLLECTION_NAME)).id)
+    setShowForm(true)
+  }
 
   // UI state for loading, saving, and Firestore errors.
   const [loading, setLoading] = useState(true)
@@ -369,6 +411,47 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
     }))
   }
 
+  // Handle uploading multiple event images to Firebase Storage.
+  const handleImageUpload = async (e) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    setUploading(true)
+    const uploadedUrls = [...(form.imageUrls || [])]
+
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        if (!isValidImage(file)) continue
+
+        const extension = (file.name.split('.').pop() || 'jpg').toLowerCase()
+        const storageRef = ref(storage, `events/${currentEventId}/img-${Date.now()}-${i}.${extension}`)
+        await uploadBytes(storageRef, file)
+        const url = await getDownloadURL(storageRef)
+        uploadedUrls.push(url)
+      }
+
+      setForm((prev) => ({
+        ...prev,
+        imageUrls: uploadedUrls,
+      }))
+    } catch (error) {
+      console.error('Error uploading images:', error)
+      window.alert('אירעה שגיאה בהעלאת התמונות. ודא/י שחוקי ה-Storage נפרסו.')
+    } finally {
+      setUploading(false)
+      e.target.value = ''
+    }
+  }
+
+  // Remove an uploaded image from the list by its index.
+  const handleRemoveImage = (indexToRemove) => {
+    setForm((prev) => ({
+      ...prev,
+      imageUrls: (prev.imageUrls || []).filter((_, idx) => idx !== indexToRemove),
+    }))
+  }
+
   // Save a new event or update an existing one in Firestore.
   const handleSubmit = async (event) => {
     // Don't let the form reload the page.
@@ -399,8 +482,8 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
           updatedAt: serverTimestamp(),
         })
       } else {
-        // Create a new document.
-        await addDoc(collection(db, EVENTS_COLLECTION_NAME), {
+        // Create a new document using the pre-generated currentEventId.
+        await setDoc(doc(db, EVENTS_COLLECTION_NAME, currentEventId), {
           ...eventData,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -411,6 +494,7 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
       // clears) and return to the list view.
       setForm(EMPTY_FORM)
       setEditingEventId(null)
+      setCurrentEventId('')
       setFormResetKey((key) => key + 1)
       setShowForm(false)
     } catch (firebaseError) {
@@ -427,6 +511,7 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
   // Load an existing event into the form and switch to edit mode.
   const handleEdit = (eventToEdit) => {
     setEditingEventId(eventToEdit.id)
+    setCurrentEventId(eventToEdit.id)
     setForm(createFormFromEvent(eventToEdit))
 
     // Open the form pre-filled with this event.
@@ -467,6 +552,7 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
   const handleCancelEdit = () => {
     setForm(EMPTY_FORM)
     setEditingEventId(null)
+    setCurrentEventId('')
   }
 
   // Open the full details view for an event (or notify it's not wired yet).
@@ -538,6 +624,25 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
 
                 {/* Key details (label + value rows). */}
                 <dl className="event-card-details" id={detailsId}>
+                  {eventItem.imageUrls && eventItem.imageUrls.length > 0 && (
+                    <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '8px', marginBottom: '8px', borderBottom: '1px dashed var(--border)' }}>
+                      {eventItem.imageUrls.map((url, idx) => (
+                        <img 
+                          key={idx} 
+                          src={url} 
+                          alt={`תמונה ${idx + 1}`} 
+                          style={{ 
+                            width: '50px', 
+                            height: '50px', 
+                            objectFit: 'cover', 
+                            borderRadius: '6px', 
+                            border: '1px solid var(--border)',
+                            flexShrink: 0
+                          }} 
+                        />
+                      ))}
+                    </div>
+                  )}
                   <div className="event-card-row">
                     <dt>תאריך</dt>
                     <dd>{eventItem.date || '—'}</dd>
@@ -557,11 +662,24 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
                     "פרטים" button — it's their only way into an event. */}
                 <div className="event-management-row-actions event-card-actions">
                   {readOnly ? (
-                    <button type="button" onClick={() => handleOpenDetails(eventItem)}>
-                      פרטים
-                    </button>
+                    <>
+                      {eventItem.imageUrls && eventItem.imageUrls.length > 0 && (
+                        <button type="button" onClick={() => setViewingPicturesEvent(eventItem)}>
+                          תמונות
+                        </button>
+                      )}
+                      <button type="button" onClick={() => handleOpenDetails(eventItem)}>
+                        פרטים
+                      </button>
+                    </>
                   ) : (
                     <>
+                      {eventItem.imageUrls && eventItem.imageUrls.length > 0 && (
+                        <button type="button" onClick={() => setViewingPicturesEvent(eventItem)}>
+                          תמונות
+                        </button>
+                      )}
+
                       <button type="button" onClick={() => handleEdit(eventItem)}>
                         עריכה
                       </button>
@@ -599,7 +717,7 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
             <button
               type="button"
               className="event-management-primary-btn"
-              onClick={() => setShowForm(true)}
+              onClick={handleOpenAddForm}
             >
               + הוספת אירוע
             </button>
@@ -755,6 +873,79 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
                     rows="4"
                   />
                 </div>
+
+                {/* Event images. */}
+                <div style={{ gridColumn: '1 / -1', marginTop: '10px' }}>
+                  <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '8px' }}>תמונות האירוע</label>
+
+                  {/* List of uploaded images */}
+                  {form.imageUrls && form.imageUrls.length > 0 && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px', marginBottom: '12px' }}>
+                      {form.imageUrls.map((url, idx) => (
+                        <div key={idx} style={{ position: 'relative', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)', height: '90px' }}>
+                          <img src={url} alt={`תמונה ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveImage(idx)}
+                            style={{
+                              position: 'absolute',
+                              top: '4px',
+                              left: '4px',
+                              background: 'rgba(239, 68, 68, 0.9)',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '50%',
+                              width: '22px',
+                              height: '22px',
+                              padding: '0',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              fontSize: '11px',
+                              boxShadow: 'none'
+                            }}
+                            title="הסרת תמונה"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* File Upload Input Button */}
+                  <label style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    padding: '12px',
+                    border: '2px dashed var(--brand-500)',
+                    borderRadius: '12px',
+                    cursor: uploading ? 'default' : 'pointer',
+                    background: 'var(--surface-2)',
+                    opacity: uploading ? 0.7 : 1,
+                    transition: 'background 0.2s',
+                    textAlign: 'center',
+                    margin: '0'
+                  }}>
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={handleImageUpload}
+                      disabled={uploading}
+                      style={{ display: 'none' }}
+                    />
+                    <span style={{ fontWeight: '700', color: 'var(--brand-700)', fontSize: '14px' }}>
+                      🖼️ {uploading ? 'מעלה תמונות...' : 'הוספת תמונות מהמכשיר'}
+                    </span>
+                  </label>
+                  <small style={{ display: 'block', marginTop: '4px', color: 'var(--text-soft)', fontSize: '12px' }}>
+                    JPG / PNG / WEBP · עד ‎5MB לתמונה
+                  </small>
+                </div>
               </div>
 
               {/* Cancel (closes the modal) + submit — same order and style as
@@ -786,6 +977,78 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
         {/* The events list is the screen's main view, for everyone. */}
         {eventListSection}
       </section>
+
+      {/* Pictures preview modal */}
+      {viewingPicturesEvent && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => setViewingPicturesEvent(null)}>
+          <div className="modal-content" style={{ maxWidth: '600px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>תמונות של {viewingPicturesEvent.name}</span>
+              <button 
+                type="button" 
+                onClick={() => setViewingPicturesEvent(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text)',
+                  fontSize: '20px',
+                  cursor: 'pointer',
+                  padding: '4px 8px',
+                  boxShadow: 'none'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', 
+              gap: '12px', 
+              maxHeight: '60vh', 
+              overflowY: 'auto', 
+              padding: '10px 0' 
+            }}>
+              {viewingPicturesEvent.imageUrls && viewingPicturesEvent.imageUrls.map((url, idx) => (
+                <a 
+                  key={idx} 
+                  href={url} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  style={{ 
+                    borderRadius: '8px', 
+                    overflow: 'hidden', 
+                    border: '1px solid var(--border)', 
+                    display: 'block', 
+                    height: '110px',
+                    position: 'relative'
+                  }}
+                >
+                  <img 
+                    src={url} 
+                    alt={`תמונה ${idx + 1}`} 
+                    style={{ 
+                      width: '100%', 
+                      height: '100%', 
+                      objectFit: 'cover',
+                      display: 'block',
+                      transition: 'transform 0.2s'
+                    }} 
+                    onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                    onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                  />
+                </a>
+              ))}
+            </div>
+            
+            <div className="modal-actions" style={{ justifyContent: 'center' }}>
+              <button type="button" className="btn btn-outline" onClick={() => setViewingPicturesEvent(null)}>
+                סגור
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

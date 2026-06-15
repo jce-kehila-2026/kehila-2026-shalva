@@ -6,10 +6,10 @@
 // the volunteer fills + signs it before being approved.
 
 // React hooks for local state + the signature canvas ref.
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // Firestore helpers to store the submitted form (best-effort).
-import { collection, doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, serverTimestamp, setDoc } from 'firebase/firestore';
 
 // Storage helpers: the signed PDF is uploaded as a real file for admins.
 import { ref as storageRef, uploadBytes } from 'firebase/storage';
@@ -340,6 +340,30 @@ function SignatureForm({ registrantId = '', prefillName = '' }) {
   // Which activity days were ticked.
   const [activityDays, setActivityDays] = useState([]);
 
+  // Available groups loaded from Firestore.
+  const [groupOptions, setGroupOptions] = useState([]);
+
+  useEffect(() => {
+    let active = true;
+    const fetchGroups = async () => {
+      try {
+        const snapshot = await getDocs(collection(db, 'groups'));
+        const names = snapshot.docs
+          .map((doc) => doc.data().groupName || doc.data().name || '')
+          .filter(Boolean);
+        if (active) {
+          setGroupOptions([...new Set(names)].sort((a, b) => a.localeCompare(b, 'he')));
+        }
+      } catch (error) {
+        console.error('שגיאה בטעינת קבוצות:', error);
+      }
+    };
+    fetchGroups();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   // The agreement checkbox + the drawn signature (PNG data-URL).
   const [agreed, setAgreed] = useState(false);
   const [signature, setSignature] = useState('');
@@ -543,7 +567,12 @@ function SignatureForm({ registrantId = '', prefillName = '' }) {
           </label>
           <label className="sig-field">
             <span>הקבוצה בה אני מתנדב/ת</span>
-            <input name="groupName" value={form.groupName} onChange={updateField} required />
+            <select name="groupName" value={form.groupName} onChange={updateField} required>
+              <option value="">— בחירה —</option>
+              {groupOptions.map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
           </label>
         </div>
 

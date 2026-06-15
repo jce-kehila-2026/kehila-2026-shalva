@@ -39,6 +39,14 @@ service firebase.storage {
       allow update: if false;
     }
 
+    // Event images. Anyone may read them, but only an active admin may upload — and only an image file up to 5MB.
+    match /events/{eventId}/{fileName} {
+      allow read: if true;
+      allow write: if isActiveAdmin()
+                   && request.resource.size <= 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/(jpeg|png|webp)');
+    }
+
     // Everything else stays denied by default.
     match /{allPaths=**} {
       allow read, write: if false;
