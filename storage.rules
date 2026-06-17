@@ -39,6 +39,24 @@ service firebase.storage {
       allow update: if false;
     }
 
+    // Public uploaded police forms. Anyone may upload up to 8MB PDF/image.
+    match /policeForms/{formId}/{fileName} {
+      allow create: if fileName.matches('shalva-police-form-[A-Za-z0-9]+[.][A-Za-z0-9]+')
+                    && request.resource.size <= 8 * 1024 * 1024
+                    && request.resource.contentType.matches('(application/pdf|image/.*)');
+      allow read, delete: if isActiveAdmin();
+      allow update: if false;
+    }
+
+    // Public uploaded medical forms. Anyone may upload up to 8MB PDF/image.
+    match /medicalForms/{formId}/{fileName} {
+      allow create: if fileName.matches('shalva-medical-form-[A-Za-z0-9]+[.][A-Za-z0-9]+')
+                    && request.resource.size <= 8 * 1024 * 1024
+                    && request.resource.contentType.matches('(application/pdf|image/.*)');
+      allow read, delete: if isActiveAdmin();
+      allow update: if false;
+    }
+
     // Event images. Anyone may read them, but only an active admin may upload — and only an image file up to 5MB.
     match /events/{eventId}/{fileName} {
       allow read: if true;

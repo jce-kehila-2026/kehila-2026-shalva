@@ -8,8 +8,11 @@ import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 // Firestore helpers for reading and writing documents.
 import { addDoc, collection, doc, getDocs, query, updateDoc, where, writeBatch } from 'firebase/firestore';
 
-// Our Firestore database instance.
-import { db } from '../../firebase';
+// Storage helpers for reading and deleting files.
+import { getDownloadURL, ref as storageRef, deleteObject } from 'firebase/storage';
+
+// Our Firestore and Storage database instances.
+import { db, storage } from '../../firebase';
 
 // Date picker for the birth date field.
 import BirthDatePicker from '../shared/BirthDatePicker/BirthDatePicker';
@@ -59,6 +62,8 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
   // Signed forms that came back from the public digital form (admin-readable),
   // matched to a volunteer by the registrant id they were approved from.
   const [signedForms, setSignedForms] = useState([]);
+  const [policeForms, setPoliceForms] = useState([]);
+  const [medicalForms, setMedicalForms] = useState([]);
 
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -161,12 +166,15 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
       setVolunteers(volunteersSnap.docs.map(toRecord));
       setGroups(groupsSnap.docs.map(toRecord));
 
-      // Signed digital forms (best-effort: a missing collection / permission
-      // issue must not break the volunteers list, so it has its own catch).
-      const signedSnap = await getDocs(collection(db, 'signedForms')).catch(() => null);
-      if (signedSnap) {
-        setSignedForms(signedSnap.docs.map(toRecord));
-      }
+      // Signed digital forms, police forms, and medical forms (best-effort)
+      const [signedSnap, policeSnap, medicalSnap] = await Promise.all([
+        getDocs(collection(db, 'signedForms')).catch(() => null),
+        getDocs(collection(db, 'policeForms')).catch(() => null),
+        getDocs(collection(db, 'medicalForms')).catch(() => null),
+      ]);
+      if (signedSnap) setSignedForms(signedSnap.docs.map(toRecord));
+      if (policeSnap) setPoliceForms(policeSnap.docs.map(toRecord));
+      if (medicalSnap) setMedicalForms(medicalSnap.docs.map(toRecord));
     } catch (error) {
       console.error('שגיאה בשליפת נתונים:', error);
     }
@@ -183,6 +191,24 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
     });
     return map;
   }, [signedForms]);
+
+  const policeByVolunteer = useMemo(() => {
+    const map = {};
+    policeForms.forEach((doc) => {
+      const rid = doc.registrantId || doc.id;
+      if (rid) map[rid] = doc;
+    });
+    return map;
+  }, [policeForms]);
+
+  const medicalByVolunteer = useMemo(() => {
+    const map = {};
+    medicalForms.forEach((doc) => {
+      const rid = doc.registrantId || doc.id;
+      if (rid) map[rid] = doc;
+    });
+    return map;
+  }, [medicalForms]);
 
   // Attach a scanned / photographed signed form to the volunteer being edited.
   // Stored inline as a data URL (kept small — Firestore documents cap at ~1MB).
@@ -204,6 +230,37 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
     reader.readAsDataURL(file);
     event.target.value = '';
   };
+
+  // Open the completed signed form PDF from Storage.
+  const openSignedPdf = async (signedForm) => {
+    const path = signedForm?.pdfStoragePath || signedForm?.fileStoragePath;
+    if (!path) {
+      alert('לטופס הזה עדיין אין קובץ שמור.');
+      return;
+    }
+
+    // Open the window immediately to capture the user gesture (prevents popup blockers).
+    const pdfWindow = window.open('', '_blank');
+
+    try {
+      const url = await getDownloadURL(storageRef(storage, path));
+      if (pdfWindow) {
+        pdfWindow.location.href = url;
+      } else {
+        window.open(url, '_blank');
+      }
+    } catch (pdfError) {
+      if (pdfWindow) {
+        pdfWindow.close();
+      }
+      console.error('פתיחת קובץ נכשלה:', pdfError);
+      alert('לא ניתן לפתוח את הקובץ כרגע.');
+    }
+  };
+
+
+
+
 
   useEffect(() => {
     fetchData();
@@ -397,19 +454,54 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
   };
 
   const handleDelete = async (volunteerId) => {
-    if (!window.confirm('למחוק מתנדב זה? גם היסטוריית הנוכחות שלו תימחק. הפעולה אינה הפיכה.')) return;
+    if (!window.confirm('למחוק מתנדב זה? כל הטפסים והקבצים שלו (טופס דיגיטלי, רפואי ומשטרתי) והיסטוריית הנוכחות שלו יימחקו. הפעולה אינה הפיכה.')) return;
 
     try {
       const batch = writeBatch(db);
 
+      // Delete attendance history
       const attendanceSnap = await getDocs(
         query(collection(db, 'attendance'), where('volunteerId', '==', volunteerId)),
       );
       attendanceSnap.docs.forEach((attendanceDoc) => batch.delete(attendanceDoc.ref));
 
+      // Get documents from state
+      const signedDoc = signedByVolunteer[volunteerId];
+      const policeDoc = policeByVolunteer[volunteerId];
+      const medicalDoc = medicalByVolunteer[volunteerId];
+
+      // Delete Firestore records
+      if (signedDoc) {
+        batch.delete(doc(db, 'signedForms', signedDoc.id));
+      }
+      if (policeDoc) {
+        batch.delete(doc(db, 'policeForms', policeDoc.id));
+      }
+      if (medicalDoc) {
+        batch.delete(doc(db, 'medicalForms', medicalDoc.id));
+      }
+
+      // Delete main volunteer document
       batch.delete(doc(db, 'volunteers', volunteerId));
 
       await batch.commit();
+
+      // Delete files from Firebase Storage asynchronously (best-effort)
+      const storageDeletes = [];
+      if (signedDoc?.pdfStoragePath) {
+        storageDeletes.push(deleteObject(storageRef(storage, signedDoc.pdfStoragePath)).catch(err => console.warn("Failed to delete signed PDF:", err)));
+      }
+      if (policeDoc?.fileStoragePath) {
+        storageDeletes.push(deleteObject(storageRef(storage, policeDoc.fileStoragePath)).catch(err => console.warn("Failed to delete police file:", err)));
+      }
+      if (medicalDoc?.fileStoragePath) {
+        storageDeletes.push(deleteObject(storageRef(storage, medicalDoc.fileStoragePath)).catch(err => console.warn("Failed to delete medical file:", err)));
+      }
+
+      if (storageDeletes.length > 0) {
+        await Promise.all(storageDeletes);
+      }
+
       await fetchData();
     } catch (error) {
       console.error('שגיאה במחיקת מתנדב:', error);
@@ -736,9 +828,9 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
 
             {/* Signed form — a digital submission and/or a scanned/attached copy. */}
             <div style={{ borderTop: '1px solid #eee', paddingTop: '14px', marginBottom: '16px' }}>
-              <strong>טופס חתום:</strong>
-              {!signedByVolunteer[viewingVolunteer.id] && !viewingVolunteer.signedFormImage ? (
-                <span className="mgmt-muted"> טרם התקבל טופס חתום.</span>
+              <strong>טפסים ומסמכים:</strong>
+              {!signedByVolunteer[viewingVolunteer.id] && !viewingVolunteer.signedFormImage && !policeByVolunteer[viewingVolunteer.id] && !medicalByVolunteer[viewingVolunteer.id] ? (
+                <span className="mgmt-muted"> טרם התקבלו טפסים או מסמכים.</span>
               ) : (
                 <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
                   {signedByVolunteer[viewingVolunteer.id] && (
@@ -748,8 +840,54 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
                         <img
                           src={signedByVolunteer[viewingVolunteer.id].signature}
                           alt="חתימה דיגיטלית"
-                          style={{ maxWidth: '100%', border: '1px solid var(--border)', borderRadius: '10px', background: '#fff' }}
+                          style={{ maxWidth: '100%', border: '1px solid var(--border)', borderRadius: '10px', background: '#fff', marginBottom: '8px' }}
                         />
+                      )}
+                      {signedByVolunteer[viewingVolunteer.id].pdfStoragePath && (
+                        <div style={{ marginTop: '8px' }}>
+                          <button
+                            type="button"
+                            className="mgmt-secondary-btn"
+                            style={{ width: '100%', justifyContent: 'center' }}
+                            onClick={() => openSignedPdf(signedByVolunteer[viewingVolunteer.id])}
+                          >
+                            📄 פתיחת PDF חתום
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {policeByVolunteer[viewingVolunteer.id] && (
+                    <div>
+                      <div style={{ color: '#0369a1', fontWeight: 700, marginBottom: '6px' }}>✓ טופס משטרתי התקבל</div>
+                      {policeByVolunteer[viewingVolunteer.id].fileStoragePath && (
+                        <div style={{ marginTop: '8px' }}>
+                          <button
+                            type="button"
+                            className="mgmt-secondary-btn"
+                            style={{ width: '100%', justifyContent: 'center' }}
+                            onClick={() => openSignedPdf(policeByVolunteer[viewingVolunteer.id])}
+                          >
+                            📄 פתיחת טופס משטרתי
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {medicalByVolunteer[viewingVolunteer.id] && (
+                    <div>
+                      <div style={{ color: '#b45309', fontWeight: 700, marginBottom: '6px' }}>✓ טופס רפואי התקבל</div>
+                      {medicalByVolunteer[viewingVolunteer.id].fileStoragePath && (
+                        <div style={{ marginTop: '8px' }}>
+                          <button
+                            type="button"
+                            className="mgmt-secondary-btn"
+                            style={{ width: '100%', justifyContent: 'center' }}
+                            onClick={() => openSignedPdf(medicalByVolunteer[viewingVolunteer.id])}
+                          >
+                            📄 פתיחת טופס רפואי
+                          </button>
+                        </div>
                       )}
                     </div>
                   )}

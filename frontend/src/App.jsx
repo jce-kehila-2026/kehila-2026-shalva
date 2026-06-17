@@ -27,6 +27,7 @@ import MainScreen from './components/MainScreen/MainScreen';
 import RegistrationScreen from './components/RegistrationScreen/RegistrationScreen';
 import Reports from './components/Reports/Reports';
 import SignatureForm from './components/SignatureForm/SignatureForm';
+import DocumentUploadForm from './components/DocumentUploadForm/DocumentUploadForm';
 import ResetPassword from './components/ResetPassword/ResetPassword';
 import UserList from './components/UserList/UserList';
 import VolunteerDetails from './components/VolunteerDetails/VolunteerDetails';
@@ -420,6 +421,30 @@ function App() {
             <SignatureForm
               registrantId={urlParams.get('rid') || ''}
               prefillName={urlParams.get('name') || ''}
+            />
+          </section>
+        </div>
+      </div>
+    );
+  }
+
+  // A "upload document" link (?uploadDoc=1&type=police|medical&rid=...&name=...) opens the public upload form
+  if (urlParams.get('uploadDoc') === '1') {
+    return (
+      <div className="app-shell" dir="rtl">
+        <div className="public-layout">
+          <a href={PUBLIC_HOME_URL} className="public-home-logo" aria-label="חזרה לדף הבית">
+            <img
+              src="https://www.shalva.org/wp-content/uploads/2025/02/Logo-Hebrew-1024x488-1.png"
+              alt="שלוה"
+            />
+          </a>
+
+          <section className="public-card public-card-wide" aria-label="העלאת מסמך">
+            <DocumentUploadForm
+              registrantId={urlParams.get('rid') || ''}
+              prefillName={urlParams.get('name') || ''}
+              docType={urlParams.get('type') || ''}
             />
           </section>
         </div>

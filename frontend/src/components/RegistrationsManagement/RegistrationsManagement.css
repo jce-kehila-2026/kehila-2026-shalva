@@ -92,6 +92,38 @@
   white-space: nowrap;
 }
 
+.reg-card-status.status-signed {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.reg-card-status.status-police {
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+
+.reg-card-status.status-medical {
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.reg-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.reg-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 /* The detail fields list; grows to fill the card height. */
 .reg-card-fields {
   margin: 0;

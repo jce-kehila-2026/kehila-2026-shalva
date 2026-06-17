@@ -330,9 +330,9 @@
 /* ---------- Hidden PDF document ---------- */
 
 .sig-pdf-document {
-  position: fixed;
-  inset-block-start: 0;
-  inset-inline-start: -10000px;
+  position: absolute;
+  top: 0;
+  left: -9999px;
   width: 794px;
   background: #ffffff;
   color: #111827;

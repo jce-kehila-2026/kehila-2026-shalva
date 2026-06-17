@@ -9,8 +9,8 @@ import { useEffect, useMemo, useState } from 'react';
 // and the registration removal succeed or fail together.
 import { collection, deleteDoc, doc, getDocs, writeBatch } from 'firebase/firestore';
 
-// Storage helper for opening the uploaded signed-form PDF.
-import { getDownloadURL, ref as storageRef } from 'firebase/storage';
+// Storage helpers for opening and deleting files.
+import { getDownloadURL, ref as storageRef, deleteObject } from 'firebase/storage';
 
 // Our Firebase instances.
 import { db, storage } from '../../firebase';
@@ -130,6 +130,8 @@ function RegistrationsManagement() {
 
   // Signed forms that came back, and the one currently open in the view modal.
   const [signedForms, setSignedForms] = useState([]);
+  const [policeForms, setPoliceForms] = useState([]);
+  const [medicalForms, setMedicalForms] = useState([]);
   const [viewingForm, setViewingForm] = useState(null);
 
   // On phones each card collapses to its name; this is the one tapped open.
@@ -200,10 +202,34 @@ function RegistrationsManagement() {
     return map;
   }, [signedForms]);
 
+  const policeByRegistrant = useMemo(() => {
+    const map = {};
+    policeForms.forEach((doc) => {
+      const rid = doc.registrantId || doc.id;
+      if (rid) map[rid] = doc;
+    });
+    return map;
+  }, [policeForms]);
+
+  const medicalByRegistrant = useMemo(() => {
+    const map = {};
+    medicalForms.forEach((doc) => {
+      const rid = doc.registrantId || doc.id;
+      if (rid) map[rid] = doc;
+    });
+    return map;
+  }, [medicalForms]);
+
   // A public link that opens the digital signing form for this registrant.
   const buildSignLink = (registrant) => {
     const name = encodeURIComponent(getFullName(registrant));
     return `${window.location.origin}${window.location.pathname}?sign=1&rid=${registrant.id}&name=${name}`;
+  };
+
+  // A public link that opens the document upload form for this registrant.
+  const buildUploadLink = (registrant, type) => {
+    const name = encodeURIComponent(getFullName(registrant));
+    return `${window.location.origin}${window.location.pathname}?uploadDoc=1&type=${type}&rid=${registrant.id}&name=${name}`;
   };
 
   // A WhatsApp link that sends the registrant their signing-form link.
@@ -219,30 +245,52 @@ function RegistrationsManagement() {
     return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
   };
 
+  // A WhatsApp link that sends the registrant their police form upload link.
+  const policeFormWhatsappHref = (registrant) => {
+    const message = `שלום ${getFullName(registrant)},\nלפני אישור ההתנדבות בעמותת שלווה — נא למלא ולהעלות טופס משטרתי בקישור:\n${buildUploadLink(registrant, 'police')}`;
+    let digits = String(registrant.phone || '').replace(/\D/g, '');
+    if (digits.startsWith('0')) {
+      digits = `972${digits.slice(1)}`;
+    }
+    return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
+  };
+
+  // A WhatsApp link that sends the registrant their medical form upload link.
+  const medicalFormWhatsappHref = (registrant) => {
+    const message = `שלום ${getFullName(registrant)},\nלפני אישור ההתנדבות בעמותת שלווה — נא למלא ולהעלות טופס רפואי בקישור:\n${buildUploadLink(registrant, 'medical')}`;
+    let digits = String(registrant.phone || '').replace(/\D/g, '');
+    if (digits.startsWith('0')) {
+      digits = `972${digits.slice(1)}`;
+    }
+    return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
+  };
+
   // Open the completed signed form PDF uploaded by the public signing form.
   const openSignedPdf = async (signedForm) => {
-    if (!signedForm?.pdfStoragePath) {
-      alert('לטופס הזה עדיין אין קובץ PDF שמור.');
+    const path = signedForm?.pdfStoragePath || signedForm?.fileStoragePath;
+    if (!path) {
+      alert('לטופס הזה עדיין אין קובץ שמור.');
       return;
     }
 
-    const pdfWindow = window.open('', '_blank', 'noopener,noreferrer');
+    // Open the window immediately to capture the user gesture (prevents popup blockers).
+    const pdfWindow = window.open('', '_blank');
 
     try {
-      const url = await getDownloadURL(storageRef(storage, signedForm.pdfStoragePath));
+      const url = await getDownloadURL(storageRef(storage, path));
 
       if (pdfWindow) {
-        pdfWindow.location.replace(url);
+        pdfWindow.location.href = url;
       } else {
-        window.open(url, '_blank', 'noopener,noreferrer');
+        window.open(url, '_blank');
       }
     } catch (pdfError) {
       if (pdfWindow) {
         pdfWindow.close();
       }
 
-      console.error('פתיחת קובץ PDF חתום נכשלה:', pdfError);
-      alert('לא ניתן לפתוח את קובץ ה-PDF כרגע.');
+      console.error('פתיחת קובץ נכשלה:', pdfError);
+      alert('לא ניתן לפתוח את הקובץ כרגע.');
     }
   };
 
@@ -274,11 +322,16 @@ function RegistrationsManagement() {
         setRegistrants(list);
         setGroups(groupsSnapshot.docs.map(toRecord));
 
-        // Signed forms (best-effort): a missing collection or permission issue
-        // here must never blank the registrations list, so it has its own catch.
-        const signedSnapshot = await getDocs(collection(db, 'signedForms')).catch(() => null);
-        if (isMounted && signedSnapshot) {
-          setSignedForms(signedSnapshot.docs.map(toRecord));
+        // Signed forms, police forms, and medical forms (best-effort)
+        const [signedSnapshot, policeSnapshot, medicalSnapshot] = await Promise.all([
+          getDocs(collection(db, 'signedForms')).catch(() => null),
+          getDocs(collection(db, 'policeForms')).catch(() => null),
+          getDocs(collection(db, 'medicalForms')).catch(() => null),
+        ]);
+        if (isMounted) {
+          if (signedSnapshot) setSignedForms(signedSnapshot.docs.map(toRecord));
+          if (policeSnapshot) setPoliceForms(policeSnapshot.docs.map(toRecord));
+          if (medicalSnapshot) setMedicalForms(medicalSnapshot.docs.map(toRecord));
         }
       } catch (loadError) {
         if (isMounted) setError(loadError.message);
@@ -381,12 +434,45 @@ function RegistrationsManagement() {
 
   // Delete a registration after confirmation.
   const handleDelete = async (id, name) => {
-    // Confirm first (irreversible).
-    if (!window.confirm(`למחוק את ההרשמה של ${name}? הפעולה אינה הפיכה.`)) return;
+    if (!window.confirm(`למחוק את ההרשמה של ${name}? כל הטפסים והקבצים שלו (טופס דיגיטלי, רפואי ומשטרתי) יימחקו גם הם. הפעולה אינה הפיכה.`)) return;
 
     try {
-      // Remove the document and drop it from the list.
-      await deleteDoc(doc(db, 'registrants', id));
+      const batch = writeBatch(db);
+
+      const signedDoc = signedByRegistrant[id];
+      const policeDoc = policeByRegistrant[id];
+      const medicalDoc = medicalByRegistrant[id];
+
+      if (signedDoc) {
+        batch.delete(doc(db, 'signedForms', signedDoc.id));
+      }
+      if (policeDoc) {
+        batch.delete(doc(db, 'policeForms', policeDoc.id));
+      }
+      if (medicalDoc) {
+        batch.delete(doc(db, 'medicalForms', medicalDoc.id));
+      }
+
+      batch.delete(doc(db, 'registrants', id));
+
+      await batch.commit();
+
+      // Delete files from Firebase Storage asynchronously (best-effort)
+      const storageDeletes = [];
+      if (signedDoc?.pdfStoragePath) {
+        storageDeletes.push(deleteObject(storageRef(storage, signedDoc.pdfStoragePath)).catch(err => console.warn("Failed to delete signed PDF:", err)));
+      }
+      if (policeDoc?.fileStoragePath) {
+        storageDeletes.push(deleteObject(storageRef(storage, policeDoc.fileStoragePath)).catch(err => console.warn("Failed to delete police file:", err)));
+      }
+      if (medicalDoc?.fileStoragePath) {
+        storageDeletes.push(deleteObject(storageRef(storage, medicalDoc.fileStoragePath)).catch(err => console.warn("Failed to delete medical file:", err)));
+      }
+
+      if (storageDeletes.length > 0) {
+        await Promise.all(storageDeletes);
+      }
+
       setRegistrants((current) => current.filter((registrant) => registrant.id !== id));
     } catch (deleteError) {
       console.error('שגיאה במחיקת הרשמה:', deleteError);
@@ -459,20 +545,39 @@ function RegistrationsManagement() {
                       doubles as the tap target that expands the card. */}
                   <header className="reg-card-head" onClick={() => toggleExpand(registrant.id)}>
                     <span className="reg-card-avatar">{getFullName(registrant).charAt(0)}</span>
-                    <div className="reg-card-title">
-                      <h3>{getFullName(registrant)}</h3>
-                      <span className="reg-card-date">נרשם/ה: {formatCreatedAt(registrant.createdAt)}</span>
+                    <div className="reg-card-info">
+                      <div className="reg-card-title">
+                        <h3>{getFullName(registrant)}</h3>
+                        <span className="reg-card-date">נרשם/ה: {formatCreatedAt(registrant.createdAt)}</span>
+                      </div>
+                      <div className="reg-card-badges">
+                        <span className="reg-card-status">{registrant.status || 'ממתין לאישור'}</span>
+                        {signedByRegistrant[registrant.id] && (
+                          <span
+                            className="reg-card-status status-signed"
+                            title="טופס החתימה התקבל"
+                          >
+                            ✓ נחתם
+                          </span>
+                        )}
+                        {policeByRegistrant[registrant.id] && (
+                          <span
+                            className="reg-card-status status-police"
+                            title="טופס משטרתי התקבל"
+                          >
+                            ✓ טופס משטרתי
+                          </span>
+                        )}
+                        {medicalByRegistrant[registrant.id] && (
+                          <span
+                            className="reg-card-status status-medical"
+                            title="טופס רפואי התקבל"
+                          >
+                            ✓ טופס רפואי
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <span className="reg-card-status">{registrant.status || 'ממתין לאישור'}</span>
-                    {signedByRegistrant[registrant.id] && (
-                      <span
-                        className="reg-card-status"
-                        style={{ background: '#dcfce7', color: '#15803d', borderColor: '#bbf7d0' }}
-                        title="טופס החתימה התקבל"
-                      >
-                        ✓ נחתם
-                      </span>
-                    )}
                   </header>
 
                   {/* All the registrant's detail fields. */}
@@ -526,7 +631,6 @@ function RegistrationsManagement() {
                       </a>
                     )}
 
-                    {/* Send the digital signing form to the registrant (before approval). */}
                     <a
                       className="reg-foot-btn"
                       href={signFormWhatsappHref(registrant)}
@@ -535,27 +639,56 @@ function RegistrationsManagement() {
                     >
                       📝 שליחת טופס לחתימה
                     </a>
-
+                    <a
+                      className="reg-foot-btn"
+                      href={policeFormWhatsappHref(registrant)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      📝 שליחת טופס משטרתי
+                    </a>
+                    <a
+                      className="reg-foot-btn"
+                      href={medicalFormWhatsappHref(registrant)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      📝 שליחת טופס רפואי
+                    </a>
+ 
                     {/* View the signed form once it has come back. */}
-                    {signedByRegistrant[registrant.id] && (
-                      <>
-                        <button
-                          type="button"
-                          className="reg-foot-btn"
-                          onClick={() => setViewingForm(signedByRegistrant[registrant.id])}
-                        >
-                          ✓ צפייה בטופס החתום
-                        </button>
-                        {signedByRegistrant[registrant.id].pdfStoragePath && (
-                          <button
-                            type="button"
-                            className="reg-foot-btn"
-                            onClick={() => openSignedPdf(signedByRegistrant[registrant.id])}
-                          >
-                            פתיחת PDF
-                          </button>
-                        )}
-                      </>
+                    {signedByRegistrant[registrant.id]?.pdfStoragePath && (
+                      <button
+                        type="button"
+                        className="reg-foot-btn"
+                        onClick={() => openSignedPdf(signedByRegistrant[registrant.id])}
+                      >
+                        📄 פתיחת PDF
+                      </button>
+                    )}
+
+                    {/* View the police form once it has come back. */}
+                    {policeByRegistrant[registrant.id] && (
+                      <button
+                        type="button"
+                        className="reg-foot-btn"
+                        style={{ color: '#0369a1' }}
+                        onClick={() => openSignedPdf(policeByRegistrant[registrant.id])}
+                      >
+                        📄 צפייה בטופס משטרתי
+                      </button>
+                    )}
+
+                    {/* View the medical form once it has come back. */}
+                    {medicalByRegistrant[registrant.id] && (
+                      <button
+                        type="button"
+                        className="reg-foot-btn"
+                        style={{ color: '#b45309' }}
+                        onClick={() => openSignedPdf(medicalByRegistrant[registrant.id])}
+                      >
+                        📄 צפייה בטופס רפואי
+                      </button>
                     )}
 
                     <button

@@ -408,7 +408,7 @@ function SignatureForm({ registrantId = '', prefillName = '' }) {
     const trimmedForm = {
       firstName: form.firstName.trim(),
       lastName: form.lastName.trim(),
-      idNumber: form.idNumber.trim(),
+      idNumber: form.idNumber.replace(/\D/g, ''),
       age: form.age.trim(),
       birthDateGreg: form.birthDateGreg.trim(),
       birthDateHeb: form.birthDateHeb.trim(),
@@ -455,6 +455,9 @@ function SignatureForm({ registrantId = '', prefillName = '' }) {
       setSubmitted(true);
     } catch (error) {
       console.error('שמירת הטופס החתום נכשלה:', error);
+      if (error && error.stack) {
+        console.error('שגיאה מלאה:', error.stack);
+      }
       setErrorText('לא הצלחנו לשמור את הטופס כ-PDF. בדקו חיבור ונסו שוב.');
     } finally {
       setSubmitting(false);

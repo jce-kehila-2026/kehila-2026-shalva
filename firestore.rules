@@ -179,6 +179,54 @@ service cloud.firestore {
       allow read, update, delete: if isAdmin();
     }
 
+    // Public uploaded police checks: anyone with the link may submit one (create only);
+    // only an admin may read / manage them.
+    match /policeForms/{id} {
+      allow create: if request.resource.data.keys().hasOnly([
+            'registrantId', 'fullName', 'idNumber',
+            'fileStoragePath', 'fileName', 'createdAt'
+          ])
+        && request.resource.data.keys().hasAll([
+            'registrantId', 'fullName', 'idNumber',
+            'fileStoragePath', 'fileName', 'createdAt'
+          ])
+        && request.resource.data.registrantId is string
+        && request.resource.data.registrantId.size() <= 120
+        && request.resource.data.fullName is string
+        && request.resource.data.fullName.size() > 0 && request.resource.data.fullName.size() <= 120
+        && request.resource.data.idNumber is string
+        && request.resource.data.idNumber.matches('[0-9]{9}')
+        && request.resource.data.fileStoragePath is string
+        && request.resource.data.fileStoragePath.matches('policeForms/[A-Za-z0-9]+/shalva-police-form-[A-Za-z0-9]+[.][A-Za-z0-9]+')
+        && request.resource.data.fileName is string
+        && request.resource.data.createdAt is timestamp;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Public uploaded medical checks: anyone with the link may submit one (create only);
+    // only an admin may read / manage them.
+    match /medicalForms/{id} {
+      allow create: if request.resource.data.keys().hasOnly([
+            'registrantId', 'fullName', 'idNumber',
+            'fileStoragePath', 'fileName', 'createdAt'
+          ])
+        && request.resource.data.keys().hasAll([
+            'registrantId', 'fullName', 'idNumber',
+            'fileStoragePath', 'fileName', 'createdAt'
+          ])
+        && request.resource.data.registrantId is string
+        && request.resource.data.registrantId.size() <= 120
+        && request.resource.data.fullName is string
+        && request.resource.data.fullName.size() > 0 && request.resource.data.fullName.size() <= 120
+        && request.resource.data.idNumber is string
+        && request.resource.data.idNumber.matches('[0-9]{9}')
+        && request.resource.data.fileStoragePath is string
+        && request.resource.data.fileStoragePath.matches('medicalForms/[A-Za-z0-9]+/shalva-medical-form-[A-Za-z0-9]+[.][A-Za-z0-9]+')
+        && request.resource.data.fileName is string
+        && request.resource.data.createdAt is timestamp;
+      allow read, update, delete: if isAdmin();
+    }
+
     // Volunteers: active users may read (the guide screens read the whole list
     // and filter client-side). Only an admin may write — guides never edit
     // volunteers in the app, so this stays admin-only on the server too.
