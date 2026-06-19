@@ -32,11 +32,18 @@ const uploadProgramImage = async (file, programId) => {
   return getDownloadURL(storageRef);
 };
 
-const ProgramManagement = ({ registerBack }) => {
+const ProgramManagement = () => {
   const [programs, setPrograms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortDir, setSortDir] = useState('asc');
+
+  // Expandable row state on mobile
+  const [expandedId, setExpandedId] = useState(null);
+
+  const toggleExpand = (id) => {
+    setExpandedId((prev) => (prev === id ? null : id));
+  };
 
   // Add modal state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -264,8 +271,8 @@ const ProgramManagement = ({ registerBack }) => {
                   </tr>
                 ) : (
                   filteredPrograms.map((program) => (
-                    <tr key={program.id}>
-                      <td>
+                    <tr key={program.id} className={expandedId === program.id ? 'is-expanded' : ''}>
+                      <td data-label="תמונה">
                         {program.imageUrl ? (
                           <img
                             src={program.imageUrl}
@@ -297,11 +304,18 @@ const ProgramManagement = ({ registerBack }) => {
                           </div>
                         )}
                       </td>
-                      <td style={{ fontWeight: 'bold' }}>{program.name}</td>
-                      <td className="muted" style={{ whiteSpace: 'pre-wrap' }}>
+                      <td
+                        data-label="שם התוכנית"
+                        className="mgmt-name-cell"
+                        style={{ fontWeight: 'bold' }}
+                        onClick={() => toggleExpand(program.id)}
+                      >
+                        {program.name}
+                      </td>
+                      <td data-label="תיאור" className="muted" style={{ whiteSpace: 'pre-wrap' }}>
                         {program.description}
                       </td>
-                      <td className="mgmt-actions-cell">
+                      <td data-label="פעולות" className="mgmt-actions-cell">
                         <div className="mgmt-row-actions">
                           <button type="button" onClick={() => openEditModal(program)}>
                             עריכה
