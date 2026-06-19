@@ -170,21 +170,21 @@
 }
 
 .showcase-desc {
-  margin: 0 0 18px;
-  max-width: 560px;
+  margin: 0 0 18px !important;
+  max-width: 800px !important;
   margin-inline-end: auto;
-  font-size: clamp(15px, 2vw, 18.5px);
-  line-height: 1.6;
-  color: #ffffff;
+  font-size: clamp(16px, 2.2vw, 21px) !important;
+  line-height: 1.6 !important;
+  color: #ffffff !important;
   text-shadow:
     0 0 3px rgba(0, 0, 0, 0.9),
     0 1px 8px rgba(0, 0, 0, 0.7);
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  display: block !important;
+  overflow: visible !important;
+  -webkit-line-clamp: unset !important;
+  line-clamp: unset !important;
 }
+
 
 
 /* ---------- Navigation ---------- */
@@ -412,8 +412,11 @@
 
   .showcase-desc {
     font-size: 17.5px;
-    -webkit-line-clamp: 3;
-    line-clamp: 3;
+    display: -webkit-box;
+    -webkit-line-clamp: 6;
+    line-clamp: 6;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
     margin-bottom: 20px;
   }
 

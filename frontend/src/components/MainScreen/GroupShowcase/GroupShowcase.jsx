@@ -85,9 +85,22 @@ function ShowcaseSlide({ group, gradient, isActive, isNear }) {
         <h3 className="showcase-name">{getGroupName(group)}</h3>
 
         {description && (
-          <p className="showcase-desc">{description}</p>
+          <p
+            className="showcase-desc"
+            style={{
+              display: 'block',
+              overflow: 'visible',
+              WebkitLineClamp: 'unset',
+              lineClamp: 'unset',
+              maxWidth: '800px',
+              fontSize: 'clamp(16px, 2.2vw, 21px)',
+            }}
+          >
+            {description}
+          </p>
         )}
       </div>
+
     </div>
   );
 }
