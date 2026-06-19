@@ -148,14 +148,31 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
         getDocs(query(collection(db, 'attendance'), where('dateKey', '==', todayKey))),
       ]);
 
-      // All volunteers matching the active group filter.
+      const HEBREW_WEEKDAYS = [
+        'יום ראשון',
+        'יום שני',
+        'יום שלישי',
+        'יום רביעי',
+        'יום חמישי',
+        'יום שישי',
+        'יום שבת'
+      ];
+      const todayHebrewDay = HEBREW_WEEKDAYS[today.getDay()];
+
+      // All volunteers matching the active group filter and scheduled for today.
       const volunteersData = volunteersSnap.docs
         .map((documentSnapshot) => ({ id: documentSnapshot.id, ...documentSnapshot.data() }))
         .filter((volunteer) => (
           volunteer.groupId === selectedGroupId ||
           volunteer.groupName === activeGroupName ||
           volunteer.group === activeGroupName
-        ));
+        ))
+        .filter((volunteer) => {
+          if (volunteer.day && volunteer.day.trim() !== '') {
+            return volunteer.day.trim() === todayHebrewDay;
+          }
+          return true;
+        });
 
       // Today's attendance records for this group.
       const attendanceData = attendanceSnap.docs

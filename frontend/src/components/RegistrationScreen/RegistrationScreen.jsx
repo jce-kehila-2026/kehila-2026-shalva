@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from "react";
 
 // Firestore helpers for adding a document.
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, getDocs } from "firebase/firestore";
 
 // Our Firestore database instance.
 import { db } from "../../firebase";
@@ -37,6 +37,9 @@ const EMPTY_FORM = {
   experience: "",
   address: "",
   school: "",
+  day: "",
+  programId: "",
+  programName: "",
 };
 
 
@@ -57,6 +60,8 @@ const SUMMARY_FIELDS = [
   ["address", "כתובת"],
   ["school", "בית ספר / מוסד לימודים"],
   ["experience", "ניסיון קודם"],
+  ["day", "יום פעילות מועדף"],
+  ["programName", "תוכנית מבוקשת"],
   ["status", "סטטוס"],
 ];
 
@@ -78,6 +83,9 @@ const getCleanFormData = (data) => ({
   experience: data.experience.trim(),
   address: data.address.trim(),
   school: data.school.trim(),
+  day: data.day || "",
+  programId: data.programId || "",
+  programName: data.programName || "",
 });
 
 
@@ -95,7 +103,9 @@ const preparePayload = (data) => {
     !cleanData.phone ||
     !cleanData.address ||
     !cleanData.school ||
-    !cleanData.experience
+    !cleanData.experience ||
+    !cleanData.day ||
+    !cleanData.programId
   ) {
     return { payload: null, error: "נא למלא את כל השדות בטופס." };
   }
@@ -131,6 +141,9 @@ function RegistrationScreen() {
   // The form values.
   const [formData, setFormData] = useState(EMPTY_FORM);
 
+  // The programs.
+  const [programs, setPrograms] = useState([]);
+
   // The saved details once submitted (null while still filling the form).
   const [submitted, setSubmitted] = useState(null);
 
@@ -159,6 +172,22 @@ function RegistrationScreen() {
     return () => {
       isMountedRef.current = false;
     };
+  }, []);
+
+  useEffect(() => {
+    async function loadPrograms() {
+      try {
+        const snap = await getDocs(collection(db, "programs"));
+        const list = snap.docs.map((doc) => ({
+          id: doc.id,
+          name: doc.data().name || "תוכנית ללא שם",
+        })).sort((a, b) => a.name.localeCompare(b.name, "he"));
+        setPrograms(list);
+      } catch (err) {
+        console.error("Error loading programs:", err);
+      }
+    }
+    loadPrograms();
   }, []);
 
   // After a successful submit, focus the "saved" heading.
@@ -445,6 +474,54 @@ function RegistrationScreen() {
               autoComplete="organization"
               required
             />
+          </div>
+
+          {/* Day of week. */}
+          <div className="regform-field">
+            <label htmlFor="reg-day">יום פעילות מועדף</label>
+            <select
+              id="reg-day"
+              name="day"
+              value={formData.day}
+              onChange={handleChange}
+              required
+            >
+              <option value="">-- בחר יום --</option>
+              <option value="יום ראשון">יום ראשון</option>
+              <option value="יום שני">יום שני</option>
+              <option value="יום שלישי">יום שלישי</option>
+              <option value="יום רביעי">יום רביעי</option>
+              <option value="יום חמישי">יום חמישי</option>
+              <option value="יום שישי">יום שישי</option>
+              <option value="יום שבת">יום שבת</option>
+            </select>
+          </div>
+
+          {/* Program selection. */}
+          <div className="regform-field">
+            <label htmlFor="reg-program">תוכנית מבוקשת</label>
+            <select
+              id="reg-program"
+              name="programId"
+              value={formData.programId}
+              onChange={(e) => {
+                const pId = e.target.value;
+                const pName = programs.find((p) => p.id === pId)?.name || "";
+                setFormData((prev) => ({
+                  ...prev,
+                  programId: pId,
+                  programName: pName,
+                }));
+              }}
+              required
+            >
+              <option value="">-- בחר תוכנית --</option>
+              {programs.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Submit error (only when validation or a save fails). */}

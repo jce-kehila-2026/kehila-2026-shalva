@@ -12,7 +12,8 @@ export const GRADIENTS = [
   'linear-gradient(135deg, #3fa7c4 0%, #4a4fbf 55%, #2a1a66 100%)',
 ];
 
-const DEFAULT_GROUP_NAME = 'קבוצה ללא שם';
+const DEFAULT_GROUP_NAME = 'תוכנית ללא שם';
+
 const DEFAULT_INITIAL = '◍';
 
 const GROUP_NAME_FIELDS = ['groupName', 'name'];

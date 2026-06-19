@@ -75,6 +75,8 @@ const DETAIL_FIELDS = [
   ['address', 'כתובת'],
   ['school', 'בית ספר / מוסד'],
   ['experience', 'ניסיון קודם'],
+  ['day', 'יום פעילות'],
+  ['programName', 'תוכנית מבוקשת'],
 ];
 
 
@@ -412,6 +414,9 @@ function RegistrationsManagement() {
         experience: registrant.experience || '',
         groupId,
         groupName,
+        day: registrant.day || '',
+        programId: registrant.programId || '',
+        programName: registrant.programName || '',
         createdAt: new Date(),
       });
 

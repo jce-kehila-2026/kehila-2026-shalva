@@ -267,7 +267,7 @@ function GroupShowcase({ groups = [], variant = '' }) {
         className="showcase-stage"
         role="group"
         aria-roledescription="carousel"
-        aria-label="חלון ראווה של קבוצות הקהילה"
+        aria-label="חלון ראווה של תוכניות הקהילה"
         tabIndex={0}
         onKeyDown={handleKeyDown}
         onClick={toggleFullscreen}
@@ -293,7 +293,7 @@ function GroupShowcase({ groups = [], variant = '' }) {
                 event.stopPropagation();
                 goPrev();
               }}
-              aria-label="הקבוצה הקודמת"
+              aria-label="התוכנית הקודמת"
             >
               ›
             </button>
@@ -305,7 +305,7 @@ function GroupShowcase({ groups = [], variant = '' }) {
                 event.stopPropagation();
                 goNext();
               }}
-              aria-label="הקבוצה הבאה"
+              aria-label="התוכנית הבאה"
             >
               ‹
             </button>
@@ -380,7 +380,7 @@ function GroupShowcase({ groups = [], variant = '' }) {
       </div>
 
       {groups.length > 1 && (
-        <div className="showcase-thumbs" role="group" aria-label="בחירת קבוצה">
+        <div className="showcase-thumbs" role="group" aria-label="בחירת תוכנית">
           {groups.map((group, index) => (
             <ShowcaseThumb
               key={group.id || index}

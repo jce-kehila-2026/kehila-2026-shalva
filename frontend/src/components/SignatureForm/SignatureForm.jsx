@@ -44,7 +44,7 @@ const CONFIDENTIALITY_TEXT =
 
 // Closed lists used by the form.
 const SHIRT_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
-const ACTIVITY_DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי'];
+const ACTIVITY_DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 
 
 const REQUIRED_TEXT_FIELDS = [

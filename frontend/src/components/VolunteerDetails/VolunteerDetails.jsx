@@ -602,10 +602,20 @@ export default function VolunteerDetails({ volunteer, onBack }) {
             </div>
 
             <div className="volunteer-details-info-item">
-              <span>מזהה</span>
-              <strong dir="ltr">
-                {getVolunteerIdentifier(volunteer)}
-              </strong>
+              <span>יום פעילות</span>
+              <strong>{safeText(volunteer.day, 'כל הימים / לא מוגדר')}</strong>
+            </div>
+
+            <div className="volunteer-details-info-item">
+              <span>תוכנית</span>
+              <strong>{safeText(volunteer.programName, 'לא שויכה תוכנית')}</strong>
+            </div>
+
+            <div className="volunteer-details-info-item">
+               <span>מזהה</span>
+               <strong dir="ltr">
+                 {getVolunteerIdentifier(volunteer)}
+               </strong>
             </div>
           </div>
         </section>

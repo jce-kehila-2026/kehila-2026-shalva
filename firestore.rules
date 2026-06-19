@@ -81,7 +81,8 @@ service cloud.firestore {
     match /registrants/{id} {
       allow create: if request.resource.data.keys().hasOnly([
             'firstName', 'lastName', 'email', 'phone', 'status',
-            'age', 'birthDate', 'experience', 'address', 'school', 'createdAt'
+            'age', 'birthDate', 'experience', 'address', 'school',
+            'day', 'programId', 'programName', 'createdAt'
           ])
         && request.resource.data.keys().hasAll(['firstName', 'lastName', 'email', 'phone', 'age', 'status', 'createdAt'])
         // Required text fields, with sane length caps (it's a public endpoint).
@@ -100,6 +101,10 @@ service cloud.firestore {
         && request.resource.data.age is number
         && request.resource.data.age >= 0 && request.resource.data.age <= 120
         && request.resource.data.birthDate is string && request.resource.data.birthDate.size() <= 20
+        // Day, programId, and programName validations (if present).
+        && (!('day' in request.resource.data) || (request.resource.data.day is string && request.resource.data.day.size() <= 40))
+        && (!('programId' in request.resource.data) || (request.resource.data.programId is string && request.resource.data.programId.size() <= 80))
+        && (!('programName' in request.resource.data) || (request.resource.data.programName is string && request.resource.data.programName.size() <= 120))
         && request.resource.data.createdAt is timestamp;
       allow read, update, delete: if isAdmin();
     }
@@ -164,7 +169,7 @@ service cloud.firestore {
         && request.resource.data.groupName.size() <= 120
         && request.resource.data.activityDays is list
         && request.resource.data.activityDays.size() > 0
-        && request.resource.data.activityDays.size() <= 5
+        && request.resource.data.activityDays.size() <= 7
         && request.resource.data.pdfFileName is string
         && request.resource.data.pdfFileName.matches('shalva-signed-form-[A-Za-z0-9]+[.]pdf')
         && request.resource.data.pdfStoragePath is string
@@ -259,6 +264,14 @@ service cloud.firestore {
       allow read: if isActiveUser();
       allow write: if isAdmin();
     }
+
+    // Programs: anyone may read (shown on the public landing page); only an admin may write.
+    match /programs/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+
 
     // User profiles / roles: a user may always read their own document (the app
     // gate needs it); active users may read others.

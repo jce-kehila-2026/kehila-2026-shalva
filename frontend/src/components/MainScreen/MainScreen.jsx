@@ -10,20 +10,20 @@ import GroupShowcase from './GroupShowcase/GroupShowcase';
 import './MainScreen.css';
 
 
-const GROUPS_COLLECTION = 'groups';
+const PROGRAMS_COLLECTION = 'programs';
 
 const REGISTER_URL = '?register=1';
 const LOGO_URL =
   'https://www.shalva.org/wp-content/uploads/2025/02/Logo-Hebrew-1024x488-1.png';
 
-const GROUPS_STATUS = Object.freeze({
+const PROGRAMS_STATUS = Object.freeze({
   LOADING: 'loading',
   SUCCESS: 'success',
   ERROR: 'error',
 });
 
-const GROUPS_LOAD_ERROR_MESSAGE =
-  'לא ניתן לטעון את הקבוצות כרגע. נסו לרענן את הדף.';
+const PROGRAMS_LOAD_ERROR_MESSAGE =
+  'לא ניתן לטעון את התוכניות כרגע. נסו לרענן את הדף.';
 
 // Some mobile browsers restore scroll after paint. These delayed resets keep
 // the full-screen landing pinned to the top even after late layout changes.
@@ -48,25 +48,26 @@ function resetDocumentScroll() {
 }
 
 
-function normalizeGroup(groupDoc) {
-  const groupData = groupDoc.data();
+function normalizeProgram(programDoc) {
+  const programData = programDoc.data();
 
   return {
-    ...groupData,
+    ...programData,
 
     // Firestore's document id stays authoritative even if the document itself
     // contains an "id" field.
-    id: groupDoc.id,
+    id: programDoc.id,
   };
 }
 
 
-// The landing page intentionally shows every group in the collection.
+// The landing page intentionally shows every program in the collection.
 // Filtering or limiting should only be added if the product requirement changes.
-async function fetchGroups() {
-  const groupsSnapshot = await getDocs(collection(db, GROUPS_COLLECTION));
-  return groupsSnapshot.docs.map(normalizeGroup);
+async function fetchPrograms() {
+  const programsSnapshot = await getDocs(collection(db, PROGRAMS_COLLECTION));
+  return programsSnapshot.docs.map(normalizeProgram);
 }
+
 
 
 function MainScreen({
@@ -74,9 +75,9 @@ function MainScreen({
   homeHref = '/',
   registerHref = REGISTER_URL,
 }) {
-  const [groupsState, setGroupsState] = useState({
-    status: GROUPS_STATUS.LOADING,
-    groups: [],
+  const [programsState, setProgramsState] = useState({
+    status: PROGRAMS_STATUS.LOADING,
+    programs: [],
     errorMessage: '',
   });
 
@@ -112,35 +113,35 @@ function MainScreen({
     };
   }, []);
 
-  // Load all groups once. The ignore flag prevents state updates after unmount.
+  // Load all programs once. The ignore flag prevents state updates after unmount.
   useEffect(() => {
     let shouldIgnoreResult = false;
 
-    async function loadGroups() {
+    async function loadPrograms() {
       try {
-        const groups = await fetchGroups();
+        const programs = await fetchPrograms();
 
         if (!shouldIgnoreResult) {
-          setGroupsState({
-            status: GROUPS_STATUS.SUCCESS,
-            groups,
+          setProgramsState({
+            status: PROGRAMS_STATUS.SUCCESS,
+            programs,
             errorMessage: '',
           });
         }
       } catch (error) {
-        console.error('Error fetching groups:', error);
+        console.error('Error fetching programs:', error);
 
         if (!shouldIgnoreResult) {
-          setGroupsState({
-            status: GROUPS_STATUS.ERROR,
-            groups: [],
-            errorMessage: GROUPS_LOAD_ERROR_MESSAGE,
+          setProgramsState({
+            status: PROGRAMS_STATUS.ERROR,
+            programs: [],
+            errorMessage: PROGRAMS_LOAD_ERROR_MESSAGE,
           });
         }
       }
     }
 
-    loadGroups();
+    loadPrograms();
 
     return () => {
       shouldIgnoreResult = true;
@@ -150,7 +151,7 @@ function MainScreen({
   // Loading completion can change the layout height. Reset once more so the
   // full-screen landing stays visually anchored at the top.
   useEffect(() => {
-    if (groupsState.status === GROUPS_STATUS.LOADING) {
+    if (programsState.status === PROGRAMS_STATUS.LOADING) {
       return undefined;
     }
 
@@ -160,7 +161,7 @@ function MainScreen({
 
     const frameId = window.requestAnimationFrame(resetDocumentScroll);
     return () => window.cancelAnimationFrame(frameId);
-  }, [groupsState.status]);
+  }, [programsState.status]);
 
   return (
     <div className="main-container">
@@ -173,14 +174,15 @@ function MainScreen({
       <main className="main-content">
         <HeroSection />
 
-        <GroupsSection
-          status={groupsState.status}
-          groups={groupsState.groups}
-          errorMessage={groupsState.errorMessage}
+        <ProgramsSection
+          status={programsState.status}
+          programs={programsState.programs}
+          errorMessage={programsState.errorMessage}
         />
       </main>
     </div>
   );
+
 }
 
 
@@ -232,18 +234,18 @@ function HeroSection() {
 }
 
 
-function GroupsSection({ status, groups, errorMessage }) {
+function ProgramsSection({ status, programs, errorMessage }) {
   return (
     <section
       className="groups-section"
-      aria-labelledby="groups-section-title"
-      aria-busy={status === GROUPS_STATUS.LOADING}
+      aria-labelledby="programs-section-title"
+      aria-busy={status === PROGRAMS_STATUS.LOADING}
     >
-      <h2 id="groups-section-title">הקבוצות שלנו</h2>
+      <h2 id="programs-section-title">התוכניות שלנו</h2>
 
-      <GroupsContent
+      <ProgramsContent
         status={status}
-        groups={groups}
+        programs={programs}
         errorMessage={errorMessage}
       />
     </section>
@@ -251,16 +253,16 @@ function GroupsSection({ status, groups, errorMessage }) {
 }
 
 
-function GroupsContent({ status, groups, errorMessage }) {
-  if (status === GROUPS_STATUS.LOADING) {
+function ProgramsContent({ status, programs, errorMessage }) {
+  if (status === PROGRAMS_STATUS.LOADING) {
     return (
       <p className="groups-message" role="status">
-        טוען קבוצות...
+        טוען תוכניות...
       </p>
     );
   }
 
-  if (status === GROUPS_STATUS.ERROR) {
+  if (status === PROGRAMS_STATUS.ERROR) {
     return (
       <p className="groups-error" role="alert">
         {errorMessage}
@@ -268,16 +270,17 @@ function GroupsContent({ status, groups, errorMessage }) {
     );
   }
 
-  if (groups.length === 0) {
+  if (programs.length === 0) {
     return (
       <p className="groups-message">
-        כרגע אין קבוצות להצגה.
+        כרגע אין תוכניות להצגה.
       </p>
     );
   }
 
-  return <GroupShowcase groups={groups} variant="landing" />;
+  return <GroupShowcase groups={programs} variant="landing" />;
 }
+
 
 
 export default MainScreen;

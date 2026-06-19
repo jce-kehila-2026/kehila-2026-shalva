@@ -77,6 +77,7 @@ function getWeekRangeLabel(sunday) {
 function getStatusLabel(status) {
   if (status === 'present') return 'נוכח';
   if (status === 'absent') return 'חסר';
+  if (status === 'not-scheduled') return 'לא משובץ ליום זה';
   return 'לא סומן';
 }
 
@@ -180,10 +181,24 @@ function AdminAttendance({ registerBack }) {
         ));
 
         // Each volunteer with their weekly status.
+        const HEBREW_WEEKDAYS = [
+          'יום ראשון',
+          'יום שני',
+          'יום שלישי',
+          'יום רביעי',
+          'יום חמישי',
+          'יום שישי',
+          'יום שבת'
+        ];
+
         const people = groupVolunteers
           .map((vol) => {
             const weeklyStatus = {};
-            weekDaysKeys.forEach((dKey) => {
+            weekDaysKeys.forEach((dKey, index) => {
+              const dayObj = weekDays[index];
+              const dayName = HEBREW_WEEKDAYS[dayObj.getDay()];
+              const isScheduledDay = !vol.day || vol.day.trim() === '' || vol.day.trim() === dayName;
+
               const recs = groupWeekAttendance.filter((r) => r.volunteerId === vol.id && r.dateKey === dKey);
               if (recs.length > 0) {
                 // Get the latest record if duplicates exist.
@@ -198,10 +213,10 @@ function AdminAttendance({ registerBack }) {
                 const norm = normalizeAttendanceStatus(getRecordStatus(latestRec));
                 weeklyStatus[dKey] = norm === 'present' ? 'present' : norm === 'absent' ? 'absent' : 'unmarked';
               } else {
-                weeklyStatus[dKey] = 'unmarked';
+                weeklyStatus[dKey] = isScheduledDay ? 'unmarked' : 'not-scheduled';
               }
             });
-            return { id: vol.id, name: getName(vol), weeklyStatus };
+            return { id: vol.id, name: getName(vol), day: vol.day || '', weeklyStatus };
           })
           .sort((a, b) => a.name.localeCompare(b.name, 'he'));
 
@@ -213,7 +228,7 @@ function AdminAttendance({ registerBack }) {
           Object.values(person.weeklyStatus).forEach((status) => {
             if (status === 'present') totalPresent++;
             else if (status === 'absent') totalAbsent++;
-            else totalUnmarked++;
+            else if (status === 'unmarked') totalUnmarked++;
           });
         });
 
@@ -338,6 +353,7 @@ function AdminAttendance({ registerBack }) {
             <span><i className="adm-week-dot is-present" /> נוכח</span>
             <span><i className="adm-week-dot is-absent" /> חסר</span>
             <span><i className="adm-week-dot is-unmarked" /> לא סומן</span>
+            <span><span style={{ fontSize: '15px', fontWeight: '800', marginInlineEnd: '3px' }}>—</span> לא משובץ ליום זה</span>
           </div>
 
           <div className="adm-week-board">
@@ -361,18 +377,29 @@ function AdminAttendance({ registerBack }) {
               {activeSelectedGroup.people.length > 0 ? (
                 activeSelectedGroup.people.map((person) => (
                   <div className="adm-week-grid adm-week-row" key={person.id}>
-                    <div className="adm-week-person">
-                      <span>{person.name}</span>
+                    <div className="adm-week-person" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center' }}>
+                      <span style={{ fontWeight: '700' }}>{person.name}</span>
+                      {person.day && (
+                        <small style={{ color: 'var(--brand-600)', fontSize: '10px', fontWeight: '700', marginTop: '1px' }}>
+                          {person.day}
+                        </small>
+                      )}
                     </div>
                     {weekDaysKeys.map((dKey) => {
                       const status = person.weeklyStatus[dKey];
                       return (
                         <div className="adm-week-cell" key={dKey}>
-                          <span
-                            className={`adm-week-dot is-${status}`}
-                            title={getStatusLabel(status)}
-                            aria-label={getStatusLabel(status)}
-                          />
+                          {status === 'not-scheduled' ? (
+                            <span className="adm-week-not-scheduled" title={getStatusLabel(status)}>
+                              —
+                            </span>
+                          ) : (
+                            <span
+                              className={`adm-week-dot is-${status}`}
+                              title={getStatusLabel(status)}
+                              aria-label={getStatusLabel(status)}
+                            />
+                          )}
                         </div>
                       );
                     })}

@@ -108,20 +108,23 @@ function fillHiddenList(lists, columnLetter, values) {
 
 
 // ----- Volunteers template -----
-// Empty file for adding NEW volunteers; group + activity time are dropdowns,
+// Empty file for adding NEW volunteers; group and program are dropdowns,
 // the birth date is a real date cell, and age fills itself from the date.
-export async function downloadVolunteersTemplate(groups = []) {
+export async function downloadVolunteersTemplate(groups = [], programs = []) {
   const headers = [
     'שם פרטי *', 'שם משפחה *', 'תעודת זהות', 'טלפון', 'אימייל',
-    'תאריך לידה', 'גיל (אוטומטי)', 'קבוצה', 'זמן פעילות', 'כתובת', 'בית ספר', 'ניסיון קודם', 'הערות',
+    'תאריך לידה', 'גיל (אוטומטי)', 'קבוצה', 'תוכנית', 'יום פעילות', 'כתובת', 'בית ספר', 'ניסיון קודם', 'הערות',
   ];
 
   const { workbook, sheet, lists } = await createTemplate('מתנדבים', headers);
 
-  // Dropdowns: group names (hidden list) + the fixed activity times.
+  // Dropdowns: group names (hidden list) + program names (hidden list) + the volunteer days.
   const groupNames = groups.map(getName).filter(Boolean);
+  const programNames = programs.map(getName).filter(Boolean);
+  const volunteerDays = ['יום ראשון', 'יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'יום שבת'];
   addDropdown(sheet, 'H', fillHiddenList(lists, 'A', groupNames));
-  addDropdown(sheet, 'I', `"${GROUP_TIMES.join(',')}"`);
+  addDropdown(sheet, 'I', fillHiddenList(lists, 'B', programNames));
+  addDropdown(sheet, 'J', `"${volunteerDays.join(',')}"`);
 
   // ID + phone columns stay TEXT so Excel keeps the leading 0.
   addTextColumn(sheet, 'C');

@@ -156,9 +156,14 @@ describe('logged-out user (no auth)', () => {
     await assertSucceeds(anonDb().collection('groups').get());
   });
 
+  it('CAN read programs (public showcase)', async () => {
+    await assertSucceeds(anonDb().collection('programs').get());
+  });
+
   it('cannot write groups', async () => {
     await assertFails(anonDb().collection('groups').doc('groupA').set({ groupName: 'hack' }));
   });
+
 
   it('cannot read volunteers', async () => {
     await assertFails(anonDb().collection('volunteers').get());
@@ -216,10 +221,11 @@ describe('logged-out user (no auth)', () => {
 
 
 describe('viewer (read-only role)', () => {
-  it('can read volunteers, attendance and events', async () => {
+  it('can read volunteers, attendance, events and programs', async () => {
     await assertSucceeds(viewerDb().collection('volunteers').get());
     await assertSucceeds(viewerDb().collection('attendance').get());
     await assertSucceeds(viewerDb().collection('events').get());
+    await assertSucceeds(viewerDb().collection('programs').get());
   });
 
   it('cannot write volunteers', async () => {
@@ -230,15 +236,17 @@ describe('viewer (read-only role)', () => {
     await assertFails(viewerDb().collection('attendance').add(ownGroupAttendance()));
   });
 
-  it('cannot write events or groups', async () => {
+  it('cannot write events, groups or programs', async () => {
     await assertFails(viewerDb().collection('events').doc('event1').update({ title: 'x' }));
     await assertFails(viewerDb().collection('groups').doc('groupA').update({ groupName: 'x' }));
+    await assertFails(viewerDb().collection('programs').doc('prog1').set({ name: 'x' }));
   });
 
   it('cannot manage users', async () => {
     await assertFails(viewerDb().collection('users').doc(VIEWER_UID).update({ role: 'admin' }));
   });
 });
+
 
 
 describe('guide (scoped to their own group)', () => {
@@ -317,12 +325,14 @@ describe('disabled user (removed guide)', () => {
 
 
 describe('admin (full management, with self-guards)', () => {
-  it('can manage volunteers, groups, events and attendance', async () => {
+  it('can manage volunteers, groups, events, programs and attendance', async () => {
     await assertSucceeds(adminDb().collection('volunteers').add({ name: 'חדש', groupId: 'groupA' }));
     await assertSucceeds(adminDb().collection('groups').doc('groupA').update({ groupName: 'שם חדש' }));
     await assertSucceeds(adminDb().collection('events').doc('event1').update({ title: 'עודכן' }));
+    await assertSucceeds(adminDb().collection('programs').doc('prog1').set({ name: 'עודכן' }));
     await assertSucceeds(adminDb().collection('attendance').doc('att-other').delete());
   });
+
 
   it('can create users and change another user\'s role', async () => {
     await assertSucceeds(adminDb().collection('users').doc('newguide').set({ role: 'guide' }));
@@ -408,3 +418,34 @@ describe('storage rules (signed volunteer PDFs)', () => {
     await assertFails(fileRef.put(smallPdf, { contentType: 'application/pdf' }));
   });
 });
+
+describe('storage rules (program images)', () => {
+  const smallImage = new Uint8Array(1024);
+  const oversized = new Uint8Array(6 * 1024 * 1024);
+
+  it('anonymous users cannot upload programs images', async () => {
+    const fileRef = testEnv.unauthenticatedContext().storage().ref('programs/prog1/cover.png');
+    await assertFails(fileRef.put(smallImage, { contentType: 'image/png' }));
+  });
+
+  it('a guide cannot upload programs images', async () => {
+    const fileRef = testEnv.authenticatedContext(GUIDE_UID).storage().ref('programs/prog1/cover.png');
+    await assertFails(fileRef.put(smallImage, { contentType: 'image/png' }));
+  });
+
+  it('an admin CAN upload a programs cover image', async () => {
+    const fileRef = testEnv.authenticatedContext(ADMIN_UID).storage().ref('programs/prog1/cover.png');
+    await assertSucceeds(fileRef.put(smallImage, { contentType: 'image/png' }));
+  });
+
+  it('an admin cannot upload a non-image file for programs', async () => {
+    const fileRef = testEnv.authenticatedContext(ADMIN_UID).storage().ref('programs/prog1/notes.pdf');
+    await assertFails(fileRef.put(smallImage, { contentType: 'application/pdf' }));
+  });
+
+  it('an admin cannot upload a programs image over 5MB', async () => {
+    const fileRef = testEnv.authenticatedContext(ADMIN_UID).storage().ref('programs/prog1/big.png');
+    await assertFails(fileRef.put(oversized, { contentType: 'image/png' }));
+  });
+});
+

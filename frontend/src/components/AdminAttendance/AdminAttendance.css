@@ -478,6 +478,12 @@
   border-color: #cbd5e1;
 }
 
+.adm-week-not-scheduled {
+  color: var(--text-muted);
+  font-weight: 700;
+  font-size: 15px;
+}
+
 /* ---------- Week Navigation ---------- */
 .adm-att .week-nav {
   display: flex;

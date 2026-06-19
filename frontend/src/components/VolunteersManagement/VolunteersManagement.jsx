@@ -58,6 +58,7 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
 
   const [volunteers, setVolunteers] = useState([]);
   const [groups, setGroups] = useState([]);
+  const [programs, setPrograms] = useState([]);
 
   // Signed forms that came back from the public digital form (admin-readable),
   // matched to a volunteer by the registrant id they were approved from.
@@ -124,6 +125,9 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
     phone: '',
     birthDate: '',
     activityTime: '',
+    day: '',
+    programId: '',
+    programName: '',
     address: '',
     email: '',
     school: '',
@@ -158,13 +162,15 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
 
   const fetchData = useCallback(async () => {
     try {
-      const [volunteersSnap, groupsSnap] = await Promise.all([
+      const [volunteersSnap, groupsSnap, programsSnap] = await Promise.all([
         getDocs(collection(db, 'volunteers')),
         getDocs(collection(db, 'groups')),
+        getDocs(collection(db, 'programs')).catch(() => null),
       ]);
 
       setVolunteers(volunteersSnap.docs.map(toRecord));
       setGroups(groupsSnap.docs.map(toRecord));
+      if (programsSnap) setPrograms(programsSnap.docs.map(toRecord));
 
       // Signed digital forms, police forms, and medical forms (best-effort)
       const [signedSnap, policeSnap, medicalSnap] = await Promise.all([
@@ -387,6 +393,9 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
       phone: volunteer.phone || '',
       birthDate: volunteer.birthDate || '',
       activityTime: volunteer.activityTime || '',
+      day: volunteer.day || '',
+      programId: volunteer.programId || '',
+      programName: volunteer.programName || '',
       address: volunteer.address || '',
       email: volunteer.email || '',
       school: volunteer.school || '',
@@ -412,6 +421,7 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
     }
 
     const selectedGroup = groups.find((group) => group.id === formData.groupId);
+    const selectedProgram = programs.find((program) => program.id === formData.programId);
     
     // --- UPDATED: Payload saves all fields ---
     const payload = {
@@ -423,6 +433,9 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
       birthDate: formData.birthDate.trim(),
       age: computedAge,
       activityTime: formData.activityTime,
+      day: formData.day,
+      programId: formData.programId,
+      programName: selectedProgram?.name || '',
       address: formData.address.trim(),
       email: formData.email.trim(),
       school: formData.school.trim(),
@@ -583,8 +596,18 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
           (group) => (group.groupName || group.name || '').trim() === groupNameRaw,
         );
 
+        // Program column: match the name against the live programs list so the
+        // volunteer gets a real programId + programName.
+        const programNameRaw = String(row['תוכנית'] || row['program'] || '').trim();
+        const matchedProgram = programs.find(
+          (program) => (program.name || '').trim() === programNameRaw,
+        );
+
         // Activity time column (בוקר / צהריים / ערב).
         const activityTime = String(row['זמן פעילות'] || row['activityTime'] || '').trim();
+
+        // Day column (יום ראשון, יום שני, etc.).
+        const day = String(row['יום פעילות'] || row['יום'] || row['day'] || '').trim();
 
         volunteersToAdd.push({
           name,
@@ -600,6 +623,9 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
           school,
           notes,
           activityTime,
+          day,
+          programId: matchedProgram?.id || '',
+          programName: matchedProgram?.name || programNameRaw || '',
           groupId: matchedGroup?.id || passedGroup?.id || '',
           groupName:
             matchedGroup?.groupName || matchedGroup?.name ||
@@ -687,13 +713,19 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
               {isImporting ? '⏳ מייבא...' : '📥 ייבא מתנדבים'}
             </button>
 
-            {/* Downloads the import template. The groups list is pulled fresh
+            {/* Downloads the import template. The groups and programs list is pulled fresh
                 at click time, so the file always matches the system NOW. */}
             <button
               className="mgmt-secondary-btn"
               onClick={async () => {
-                const snapshot = await getDocs(collection(db, 'groups'));
-                downloadVolunteersTemplate(snapshot.docs.map((groupDoc) => groupDoc.data()));
+                const [groupsSnap, programsSnap] = await Promise.all([
+                  getDocs(collection(db, 'groups')),
+                  getDocs(collection(db, 'programs')),
+                ]);
+                downloadVolunteersTemplate(
+                  groupsSnap.docs.map((groupDoc) => groupDoc.data()),
+                  programsSnap.docs.map((programDoc) => ({ id: programDoc.id, ...programDoc.data() }))
+                );
               }}
             >
               ⬇️ הורדת תבנית אקסל
@@ -824,6 +856,8 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
               <div><strong>בית ספר:</strong> {viewingVolunteer.school || '—'}</div>
               <div><strong>ניסיון קודם:</strong> {viewingVolunteer.experience || '—'}</div>
               <div><strong>קבוצה נוכחית:</strong> {getGroupName(viewingVolunteer.groupId, viewingVolunteer.groupName)}</div>
+              <div><strong>יום פעילות נוכחי:</strong> {viewingVolunteer.day || 'כל הימים / לא מוגדר'}</div>
+              <div><strong>תוכנית:</strong> {viewingVolunteer.programName || 'ללא תוכנית'}</div>
             </div>
 
             {/* Signed form — a digital submission and/or a scanned/attached copy. */}
@@ -997,18 +1031,24 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
                   />
                 </div>
 
-                {/* Activity time — the same closed list used for groups. */}
+
+
+                {/* Day of week for volunteer attendance */}
                 <div className="form-group">
-                  <label>זמן פעילות:</label>
+                  <label>יום פעילות:</label>
                   <select
                     className="styled-input full-width-input"
-                    value={formData.activityTime}
-                    onChange={(e) => setFormData({ ...formData, activityTime: e.target.value })}
+                    value={formData.day}
+                    onChange={(e) => setFormData({ ...formData, day: e.target.value })}
                   >
-                    <option value="">-- בחר זמן פעילות --</option>
-                    {GROUP_TIMES.map((timeOption) => (
-                      <option key={timeOption} value={timeOption}>{timeOption}</option>
-                    ))}
+                    <option value="">כל הימים / לא מוגדר</option>
+                    <option value="יום ראשון">יום ראשון</option>
+                    <option value="יום שני">יום שני</option>
+                    <option value="יום שלישי">יום שלישי</option>
+                    <option value="יום רביעי">יום רביעי</option>
+                    <option value="יום חמישי">יום חמישי</option>
+                    <option value="יום שישי">יום שישי</option>
+                    <option value="יום שבת">יום שבת</option>
                   </select>
                 </div>
 
@@ -1064,6 +1104,20 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
                     <option value="">-- ללא קבוצה --</option>
                     {groups.map((group) => (
                       <option key={group.id} value={group.id}>{group.groupName || group.name || 'קבוצה ללא שם'}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                  <label>שיוך לתוכנית:</label>
+                  <select
+                    className="styled-input full-width-input"
+                    value={formData.programId}
+                    onChange={(e) => setFormData({ ...formData, programId: e.target.value })}
+                  >
+                    <option value="">-- ללא תוכנית --</option>
+                    {programs.map((program) => (
+                      <option key={program.id} value={program.id}>{program.name || 'תוכנית ללא שם'}</option>
                     ))}
                   </select>
                 </div>

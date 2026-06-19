@@ -23,6 +23,7 @@ import Messages from '../Messages/Messages';
 import RegistrationsManagement from '../RegistrationsManagement/RegistrationsManagement';
 import Reports from '../Reports/Reports';
 import VolunteersManagement from '../VolunteersManagement/VolunteersManagement';
+import ProgramManagement from '../ProgramManagement/ProgramManagement';
 
 // Styles for the admin shell + sidebar.
 import './AdminDashboard.css';
@@ -37,12 +38,14 @@ const NAV_ITEMS = [
   { id: 'registrations', label: 'ניהול נרשמים' },
   { id: 'guides', label: 'ניהול מדריכים' },
   { id: 'events', label: 'ניהול אירועים' },
+  { id: 'programs', label: 'ניהול תוכניות' },
   { id: 'attendance', label: 'מעקב נוכחות' },
   { id: 'messages', label: 'הודעות' },
   { id: 'reports', label: 'דוחות' },
   { id: 'charts', label: 'סטטיסטיקה' },
   { id: 'birthdays', label: 'ימי הולדת' },
 ];
+
 
 
 // currentView / setCurrentView are lifted to App so navigation state survives
@@ -116,6 +119,11 @@ function AdminDashboard({ currentView, setCurrentView, navOpen = false, setNavOp
         ) : (
           <EventManagement registerBack={registerBack} onOpenEventDetails={(eventItem) => setSelectedEvent(eventItem)} />
         );
+
+      // Program management.
+      case 'programs':
+        return <ProgramManagement registerBack={registerBack} />;
+
 
       // Read-only attendance history.
       case 'attendance':

@@ -577,10 +577,11 @@ const GroupDetails = ({ groupId, onBack }) => {
                   {volunteers.map((volunteer) => {
                     const name = getPersonName(volunteer);
 
-                    // A short "age · school" sub-line (drops the empty parts).
+                    // A short "age · school · day" sub-line (drops the empty parts).
                     const sub = [
                       volunteer.age ? `גיל ${volunteer.age}` : '',
                       volunteer.school || '',
+                      volunteer.day ? `יום פעילות: ${volunteer.day}` : '',
                     ].filter(Boolean).join(' · ') || '—';
 
                     return (
