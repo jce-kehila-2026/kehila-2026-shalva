@@ -1,0 +1,68 @@
+/* ErrorBoundary fallback styles.
+   Shown ONLY after an uncaught render error. Every selector is scoped to
+   .error-boundary* so these rules cannot touch the normal application UI. */
+
+/* Full-viewport centering wrapper. min-height (not height) keeps it usable on
+   short viewports and when the mobile keyboard shrinks the visible area. */
+.error-boundary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+  box-sizing: border-box;
+  background: #f5f6fa;
+}
+
+/* The message card. A max-width (not a fixed width) plus width:100% and
+   border-box prevents any horizontal overflow on small screens. */
+.error-boundary__card {
+  width: 100%;
+  max-width: 420px;
+  box-sizing: border-box;
+  padding: 32px 24px;
+  text-align: center;
+  background: #ffffff;
+  border: 1px solid #e6e8ef;
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(20, 20, 50, 0.08);
+}
+
+/* Title — fluid size so it stays readable from mobile to desktop. */
+.error-boundary__title {
+  margin: 0 0 12px;
+  font-size: clamp(18px, 4vw, 22px);
+  font-weight: 700;
+  color: #2a2a3a;
+}
+
+/* Explanatory message. */
+.error-boundary__message {
+  margin: 0 0 24px;
+  font-size: clamp(14px, 3.5vw, 16px);
+  line-height: 1.6;
+  color: #555566;
+}
+
+/* Reload button — comfortable tap target, never wider than the card. */
+.error-boundary__reload {
+  width: 100%;
+  max-width: 220px;
+  padding: 12px 20px;
+  font: inherit;
+  font-weight: 700;
+  color: #ffffff;
+  background: #6b3fa0;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.error-boundary__reload:hover {
+  background: #5a3488;
+}
+
+.error-boundary__reload:focus-visible {
+  outline: 3px solid rgba(107, 63, 160, 0.4);
+  outline-offset: 2px;
+}
