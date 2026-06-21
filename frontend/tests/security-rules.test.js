@@ -290,8 +290,31 @@ describe('guide (scoped to their own group)', () => {
     );
   });
 
-  it('cannot delete attendance (admin only)', async () => {
-    await assertFails(guideDb().collection('attendance').doc('att-own').delete());
+  it('cannot delete another group\'s attendance record', async () => {
+    await assertFails(guideDb().collection('attendance').doc('att-other').delete());
+  });
+
+  it('CAN delete their own group\'s attendance record', async () => {
+    await assertSucceeds(guideDb().collection('attendance').doc('att-own').delete());
+  });
+
+  it('CAN create attendance for a volunteer matched by groupName/group only', async () => {
+    // Seed a volunteer that only has groupName matching, no groupId.
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await db.collection('volunteers').doc('vol-name-only').set({
+        name: 'שם זמני',
+        groupName: 'קבוצה א',
+      });
+    });
+
+    await assertSucceeds(
+      guideDb().collection('attendance').doc('groupA_2026-06-12_vol-name-only').set({
+        ...ownGroupAttendance(),
+        volunteerId: 'vol-name-only',
+        volunteerName: 'שם זמני',
+      }),
+    );
   });
 
   it('cannot edit volunteers, groups or users', async () => {

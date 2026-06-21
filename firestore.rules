@@ -46,9 +46,16 @@ service cloud.firestore {
       return hasRole('admin') || hasRole('guide');
     }
 
-    // The group id assigned to the signed-in guide (from guides/{uid}), or ''.
-    function guideGroupId() {
-      return get(/databases/$(database)/documents/guides/$(request.auth.uid)).data.get('groupId', '');
+    // Helper to check if the signed-in guide is assigned to the given group ID.
+    // Looks up both the guide's mapping document and the group's guideId field.
+    function isGuideOfGroup(groupId) {
+      return hasRole('guide')
+        && (
+             (exists(/databases/$(database)/documents/guides/$(request.auth.uid))
+              && get(/databases/$(database)/documents/guides/$(request.auth.uid)).data.get('groupId', '') == groupId)
+             || (exists(/databases/$(database)/documents/groups/$(groupId))
+                 && get(/databases/$(database)/documents/groups/$(groupId)).data.get('guideId', '') == request.auth.uid)
+           );
     }
 
     // A guide writing an attendance record for THEIR OWN group only:
@@ -56,16 +63,23 @@ service cloud.firestore {
     //  - the record only carries the known attendance fields,
     //  - the volunteer it points at also belongs to the guide's group.
     function guideAttendanceWrite(data) {
-      return hasRole('guide')
-        && exists(/databases/$(database)/documents/guides/$(request.auth.uid))
-        && guideGroupId() != ''
-        && data.get('groupId', '') == guideGroupId()
+      return isGuideOfGroup(data.get('groupId', ''))
         && data.keys().hasOnly([
              'groupId', 'group', 'groupName', 'date', 'dateKey',
              'status', 'volunteerId', 'volunteerName'
            ])
         && exists(/databases/$(database)/documents/volunteers/$(data.volunteerId))
-        && get(/databases/$(database)/documents/volunteers/$(data.volunteerId)).data.get('groupId', '') == guideGroupId();
+        && (
+             get(/databases/$(database)/documents/volunteers/$(data.volunteerId)).data.get('groupId', '') == data.get('groupId', '')
+             || (
+                  get(/databases/$(database)/documents/volunteers/$(data.volunteerId)).data.get('groupName', '') != ''
+                  && get(/databases/$(database)/documents/volunteers/$(data.volunteerId)).data.get('groupName', '') == data.get('groupName', '')
+                )
+             || (
+                  get(/databases/$(database)/documents/volunteers/$(data.volunteerId)).data.get('group', '') != ''
+                  && get(/databases/$(database)/documents/volunteers/$(data.volunteerId)).data.get('group', '') == data.get('groupName', '')
+                )
+           );
     }
 
 
@@ -254,9 +268,11 @@ service cloud.firestore {
       // and rewrite its groupId to their own.
       allow update: if isAdmin()
         || (guideAttendanceWrite(request.resource.data)
-            && resource.data.get('groupId', '') == guideGroupId());
+            && isGuideOfGroup(resource.data.get('groupId', '')));
 
-      allow delete: if isAdmin();
+      allow delete: if isAdmin()
+        || (hasRole('guide')
+            && isGuideOfGroup(resource.data.get('groupId', '')));
     }
 
     // Events: active users may read; only an admin may write.
