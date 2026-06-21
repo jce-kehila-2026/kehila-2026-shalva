@@ -17,6 +17,9 @@ import { ref as storageRef, uploadBytes } from 'firebase/storage';
 // Our Firestore database instance.
 import { db, storage } from '../../firebase';
 
+// Allowed activity-day short labels (ראשון–שישי; Saturday is not selectable).
+import { ACTIVITY_DAY_SHORT_LABELS } from '../../utils/activityDays';
+
 // Shared day / month / year date selector.
 import BirthDatePicker from '../shared/BirthDatePicker/BirthDatePicker';
 
@@ -44,7 +47,6 @@ const CONFIDENTIALITY_TEXT =
 
 // Closed lists used by the form.
 const SHIRT_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
-const ACTIVITY_DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 
 
 const REQUIRED_TEXT_FIELDS = [
@@ -583,7 +585,7 @@ function SignatureForm({ registrantId = '', prefillName = '' }) {
         <div className="sig-days">
           <span className="sig-days-label">באיזה יום אני מתנדב/ת?</span>
           <div className="sig-days-options">
-            {ACTIVITY_DAYS.map((day) => (
+            {ACTIVITY_DAY_SHORT_LABELS.map((day) => (
               <button
                 type="button"
                 key={day}

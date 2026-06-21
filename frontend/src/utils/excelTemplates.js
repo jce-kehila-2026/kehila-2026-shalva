@@ -9,6 +9,11 @@
 // The closed list of activity times.
 import { GROUP_TIMES } from './groupOptions';
 
+// Allowed activity days for the VOLUNTEERS template (full Hebrew form,
+// Sunday–Friday; Saturday is not selectable). Aliased so it doesn't collide with
+// the short groups-template list below.
+import { ACTIVITY_DAYS as ALLOWED_ACTIVITY_DAYS } from './activityDays';
+
 // Activity days offered in the groups template.
 const ACTIVITY_DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי'];
 
@@ -121,10 +126,9 @@ export async function downloadVolunteersTemplate(groups = [], programs = []) {
   // Dropdowns: group names (hidden list) + program names (hidden list) + the volunteer days.
   const groupNames = groups.map(getName).filter(Boolean);
   const programNames = programs.map(getName).filter(Boolean);
-  const volunteerDays = ['יום ראשון', 'יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'יום שבת'];
   addDropdown(sheet, 'H', fillHiddenList(lists, 'A', groupNames));
   addDropdown(sheet, 'I', fillHiddenList(lists, 'B', programNames));
-  addDropdown(sheet, 'J', `"${volunteerDays.join(',')}"`);
+  addDropdown(sheet, 'J', `"${ALLOWED_ACTIVITY_DAYS.join(',')}"`);
 
   // ID + phone columns stay TEXT so Excel keeps the leading 0.
   addTextColumn(sheet, 'C');

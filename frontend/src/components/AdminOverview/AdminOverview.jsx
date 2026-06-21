@@ -25,6 +25,9 @@ import { getDisplayName, parseBirthDate, computeAge } from '../../utils/people';
 // Shared attendance helpers (count today's absentees consistently).
 import { normalizeAttendanceStatus, getRecordStatus } from '../../utils/attendance';
 
+// Saturday is not a permitted event date.
+import { isSaturdayDateValue } from '../../utils/activityDays';
+
 // WhatsApp helpers: build a greeting + link so a birthday name opens a chat.
 import { birthdayMessage, buildWhatsAppUrl, hasValidPhone } from '../../utils/whatsapp';
 
@@ -448,6 +451,12 @@ function AdminOverview({ onNavigate }) {
     // before React re-renders the disabled button, so two quick clicks can't
     // both create an event (each addDoc would create a separate document).
     if (savingEventRef.current) {
+      return;
+    }
+
+    // Saturday is not a permitted event date — re-check before any addDoc/write.
+    if (isSaturdayDateValue(eventForm.date)) {
+      setEventError('לא ניתן לקבוע אירוע ליום שבת.');
       return;
     }
 
@@ -1107,7 +1116,16 @@ function AdminOverview({ onNavigate }) {
                 <BirthDatePicker
                   id="ao-ev-date"
                   value={eventForm.date}
-                  onChange={(date) => setEventForm((previous) => ({ ...previous, date }))}
+                  onChange={(date) => {
+                    setEventForm((previous) => ({ ...previous, date }));
+                    // Saturday is not a permitted event date: flag it on
+                    // selection; clear only this specific error on Sunday–Friday.
+                    setEventError((previous) =>
+                      isSaturdayDateValue(date)
+                        ? 'לא ניתן לקבוע אירוע ליום שבת.'
+                        : (previous === 'לא ניתן לקבוע אירוע ליום שבת.' ? '' : previous),
+                    );
+                  }}
                   label="תאריך"
                   pastYears={3}
                   futureYears={6}

@@ -11,6 +11,9 @@ import { collection, addDoc, serverTimestamp, getDocs } from "firebase/firestore
 // Our Firestore database instance.
 import { db } from "../../firebase";
 
+// Allowed activity days (Sunday–Friday; Saturday is not selectable).
+import { ACTIVITY_DAYS } from "../../utils/activityDays";
+
 // Date picker for the birth date field.
 import BirthDatePicker from "../shared/BirthDatePicker/BirthDatePicker";
 
@@ -487,13 +490,9 @@ function RegistrationScreen() {
               required
             >
               <option value="">-- בחר יום --</option>
-              <option value="יום ראשון">יום ראשון</option>
-              <option value="יום שני">יום שני</option>
-              <option value="יום שלישי">יום שלישי</option>
-              <option value="יום רביעי">יום רביעי</option>
-              <option value="יום חמישי">יום חמישי</option>
-              <option value="יום שישי">יום שישי</option>
-              <option value="יום שבת">יום שבת</option>
+              {ACTIVITY_DAYS.map((activityDay) => (
+                <option key={activityDay} value={activityDay}>{activityDay}</option>
+              ))}
             </select>
           </div>
 

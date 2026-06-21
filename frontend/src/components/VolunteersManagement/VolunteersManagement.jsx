@@ -8,6 +8,9 @@ import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 // Firestore helpers for reading and writing documents.
 import { addDoc, collection, doc, getDocs, query, updateDoc, where, writeBatch } from 'firebase/firestore';
 
+// Allowed activity days (Sunday–Friday) + legacy-Saturday detection for display.
+import { ACTIVITY_DAYS, isLegacySaturdayActivityDay } from '../../utils/activityDays';
+
 // Storage helpers for reading and deleting files.
 import { getDownloadURL, ref as storageRef, deleteObject } from 'firebase/storage';
 
@@ -1042,13 +1045,15 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
                     onChange={(e) => setFormData({ ...formData, day: e.target.value })}
                   >
                     <option value="">כל הימים / לא מוגדר</option>
-                    <option value="יום ראשון">יום ראשון</option>
-                    <option value="יום שני">יום שני</option>
-                    <option value="יום שלישי">יום שלישי</option>
-                    <option value="יום רביעי">יום רביעי</option>
-                    <option value="יום חמישי">יום חמישי</option>
-                    <option value="יום שישי">יום שישי</option>
-                    <option value="יום שבת">יום שבת</option>
+                    {ACTIVITY_DAYS.map((activityDay) => (
+                      <option key={activityDay} value={activityDay}>{activityDay}</option>
+                    ))}
+                    {/* Existing Saturday record: show its value as a selected but
+                        disabled option so it stays visible and can't be re-chosen.
+                        Once a Sunday–Friday day is picked, this disappears. */}
+                    {isLegacySaturdayActivityDay(formData.day) && (
+                      <option value={formData.day} disabled>יום שבת — נתון קיים</option>
+                    )}
                   </select>
                 </div>
 

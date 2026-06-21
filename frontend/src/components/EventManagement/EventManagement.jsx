@@ -22,6 +22,9 @@ import {
 import { db, storage } from '../../firebase'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 
+// Saturday is not a permitted event date.
+import { isSaturdayDateValue } from '../../utils/activityDays'
+
 // Date picker used for the event date field.
 import BirthDatePicker from '../shared/BirthDatePicker/BirthDatePicker'
 
@@ -235,6 +238,8 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
     setForm(EMPTY_FORM)
     setEditingEventId(null)
     setCurrentEventId(doc(collection(db, EVENTS_COLLECTION_NAME)).id)
+    // Start with a clean Saturday error so a previous attempt doesn't linger.
+    setDateError('')
     setShowForm(true)
   }
 
@@ -242,6 +247,9 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+
+  // Inline error shown when the chosen event date falls on a Saturday.
+  const [dateError, setDateError] = useState('')
 
   // Group names loaded from Firestore so the dropdown stays up to date.
   const [groupOptions, setGroupOptions] = useState([])
@@ -456,6 +464,13 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
     // Don't let the form reload the page.
     event.preventDefault()
 
+    // Saturday is not a permitted event date — re-check before any write
+    // (uploadBytes / addDoc / setDoc / updateDoc), independent of the input guard.
+    if (isSaturdayDateValue(form.date)) {
+      setDateError('לא ניתן לקבוע אירוע ליום שבת.')
+      return
+    }
+
     // Name, date and location are required.
     const isMissingRequiredField =
       !form.name.trim() ||
@@ -513,6 +528,9 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
     setCurrentEventId(eventToEdit.id)
     setForm(createFormFromEvent(eventToEdit))
 
+    // No stale Saturday error from a previous form session.
+    setDateError('')
+
     // Open the form pre-filled with this event.
     setShowForm(true)
 
@@ -552,6 +570,8 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
     setForm(EMPTY_FORM)
     setEditingEventId(null)
     setCurrentEventId('')
+    // Clear the Saturday error along with the form.
+    setDateError('')
   }
 
   // Open the full details view for an event (or notify it's not wired yet).
@@ -765,11 +785,18 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
                   <BirthDatePicker
                     key={editingEventId ?? `new-${formResetKey}`}
                     value={form.date}
-                    onChange={(date) => setForm((currentForm) => ({ ...currentForm, date }))}
+                    onChange={(date) => {
+                      setForm((currentForm) => ({ ...currentForm, date }))
+                      // Keep the value visible, but flag a Saturday selection.
+                      setDateError(isSaturdayDateValue(date) ? 'לא ניתן לקבוע אירוע ליום שבת.' : '')
+                    }}
                     label="תאריך"
                     pastYears={3}
                     futureYears={6}
                   />
+                  {dateError && (
+                    <div className="event-management-error">{dateError}</div>
+                  )}
                 </div>
 
                 {/* Location. */}
