@@ -357,7 +357,7 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
       setTouchedVolunteerIds({});
     } catch (error) {
       console.error('Error saving attendance:', error);
-      alert('אירעה שגיאה בשמירת הנוכחות');
+      alert(`אירעה שגיאה בשמירת הנוכחות: ${error.code || ''} ${error.message || error}`);
     } finally {
       setSaving(false);
     }
