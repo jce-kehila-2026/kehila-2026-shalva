@@ -5,19 +5,22 @@
 // React hooks for state, effects, memoization and refs.
 import { useState, useEffect, useMemo, useRef } from 'react';
 
-// Secondary Firebase app helpers (used to create/delete guide auth accounts).
-import { initializeApp, deleteApp } from 'firebase/app';
+// Secondary Firebase app cleanup (the app itself is created via the centralized,
+// emulator-safe createSecondaryAuth helper below).
+import { deleteApp } from 'firebase/app';
 
 // Auth helpers for creating (and, on failure, cleaning up) a guide's account
 // on a secondary app.
-import { getAuth, createUserWithEmailAndPassword, deleteUser } from 'firebase/auth';
+import { createUserWithEmailAndPassword, deleteUser } from 'firebase/auth';
 
 // Firestore helpers for reading and writing documents (writeBatch keeps the
 // multi-document guide operations atomic).
 import { collection, query, where, getDocs, doc, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
 
-// Our Firestore database instance.
-import { db } from '../../firebase';
+// Our Firestore database instance + the centralized secondary-Auth factory
+// (emulator-safe: in emulator mode it connects the local Auth emulator so a
+// guide-account create can never reach live Firebase).
+import { db, createSecondaryAuth } from '../../firebase';
 
 // Date picker for the guide's birth date.
 import BirthDatePicker from '../shared/BirthDatePicker/BirthDatePicker';
@@ -38,16 +41,6 @@ import SearchFilters from '../shared/SearchFilters/SearchFilters';
 import '../shared/ManagementScreen.css';
 import '../VolunteersManagement/VolunteersManagement.css';
 
-
-// Firebase config (read from the local .env.local), used for the secondary app.
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
-};
 
 
 function GuideManagement() {
@@ -183,8 +176,9 @@ function GuideManagement() {
 
       try {
         // Use a secondary app so creating the user doesn't sign the admin out.
-        secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
-        const secondaryAuth = getAuth(secondaryApp);
+        const secondary = createSecondaryAuth("SecondaryApp");
+        secondaryApp = secondary.secondaryApp;
+        const secondaryAuth = secondary.secondaryAuth;
 
         // Create the auth account.
         const userCredential = await createUserWithEmailAndPassword(
@@ -345,8 +339,9 @@ function GuideManagement() {
       const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
       const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
 
-      secondaryApp = initializeApp(firebaseConfig, 'SecondaryImportApp');
-      const secondaryAuth = getAuth(secondaryApp);
+      const secondary = createSecondaryAuth('SecondaryImportApp');
+      secondaryApp = secondary.secondaryApp;
+      const secondaryAuth = secondary.secondaryAuth;
 
       for (const row of rows) {
         const firstName = String(row['שם פרטי *'] || row['שם פרטי'] || row['firstName'] || '').trim();
