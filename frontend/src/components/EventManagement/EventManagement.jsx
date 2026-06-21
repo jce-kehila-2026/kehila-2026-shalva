@@ -8,7 +8,6 @@ import { useEffect, useMemo, useState } from 'react'
 
 // Firestore helpers for reading, writing, deleting and live-subscribing.
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,

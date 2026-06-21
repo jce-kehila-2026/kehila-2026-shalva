@@ -191,7 +191,7 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
     } finally {
       setLoading(false);
     }
-  }, [activeGroupName, selectedGroupId, todayKey]);
+  }, [activeGroupName, selectedGroupId, today, todayKey]);
 
   // Load the groups once on mount.
   useEffect(() => {

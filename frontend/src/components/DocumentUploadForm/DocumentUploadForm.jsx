@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { collection, doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes } from 'firebase/storage';
 import { db, storage } from '../../firebase';
 import '../SignatureForm/SignatureForm.css';

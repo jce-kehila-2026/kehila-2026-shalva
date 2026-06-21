@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 // Firestore helpers. A writeBatch makes "approve" atomic — the new volunteer
 // and the registration removal succeed or fail together.
-import { collection, deleteDoc, doc, getDocs, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDocs, writeBatch } from 'firebase/firestore';
 
 // Storage helpers for opening and deleting files.
 import { getDownloadURL, ref as storageRef, deleteObject } from 'firebase/storage';
