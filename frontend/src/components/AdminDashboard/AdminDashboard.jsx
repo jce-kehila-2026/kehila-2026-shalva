@@ -4,7 +4,7 @@
 // no longer a separate menu entry.
 
 // React hooks for state and side effects.
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 // The admin home / overview screen (now includes the חמ״ל).
 import AdminOverview from '../AdminOverview/AdminOverview';
@@ -19,9 +19,11 @@ import EventDetails from '../EventDetails/EventDetails';
 import EventManagement from '../EventManagement/EventManagement';
 import GroupManagement from '../GroupManagement/GroupManagement';
 import GuideManagement from '../GuideManagement/GuideManagement';
+import Messages from '../Messages/Messages';
 import RegistrationsManagement from '../RegistrationsManagement/RegistrationsManagement';
 import Reports from '../Reports/Reports';
 import VolunteersManagement from '../VolunteersManagement/VolunteersManagement';
+import ProgramManagement from '../ProgramManagement/ProgramManagement';
 
 // Styles for the admin shell + sidebar.
 import './AdminDashboard.css';
@@ -33,24 +35,52 @@ const NAV_ITEMS = [
   { id: 'overview', label: 'דף הבית' },
   { id: 'groups', label: 'ניהול קבוצות' },
   { id: 'volunteers', label: 'ניהול מתנדבים' },
-  { id: 'registrations', label: 'הרשמות להתנדבות' },
+  { id: 'registrations', label: 'ניהול נרשמים' },
   { id: 'guides', label: 'ניהול מדריכים' },
   { id: 'events', label: 'ניהול אירועים' },
+  { id: 'programs', label: 'ניהול תוכניות' },
   { id: 'attendance', label: 'מעקב נוכחות' },
+  { id: 'messages', label: 'הודעות' },
   { id: 'reports', label: 'דוחות' },
-  { id: 'charts', label: 'תרשימים' },
+  { id: 'charts', label: 'סטטיסטיקה' },
   { id: 'birthdays', label: 'ימי הולדת' },
 ];
 
 
+
 // currentView / setCurrentView are lifted to App so navigation state survives
-// across the shared header.
-function AdminDashboard({ currentView, setCurrentView }) {
+// across the shared header; navOpen / setNavOpen too, because the hamburger
+// button itself renders inside App's shared header bar.
+function AdminDashboard({ currentView, setCurrentView, navOpen = false, setNavOpen }) {
   // The event opened from the events area (null when none is open).
   const [selectedEvent, setSelectedEvent] = useState(null);
 
-  // Whether the mobile navigation drawer is open.
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // The screens visited before the current one (for the back button).
+  const viewHistory = useRef([]);
+
+  // A screen with internal levels (an open form, a chosen report…) registers
+  // a handler here; it returns true when it consumed the back press by
+  // stepping back INSIDE the module.
+  const internalBackRef = useRef(null);
+  const registerBack = useCallback((handler) => {
+    internalBackRef.current = handler;
+  }, []);
+
+  // Back priority: 1) close an open event detail, 2) let the active screen
+  // step back internally, 3) the previous module, 4) the dashboard home.
+  const handleBack = () => {
+    if (selectedEvent) {
+      setSelectedEvent(null);
+      return;
+    }
+
+    if (internalBackRef.current && internalBackRef.current()) {
+      return;
+    }
+
+    internalBackRef.current = null;
+    setCurrentView(viewHistory.current.pop() || 'overview');
+  };
 
   // Default to the home view when nothing is selected yet.
   const activeView = currentView || 'overview';
@@ -68,11 +98,11 @@ function AdminDashboard({ currentView, setCurrentView }) {
 
       // Group management.
       case 'groups':
-        return <GroupManagement />;
+        return <GroupManagement registerBack={registerBack} />;
 
       // Volunteer management.
       case 'volunteers':
-        return <VolunteersManagement />;
+        return <VolunteersManagement registerBack={registerBack} />;
 
       // Incoming registration submissions.
       case 'registrations':
@@ -87,16 +117,25 @@ function AdminDashboard({ currentView, setCurrentView }) {
         return selectedEvent ? (
           <EventDetails event={selectedEvent} onBack={() => setSelectedEvent(null)} />
         ) : (
-          <EventManagement onOpenEventDetails={(eventItem) => setSelectedEvent(eventItem)} />
+          <EventManagement registerBack={registerBack} onOpenEventDetails={(eventItem) => setSelectedEvent(eventItem)} />
         );
+
+      // Program management.
+      case 'programs':
+        return <ProgramManagement registerBack={registerBack} />;
+
 
       // Read-only attendance history.
       case 'attendance':
-        return <AdminAttendance />;
+        return <AdminAttendance registerBack={registerBack} />;
+
+      // WhatsApp-based messaging hub.
+      case 'messages':
+        return <Messages />;
 
       // Reports.
       case 'reports':
-        return <Reports />;
+        return <Reports registerBack={registerBack} />;
 
       // Charts / statistics.
       case 'charts':
@@ -117,18 +156,14 @@ function AdminDashboard({ currentView, setCurrentView }) {
   return (
     <div className="admin-shell" dir="rtl">
 
-      {/* Mobile-only button that opens the navigation drawer. */}
-      <button type="button" className="admin-nav-toggle" onClick={() => setMobileNavOpen(true)}>
-        <span aria-hidden="true">☰</span> מרכז ניהול
-      </button>
-
-      {/* Dim backdrop behind the open mobile drawer (click to close). */}
-      {mobileNavOpen && (
-        <div className="admin-nav-backdrop" onClick={() => setMobileNavOpen(false)} />
+      {/* The hamburger button lives in App's shared header; this screen only
+          renders the drawer it opens. Dim backdrop closes on click. */}
+      {navOpen && (
+        <div className="admin-nav-backdrop" onClick={() => setNavOpen(false)} />
       )}
 
-      {/* Navigation: a persistent sidebar on desktop, a slide-in drawer on mobile. */}
-      <aside className={`admin-sidebar ${mobileNavOpen ? 'is-open' : ''}`} aria-label="ניווט ניהול">
+      {/* Navigation drawer, slides in from the right. */}
+      <aside className={`admin-sidebar ${navOpen ? 'is-open' : ''}`} aria-label="ניווט ניהול">
 
         {/* Sidebar title. */}
         <div className="admin-sidebar-title">מרכז ניהול</div>
@@ -142,9 +177,13 @@ function AdminDashboard({ currentView, setCurrentView }) {
               className={`admin-nav-item ${activeView === item.id ? 'is-active' : ''}`}
               aria-current={activeView === item.id ? 'page' : undefined}
               onClick={() => {
-                // Switch the view and close the mobile drawer.
+                // Remember where we were, switch the view, close the drawer.
+                if (item.id !== activeView) {
+                  viewHistory.current.push(activeView);
+                }
+                internalBackRef.current = null;
                 setCurrentView(item.id);
-                setMobileNavOpen(false);
+                setNavOpen(false);
               }}
             >
               {/* Area label (text only). */}
@@ -156,6 +195,35 @@ function AdminDashboard({ currentView, setCurrentView }) {
 
       {/* The selected area renders here. */}
       <div className="admin-content">
+
+        {/* Breadcrumb + back — hidden on the home view. */}
+        {activeView !== 'overview' && (
+          <div className="admin-nav-row">
+            <button type="button" className="admin-back-btn" onClick={handleBack}>
+              → חזור
+            </button>
+
+            {/* Where am I: ראשי > current module (ראשי is clickable). */}
+            <nav className="admin-breadcrumb" aria-label="מיקום במערכת">
+              <button
+                type="button"
+                className="admin-crumb-link"
+                onClick={() => {
+                  internalBackRef.current = null;
+                  viewHistory.current = [];
+                  setCurrentView('overview');
+                }}
+              >
+                ראשי
+              </button>
+              <span className="admin-crumb-sep">‹</span>
+              <span className="admin-crumb-here">
+                {NAV_ITEMS.find((item) => item.id === activeView)?.label || ''}
+              </span>
+            </nav>
+          </div>
+        )}
+
         {renderContent()}
       </div>
     </div>

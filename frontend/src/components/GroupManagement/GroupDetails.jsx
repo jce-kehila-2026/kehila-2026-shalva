@@ -5,22 +5,204 @@
 import { useEffect, useState } from 'react';
 
 // Firestore helpers for reading single docs and collections.
-import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 
 // Our Firestore database instance.
 import { db } from '../../firebase';
 
-// Shares the group management styles.
-import './GroupManagement.css';
+// Shared display-name helper.
+import { getDisplayName } from '../../utils/people';
+
+// Shared attendance status normalization (handles old string/boolean statuses).
+import { normalizeAttendanceStatus, getRecordStatus } from '../../utils/attendance';
+
+// This screen's own modern, mobile-first styles.
+import './GroupDetails.css';
 
 
-// Best available display name for a person, with graceful fallbacks.
-const getPersonName = (person) => (
-  person?.name ||
-  [person?.firstName, person?.lastName].filter(Boolean).join(' ').trim() ||
-  person?.email ||
-  'לא הוזן שם'
-);
+// A person's display name (this screen's fallback wording).
+const getPersonName = (person) => getDisplayName(person, 'לא הוזן שם');
+
+
+// First character of a name, used for the round avatars.
+const getInitial = (name) => {
+  const trimmed = (name || '').trim();
+  return trimmed ? trimmed[0] : '?';
+};
+
+
+// A clean "tel:" target from a free-text phone (digits + leading plus only).
+const telHref = (phone) => `tel:${String(phone).replace(/[^\d+]/g, '')}`;
+
+
+function getDayKey(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
+
+function getStartOfCurrentWeek() {
+  const start = new Date();
+  start.setDate(start.getDate() - start.getDay());
+  start.setHours(0, 0, 0, 0);
+  return start;
+}
+
+
+function getCurrentWeekStartKey() {
+  return getDayKey(getStartOfCurrentWeek());
+}
+
+
+function getDateFromDayKey(dateKey) {
+  const [year, month, day] = String(dateKey || '').split('-').map(Number);
+  if (!year || !month || !day) {
+    return getStartOfCurrentWeek();
+  }
+
+  return new Date(year, month - 1, day);
+}
+
+
+// This week's day keys (Sunday–Saturday), used for the attendance summary.
+function getThisWeekDayKeys(weekStartKey = getCurrentWeekStartKey()) {
+  const start = getDateFromDayKey(weekStartKey);
+  const keys = [];
+
+  for (let i = 0; i < 7; i += 1) {
+    const day = new Date(start);
+    day.setDate(start.getDate() + i);
+    keys.push(getDayKey(day));
+  }
+
+  return keys;
+}
+
+
+function getThisWeekRangeLabel(weekStartKey = getCurrentWeekStartKey()) {
+  const start = getDateFromDayKey(weekStartKey);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+
+  const options = { day: 'numeric', month: 'long' };
+  return `${start.toLocaleDateString('he-IL', options)} - ${end.toLocaleDateString('he-IL', options)}`;
+}
+
+
+function getDayLabel(dateKey) {
+  const [year, month, day] = String(dateKey || '').split('-').map(Number);
+  if (!year || !month || !day) {
+    return 'תאריך לא ידוע';
+  }
+
+  return new Date(year, month - 1, day).toLocaleDateString('he-IL', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'numeric',
+  });
+}
+
+
+function getRecordTime(record) {
+  const value = record.date || record.createdAt || record.updatedAt;
+  if (value?.toDate) {
+    return value.toDate().getTime();
+  }
+
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+
+function getRecordVolunteerKey(record) {
+  return (
+    record.volunteerId ||
+    record.userId ||
+    record.uid ||
+    record.idNumber ||
+    record.identityNumber ||
+    record.volunteerName ||
+    record.name ||
+    ''
+  );
+}
+
+
+function buildWeeklyAttendance(records, groupId, groupName, groupVolunteers, weekKeys) {
+  const latestByVolunteerAndDay = new Map();
+  const volunteersById = new Map(groupVolunteers.map((volunteer) => [volunteer.id, volunteer]));
+  const dayGroups = weekKeys.map((dateKey) => ({
+    dateKey,
+    dayLabel: getDayLabel(dateKey),
+    present: [],
+    absent: [],
+  }));
+  const dayGroupsByKey = new Map(dayGroups.map((day) => [day.dateKey, day]));
+
+  records.forEach((record) => {
+    const belongsToGroup =
+      record.groupId === groupId ||
+      record.groupName === groupName ||
+      record.group === groupName;
+
+    if (!belongsToGroup || !weekKeys.includes(record.dateKey)) {
+      return;
+    }
+
+    const volunteerKey = getRecordVolunteerKey(record);
+    if (!volunteerKey) {
+      return;
+    }
+
+    const mapKey = `${volunteerKey}_${record.dateKey}`;
+    const current = latestByVolunteerAndDay.get(mapKey);
+    if (!current || getRecordTime(record) > getRecordTime(current)) {
+      latestByVolunteerAndDay.set(mapKey, record);
+    }
+  });
+
+  const details = {
+    present: [],
+    absent: [],
+  };
+
+  latestByVolunteerAndDay.forEach((record) => {
+    const status = normalizeAttendanceStatus(getRecordStatus(record));
+    if (status !== 'present' && status !== 'absent') {
+      return;
+    }
+
+    const volunteer = volunteersById.get(record.volunteerId);
+    const name = volunteer
+      ? getPersonName(volunteer)
+      : (record.volunteerName || record.name || 'מתנדב ללא שם');
+
+    const item = {
+      key: `${getRecordVolunteerKey(record)}_${record.dateKey}_${status}`,
+      name,
+      dateKey: record.dateKey,
+      dayLabel: getDayLabel(record.dateKey),
+    };
+
+    details[status].push(item);
+    dayGroupsByKey.get(record.dateKey)?.[status].push(item);
+  });
+
+  [...Object.values(details), ...dayGroups.flatMap((day) => [day.present, day.absent])].forEach((items) => {
+    items.sort((first, second) => (
+      first.dateKey.localeCompare(second.dateKey) ||
+      first.name.localeCompare(second.name, 'he')
+    ));
+  });
+
+  return {
+    ...details,
+    byDay: dayGroups,
+  };
+}
 
 
 const GroupDetails = ({ groupId, onBack }) => {
@@ -31,6 +213,44 @@ const GroupDetails = ({ groupId, onBack }) => {
   const [group, setGroup] = useState(null);
   const [guide, setGuide] = useState(null);
   const [volunteers, setVolunteers] = useState([]);
+
+  // This week's attendance summary + the group's events.
+  const [attendanceSummary, setAttendanceSummary] = useState({ present: 0, absent: 0, unmarked: 0 });
+  const [weeklyAttendance, setWeeklyAttendance] = useState({ present: [], absent: [], byDay: [] });
+  const [openCards, setOpenCards] = useState({
+    attendance: false,
+    guide: false,
+    members: false,
+    events: false,
+  });
+  const [currentWeekStartKey, setCurrentWeekStartKey] = useState(() => getCurrentWeekStartKey());
+  const [events, setEvents] = useState([]);
+
+  const toggleCard = (cardName) => {
+    setOpenCards((currentOpenCards) => ({
+      ...currentOpenCards,
+      [cardName]: !currentOpenCards[cardName],
+    }));
+  };
+
+  useEffect(() => {
+    const syncCurrentWeek = () => {
+      const nextWeekStartKey = getCurrentWeekStartKey();
+      setCurrentWeekStartKey((previousKey) => (
+        previousKey === nextWeekStartKey ? previousKey : nextWeekStartKey
+      ));
+    };
+
+    const intervalId = window.setInterval(syncCurrentWeek, 60 * 60 * 1000);
+    window.addEventListener('focus', syncCurrentWeek);
+    document.addEventListener('visibilitychange', syncCurrentWeek);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', syncCurrentWeek);
+      document.removeEventListener('visibilitychange', syncCurrentWeek);
+    };
+  }, []);
 
   // Load everything for the given group whenever the id changes.
   useEffect(() => {
@@ -93,6 +313,34 @@ const GroupDetails = ({ groupId, onBack }) => {
           );
 
         setVolunteers(volData);
+
+        // This week's attendance summary for the group (present / absent /
+        // unmarked across the group's volunteers × 7 days).
+        const weekKeys = getThisWeekDayKeys(currentWeekStartKey);
+        const attendanceSnap = await getDocs(
+          query(collection(db, 'attendance'), where('dateKey', 'in', weekKeys)),
+        );
+        const attendanceDetails = buildWeeklyAttendance(
+          attendanceSnap.docs.map((attendanceDoc) => attendanceDoc.data()),
+          groupId,
+          groupName,
+          volData,
+          weekKeys,
+        );
+        const present = attendanceDetails.present.length;
+        const absent = attendanceDetails.absent.length;
+        const unmarked = Math.max(0, volData.length * weekKeys.length - present - absent);
+        setAttendanceSummary({ present, absent, unmarked });
+        setWeeklyAttendance(attendanceDetails);
+
+        // The group's events (linked by the event's assignedGroup = group name).
+        const eventsSnap = await getDocs(
+          query(collection(db, 'events'), where('assignedGroup', '==', groupName)),
+        );
+        const eventsData = eventsSnap.docs
+          .map((eventDoc) => ({ id: eventDoc.id, ...eventDoc.data() }))
+          .sort((first, second) => (first.date || '').localeCompare(second.date || ''));
+        setEvents(eventsData);
       } catch (error) {
         console.error('שגיאה בשליפת נתוני הקבוצה המלאים:', error);
       } finally {
@@ -101,99 +349,310 @@ const GroupDetails = ({ groupId, onBack }) => {
     };
 
     fetchAllGroupData();
-  }, [groupId]);
+  }, [currentWeekStartKey, groupId]);
 
   // While loading, show a placeholder.
   if (loading) {
-    return <div className="admin-container centered-state">טוען נתוני קבוצה...</div>;
+    return (
+      <div className="gd-page" dir="rtl">
+        <div className="gd-loading">טוען נתוני קבוצה...</div>
+      </div>
+    );
   }
 
   // Group missing / failed to load.
   if (!group) {
     return (
-      <div className="admin-container">
-        {typeof onBack === 'function' && <button className="btn btn-outline" onClick={onBack}>חזרה</button>}
-        <div className="empty-state">שגיאה: הקבוצה לא נמצאה.</div>
+      <div className="gd-page" dir="rtl">
+        {typeof onBack === 'function' && (
+          <button className="gd-back" onClick={onBack}>חזרה</button>
+        )}
+        <div className="gd-empty">שגיאה: הקבוצה לא נמצאה.</div>
       </div>
     );
   }
 
   // The group's display name.
   const groupName = group.groupName || group.name || 'קבוצה ללא שם';
+  const attendanceWeekLabel = getThisWeekRangeLabel(currentWeekStartKey);
+  const hasWeeklyAttendance = weeklyAttendance.present.length > 0 || weeklyAttendance.absent.length > 0;
+  const attendanceDays = (weeklyAttendance.byDay || []).filter((day) => (
+    day.present.length > 0 || day.absent.length > 0
+  ));
 
   return (
-    <div className="admin-container">
+    <div className="gd-page" dir="rtl">
 
-      {/* Title bar + back button. */}
-      <div className="action-bar spaced-action-bar">
-        <h2 className="admin-title inline-title">ניהול קבוצה: {groupName}</h2>
-        {typeof onBack === 'function' && (
-          <button className="btn btn-outline" onClick={onBack}>חזרה לרשימת הקבוצות</button>
-        )}
+      {/* Hero: the group name, the guide, and the back button — all at the top. */}
+      <header className="gd-hero">
+        <span className="gd-hero-glow" aria-hidden="true" />
+
+        <div className="gd-hero-content">
+          <div className="gd-hero-text">
+            <span className="gd-hero-eyebrow">הקבוצה שלי</span>
+            <h1 className="gd-hero-title">{groupName}</h1>
+
+            {/* Quick meta chips: who leads the group and when it meets. */}
+            <div className="gd-hero-meta">
+              {guide && <span className="gd-chip">👤 {getPersonName(guide)}</span>}
+              {group.time && <span className="gd-chip">🕒 {group.time}</span>}
+            </div>
+          </div>
+
+          {typeof onBack === 'function' && (
+            <button className="gd-back" onClick={onBack}>חזרה</button>
+          )}
+        </div>
+      </header>
+
+      {/* Quick stats — the key numbers, right at the top. */}
+      <div className="gd-stats">
+        <div className="gd-stat">
+          <span className="gd-stat-num">{volunteers.length}</span>
+          <span className="gd-stat-label">מתנדבים</span>
+        </div>
+        <div className="gd-stat gd-stat--present">
+          <span className="gd-stat-num">{attendanceSummary.present}</span>
+          <span className="gd-stat-label">נוכחים השבוע</span>
+        </div>
+        <div className="gd-stat gd-stat--absent">
+          <span className="gd-stat-num">{attendanceSummary.absent}</span>
+          <span className="gd-stat-label">חסרים השבוע</span>
+        </div>
+        <div className="gd-stat">
+          <span className="gd-stat-num">{events.length}</span>
+          <span className="gd-stat-label">אירועים</span>
+        </div>
       </div>
 
-      <div className="details-grid">
+      {/* The main content cards. */}
+      <div className="gd-grid">
 
-        {/* Assigned guide card. */}
-        <div className="table-container details-card">
-          <h3>👨‍🏫 מדריך אחראי</h3>
-          {guide ? (
-            <div className="details-list">
-              <p><strong>שם:</strong> {getPersonName(guide)}</p>
-              <p><strong>אימייל:</strong> {guide.email || 'לא הוזן'}</p>
-              <p><strong>טלפון:</strong> {guide.phone || 'לא הוזן'}</p>
+        <section className={`gd-card gd-collapsible-card gd-attendance-card ${openCards.attendance ? 'is-open' : ''}`}>
+          <button
+            type="button"
+            className="gd-card-heading-row gd-card-toggle"
+            onClick={() => toggleCard('attendance')}
+            aria-expanded={openCards.attendance}
+            aria-controls="gd-weekly-attendance-details"
+          >
+            <div>
+              <h2 className="gd-card-title">נוכחות השבוע</h2>
+              <p className="gd-card-subtitle">{attendanceWeekLabel}</p>
             </div>
-          ) : (
-            <div className="empty-state">
-              אין מדריך משויך לקבוצה זו כרגע.
-              <br />
-              <span className="muted-text">ניתן לשייך מדריך דרך מסך ניהול הקבוצות.</span>
+            <span className="gd-card-toggle-meta">
+              <span className="gd-card-count">{attendanceSummary.present + attendanceSummary.absent}</span>
+              <span className="gd-card-toggle-text">
+                {openCards.attendance ? 'סגור' : 'פתח'}
+              </span>
+              <span className="gd-card-chevron" aria-hidden="true" />
+            </span>
+          </button>
+
+          {openCards.attendance && (
+            <div id="gd-weekly-attendance-details" className="gd-card-panel gd-attendance-details">
+              {hasWeeklyAttendance ? (
+                <div className="gd-attendance-days">
+                  {attendanceDays.map((day) => (
+                    <section className="gd-attendance-day-group" key={day.dateKey}>
+                      <div className="gd-attendance-day-head">
+                        <span>{day.dayLabel}</span>
+                        <strong>{day.present.length + day.absent.length}</strong>
+                      </div>
+
+                      <div className="gd-attendance-day-columns">
+                        <div className="gd-attendance-status-block gd-attendance-status-block--present">
+                          <div className="gd-attendance-status-title">
+                            <span>נוכחים</span>
+                            <strong>{day.present.length}</strong>
+                          </div>
+                          {day.present.length > 0 ? (
+                            <ul className="gd-attendance-list">
+                              {day.present.map((item) => (
+                                <li className="gd-attendance-item" key={item.key}>
+                                  <span className="gd-attendance-name">{item.name}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <div className="gd-attendance-empty">אין</div>
+                          )}
+                        </div>
+
+                        <div className="gd-attendance-status-block gd-attendance-status-block--absent">
+                          <div className="gd-attendance-status-title">
+                            <span>חסרים</span>
+                            <strong>{day.absent.length}</strong>
+                          </div>
+                          {day.absent.length > 0 ? (
+                            <ul className="gd-attendance-list">
+                              {day.absent.map((item) => (
+                                <li className="gd-attendance-item" key={item.key}>
+                                  <span className="gd-attendance-name">{item.name}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <div className="gd-attendance-empty">אין</div>
+                          )}
+                        </div>
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              ) : (
+                <div className="gd-attendance-empty gd-attendance-empty--card">
+                  עדיין לא סומנה נוכחות השבוע.
+                </div>
+              )}
             </div>
           )}
-        </div>
+        </section>
 
-        {/* Attendance summary placeholder. */}
-        <div className="table-container details-card dashed-card">
-          <h3>✅ סיכום נוכחות</h3>
-          <div className="empty-state">
-            סימון הנוכחות זמין מלוח המדריך וממסך ניהול הנוכחות.
-          </div>
-        </div>
+        {/* Guide contact — shown only when a guide is assigned. */}
+        {guide && (
+          <section className={`gd-card gd-collapsible-card ${openCards.guide ? 'is-open' : ''}`}>
+            <button
+              type="button"
+              className="gd-card-heading-row gd-card-toggle"
+              onClick={() => toggleCard('guide')}
+              aria-expanded={openCards.guide}
+              aria-controls="gd-guide-details"
+            >
+              <div>
+                <h2 className="gd-card-title">מדריך אחראי</h2>
+              </div>
+              <span className="gd-card-toggle-meta">
+                <span className="gd-card-toggle-text">
+                  {openCards.guide ? 'סגור' : 'פתח'}
+                </span>
+                <span className="gd-card-chevron" aria-hidden="true" />
+              </span>
+            </button>
 
-        {/* Group members table. */}
-        <div className="table-container details-card full-grid-row">
-          <h3>🤝 חברי הקבוצה - {volunteers.length} רשומים</h3>
-          {volunteers.length > 0 ? (
-            <table className="styled-table details-table">
-              <thead>
-                <tr>
-                  <th>שם המתנדב</th>
-                  <th>גיל</th>
-                  <th>בי״ס / מוסד לימודים</th>
-                  <th>ניסיון קודם</th>
-                </tr>
-              </thead>
-              <tbody>
-                {volunteers.map((volunteer) => (
-                  <tr key={volunteer.id}>
-                    <td><strong>{getPersonName(volunteer)}</strong></td>
-                    <td>{volunteer.age || '-'}</td>
-                    <td>{volunteer.school || '-'}</td>
-                    <td>{volunteer.experience || '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className="empty-state">אין מתנדבים בקבוצה זו.</div>
+            {openCards.guide && (
+              <div id="gd-guide-details" className="gd-card-panel">
+                <div className="gd-guide">
+                  <span className="gd-guide-avatar">{getInitial(getPersonName(guide))}</span>
+                  <div className="gd-guide-info">
+                    <span className="gd-guide-name">{getPersonName(guide)}</span>
+                    {guide.email && <span className="gd-guide-line" dir="ltr">{guide.email}</span>}
+                    {guide.phone && (
+                      <a className="gd-guide-line" href={telHref(guide.phone)} dir="ltr">{guide.phone}</a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Group members. */}
+        <section className={`gd-card gd-collapsible-card ${openCards.members ? 'is-open' : ''}`}>
+          <button
+            type="button"
+            className="gd-card-heading-row gd-card-toggle"
+            onClick={() => toggleCard('members')}
+            aria-expanded={openCards.members}
+            aria-controls="gd-members-details"
+          >
+            <div>
+              <h2 className="gd-card-title">
+                חברי הקבוצה
+                <span className="gd-card-count">{volunteers.length}</span>
+              </h2>
+            </div>
+            <span className="gd-card-toggle-meta">
+              <span className="gd-card-toggle-text">
+                {openCards.members ? 'סגור' : 'פתח'}
+              </span>
+              <span className="gd-card-chevron" aria-hidden="true" />
+            </span>
+          </button>
+
+          {openCards.members && (
+            <div id="gd-members-details" className="gd-card-panel">
+              {volunteers.length > 0 ? (
+                <ul className="gd-members">
+                  {volunteers.map((volunteer) => {
+                    const name = getPersonName(volunteer);
+
+                    // A short "age · school · day" sub-line (drops the empty parts).
+                    const sub = [
+                      volunteer.age ? `גיל ${volunteer.age}` : '',
+                      volunteer.school || '',
+                      volunteer.day ? `יום פעילות: ${volunteer.day}` : '',
+                    ].filter(Boolean).join(' · ') || '—';
+
+                    return (
+                      <li className="gd-member" key={volunteer.id}>
+                        <span className="gd-member-avatar">{getInitial(name)}</span>
+                        <div className="gd-member-info">
+                          <span className="gd-member-name">{name}</span>
+                          <span className="gd-member-sub">{sub}</span>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <div className="gd-empty">אין מתנדבים בקבוצה זו.</div>
+              )}
+            </div>
           )}
-        </div>
+        </section>
 
-        {/* Group events placeholder. */}
-        <div className="table-container details-card dashed-card full-grid-row">
-          <h3>📅 אירועי הקבוצה</h3>
-          <div className="empty-state">אירועים מנוהלים במסך ניהול האירועים.</div>
-        </div>
+        {/* The group's events (read-only — managed in the events screen). */}
+        <section className={`gd-card gd-collapsible-card ${openCards.events ? 'is-open' : ''}`}>
+          <button
+            type="button"
+            className="gd-card-heading-row gd-card-toggle"
+            onClick={() => toggleCard('events')}
+            aria-expanded={openCards.events}
+            aria-controls="gd-events-details"
+          >
+            <div>
+              <h2 className="gd-card-title">
+                אירועי הקבוצה
+                <span className="gd-card-count">{events.length}</span>
+              </h2>
+            </div>
+            <span className="gd-card-toggle-meta">
+              <span className="gd-card-toggle-text">
+                {openCards.events ? 'סגור' : 'פתח'}
+              </span>
+              <span className="gd-card-chevron" aria-hidden="true" />
+            </span>
+          </button>
+
+          {openCards.events && (
+            <div id="gd-events-details" className="gd-card-panel">
+              {events.length > 0 ? (
+                <ul className="gd-events">
+                  {events.map((eventItem) => {
+                    // A short "date · location" meta line (drops empty parts).
+                    const meta = [
+                      eventItem.date || '',
+                      eventItem.location || '',
+                    ].filter(Boolean).join(' · ') || '—';
+
+                    return (
+                      <li className="gd-event" key={eventItem.id}>
+                        <div className="gd-event-info">
+                          <span className="gd-event-name">{eventItem.name || 'ללא שם'}</span>
+                          <span className="gd-event-meta">{meta}</span>
+                        </div>
+                        {eventItem.status && <span className="gd-event-status">{eventItem.status}</span>}
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <div className="gd-empty">אין אירועים משויכים לקבוצה זו.</div>
+              )}
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );

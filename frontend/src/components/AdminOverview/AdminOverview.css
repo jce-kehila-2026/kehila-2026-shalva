@@ -6,69 +6,6 @@
 }
 
 
-/* Header row: title block + "more info" button. */
-.ao-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
-  flex-wrap: wrap;
-  margin-bottom: 18px;
-}
-
-/* Title/eyebrow/subtitle column. */
-.ao-head-text {
-  min-width: 0;
-}
-
-/* The button that opens the side drawer. */
-.ao-more-btn {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 18px;
-  border: 1px solid var(--brand-200);
-  background: var(--surface);
-  color: var(--brand-700);
-  border-radius: var(--radius-pill);
-  font-weight: 700;
-  box-shadow: var(--shadow-sm);
-  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
-}
-
-/* Lift the button on hover. */
-.ao-more-btn:hover {
-  background: var(--brand-50);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow);
-}
-
-/* Small pill label above the title. */
-.ao-eyebrow {
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: var(--radius-pill);
-  background: var(--brand-50);
-  color: var(--brand-700);
-  font-size: 13px;
-  font-weight: 700;
-  margin-bottom: 8px;
-}
-
-/* Main page title. */
-.ao-title {
-  margin: 0;
-  font-size: clamp(24px, 3.5vw, 32px);
-  color: var(--text);
-}
-
-/* Subtitle under the title. */
-.ao-subtitle {
-  margin: 6px 0 0;
-  color: var(--text-muted);
-}
-
 /* Warning banner when some data failed to load. */
 .ao-note {
   margin-bottom: 14px;
@@ -156,6 +93,13 @@
   line-height: 1.1;
 }
 
+/* The Hebrew month(s) + year, shown under the Gregorian month. */
+.ao-cal-hebrew-month {
+  font-size: 13.5px;
+  font-weight: 700;
+  opacity: 0.92;
+}
+
 /* Prev/next month arrow group (forced LTR). */
 .ao-cal-arrows {
   position: relative;
@@ -202,6 +146,15 @@
   opacity: 0.92;
 }
 
+/* "Today" button — same frosted look as the arrows, but auto-width for its
+   text label instead of the fixed icon-button square. */
+.ao-cal-arrows .ao-cal-today {
+  width: auto;
+  padding: 0 14px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
 /* Padded body that holds the day grid. */
 .ao-cal-body {
   padding: clamp(14px, 2.5vw, 20px);
@@ -209,154 +162,7 @@
 }
 
 
-/* Stack of expandable event cards. */
-.ao-events {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-/* A single event card. */
-.ao-event {
-  position: relative;
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  background: var(--surface);
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
-  overflow: hidden;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
-}
-
-/* Coloured accent strip down the side of each event card. */
-.ao-event::before {
-  content: '';
-  position: absolute;
-  inset-inline-start: 0;
-  top: 0;
-  bottom: 0;
-  width: 5px;
-  background: var(--brand-400);
-}
-
-/* Accent-strip colour per event status. */
-.ao-event--active::before { background: #16a34a; }
-.ao-event--planned::before { background: #4f46e5; }
-.ao-event--finished::before { background: #94a3b8; }
-.ao-event--cancelled::before { background: #dc2626; }
-
-/* Lift the card on hover. */
-.ao-event:hover {
-  transform: translateY(-2px);
-  border-color: var(--brand-200);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.1);
-}
-
-/* Highlight the card while it's expanded. */
-.ao-event.is-open {
-  border-color: var(--brand-200);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.1);
-}
-
-/* The clickable header row of an event card. */
-.ao-event-head {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 18px;
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-  cursor: pointer;
-  text-align: right;
-}
-
-/* Tint the header on hover. */
-.ao-event-head:hover {
-  background: var(--brand-50);
-  transform: none;
-  box-shadow: none;
-}
-
-/* The gradient date badge on the left of the card. */
-.ao-event-date {
-  flex-shrink: 0;
-  width: 58px;
-  height: 58px;
-  display: grid;
-  place-items: center;
-  border-radius: 16px;
-  background: linear-gradient(160deg, var(--brand-600), var(--info));
-  color: #fff;
-  line-height: 1.05;
-  box-shadow: 0 8px 18px rgba(158, 33, 136, 0.2);
-}
-
-/* Day number in the date badge. */
-.ao-event-day {
-  display: block;
-  font-size: 22px;
-  font-weight: 800;
-}
-
-/* Month name in the date badge. */
-.ao-event-month {
-  display: block;
-  font-size: 11px;
-  font-weight: 700;
-  opacity: 0.9;
-}
-
-/* Name + meta column; grows to fill the row. */
-.ao-event-info {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-/* Event name (truncated if too long). */
-.ao-event-name {
-  display: block;
-  font-size: 16px;
-  font-weight: 800;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Date · location meta line. */
-.ao-event-meta {
-  display: block;
-  margin-top: 3px;
-  color: var(--text-muted);
-  font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Status pill on the card header. */
-.ao-event-status {
-  flex-shrink: 0;
-  padding: 3px 10px;
-  border-radius: var(--radius-pill);
-  background: var(--surface-2);
-  color: var(--text-muted);
-  border: 1px solid var(--border);
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-/* Expand/collapse chevron. */
-.ao-event-chevron {
-  flex-shrink: 0;
-  color: var(--text-muted);
-  font-size: 11px;
-}
-
-
-/* Base status badge (shown in the details grid). */
+/* Base status badge (shown beside each selected-day event). */
 .ao-status-badge {
   display: inline-block;
   padding: 3px 10px;
@@ -375,90 +181,10 @@
 .ao-status-cancelled { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
 
 
-/* The revealed details panel under an event header. */
-.ao-event-detail {
-  padding: 4px 16px 16px;
-  border-top: 1px solid var(--border);
-  animation: ao-fade 0.2s ease;
-}
-
-/* Fade-in used by the reveal panels. */
+/* Fade-in used by the reveal panels (birthdays) and the modal. */
 @keyframes ao-fade {
   from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: translateY(0); }
-}
-
-/* Grid of detail items. */
-.ao-detail-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 12px;
-  margin-top: 14px;
-}
-
-/* A single detail item (label + value). */
-.ao-detail-item {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface-2);
-}
-
-/* A detail item that spans the full grid width. */
-.ao-detail-wide {
-  grid-column: 1 / -1;
-}
-
-/* Detail label. */
-.ao-detail-label {
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-/* Detail value. */
-.ao-detail-value {
-  color: var(--text);
-  font-weight: 700;
-}
-
-/* Contact list (name / phone / email). */
-.ao-contact {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 16px;
-  font-weight: 700;
-}
-
-/* Contact links. */
-.ao-contact a {
-  color: var(--brand-700);
-}
-
-/* Description block under the details. */
-.ao-event-desc {
-  margin-top: 14px;
-}
-
-/* Description heading. */
-.ao-event-desc h5 {
-  margin: 0 0 6px;
-  font-size: 14px;
-  color: var(--text);
-}
-
-/* Description text (keeps line breaks). */
-.ao-event-desc p {
-  margin: 0;
-  color: var(--text-muted);
-  line-height: 1.6;
-  white-space: pre-line;
 }
 
 
@@ -477,15 +203,20 @@
   border-radius: 6px;
 }
 
-/* Weekday header cells. */
+/* Weekday header cells — uniform, professional header chips on a soft brand
+   band, all the same size so the row reads as one clean header. */
 .ao-cal-weekday {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   text-align: center;
   font-weight: 800;
   color: var(--brand-700);
-  font-size: 12px;
-  padding: 10px 0;
-  background: var(--surface);
-  letter-spacing: 0.02em;
+  font-size: 13px;
+  padding: 9px 0;
+  background: var(--brand-50);
+  border-radius: 8px;
+  letter-spacing: 0.04em;
 }
 
 /* Blank leading cell before the 1st. */
@@ -520,6 +251,12 @@
   background: #fef9c3;
 }
 
+/* A day that has an event gets a soft info-blue tint — a calm on-palette marker
+   (the same idea as Shabbat's yellow / a holiday's purple). */
+.ao-cal-day.has-event {
+  background: var(--info-bg);
+}
+
 /* The round number inside each day cell. */
 .ao-cal-num {
   width: clamp(34px, 6vw, 42px);
@@ -550,12 +287,56 @@
   font-weight: 800;
 }
 
-/* Black dot marking days that have events. */
+/* The small Hebrew date (in letters) under the Gregorian number. */
+.ao-cal-heb {
+  font-size: clamp(9px, 1.4vw, 11px);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--brand-700);
+  opacity: 0.85;
+}
+
+/* Brand dot marking days that have events (paired with the cell tint). */
 .ao-cal-mark {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #0f172a;
+  background: var(--brand-600);
+}
+
+/* A small Star-of-David mark in the corner of a day that is a Jewish holiday. */
+.ao-cal-holiday {
+  position: absolute;
+  top: 3px;
+  inset-inline-start: 5px;
+  font-size: 11px;
+  line-height: 1;
+}
+
+/* A holiday day is simply tinted light purple (just like Shabbat's soft yellow)
+   to flag the חג — no background image. */
+.ao-cal-day.is-holiday {
+  background: var(--brand-200);
+}
+
+/* Festive "חג שמח" banner across the top of the calendar (below its header). */
+.ao-cal-holiday-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 14px;
+  background: linear-gradient(135deg, var(--brand-50), var(--info-bg));
+  color: var(--brand-700);
+  font-weight: 800;
+  font-size: 14px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Brighter, celebratory variant when the holiday is TODAY. */
+.ao-cal-holiday-banner.is-today {
+  background: linear-gradient(135deg, #fce7f3, #ede9fe 55%, #cffafe);
 }
 
 /* The "events for selected day" area below the grid. */
@@ -572,32 +353,128 @@
   color: var(--text);
 }
 
-
-/* Wrapper around the birthdays cake. */
-.ao-bday-block {
-  margin-bottom: 16px;
+/* Selected-day event list (sits under the calendar grid). */
+.ao-cal-event-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-/* The big tappable cake card. */
+/* One event row in the list. */
+.ao-cal-event-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+/* Event name (truncates if long). */
+.ao-cal-event-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* The birthdays block is a festive, full-width band: a soft party-gradient card
+   holding falling confetti, floating balloons, and the tappable cake row. */
+.ao-bday-block {
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 16px;
+  padding: 6px;
+  border: 1px solid var(--brand-100);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(620px 220px at 50% -40%, rgba(255, 255, 255, 0.85), transparent 70%),
+    linear-gradient(135deg, #eef2ff 0%, #fce7f3 48%, #cffafe 100%);
+  box-shadow: var(--shadow);
+}
+
+/* Full-cover layer that holds the confetti pieces (decorative). */
+.ao-bday-confetti {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* A single confetti piece; size / colour / speed come from inline CSS vars. */
+.ao-bday-confetti i {
+  position: absolute;
+  top: 0;
+  width: var(--s);
+  height: calc(var(--s) * 0.42);
+  background: var(--c);
+  border-radius: 1px;
+  opacity: 0;
+  transform: rotate(var(--r));
+  animation: ao-confetti-fall var(--d) linear var(--delay) infinite;
+}
+
+/* Confetti motion: fade in near the top, fall and spin to the bottom. */
+@keyframes ao-confetti-fall {
+  0% { transform: translateY(-20px) rotate(0deg); opacity: 0; }
+  12% { opacity: 0.95; }
+  100% { transform: translateY(240px) rotate(560deg); opacity: 0; }
+}
+
+/* Floating balloon / gift / party emoji decorations. */
+.ao-bday-balloon {
+  position: absolute;
+  z-index: 1;
+  font-size: clamp(22px, 3vw, 34px);
+  filter: drop-shadow(0 6px 10px rgba(15, 23, 42, 0.12));
+  animation: ao-balloon-float 4.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Tuck each decoration into a corner with its own float timing. */
+.ao-bday-balloon-1 { top: 12%; inset-inline-end: 6%; animation-delay: 0s; }
+.ao-bday-balloon-2 { top: 20%; inset-inline-start: 5%; animation-delay: 0.9s; }
+.ao-bday-balloon-3 { bottom: 14%; inset-inline-start: 9%; animation-delay: 1.6s; }
+.ao-bday-balloon-4 { bottom: 16%; inset-inline-end: 8%; animation-delay: 0.4s; }
+
+/* Gentle up-and-down bob for the decorations. */
+@keyframes ao-balloon-float {
+  0%, 100% { transform: translateY(0) rotate(-6deg); }
+  50% { transform: translateY(-12px) rotate(6deg); }
+}
+
+/* The tappable cake row now sits transparently over the festive band. */
 .ao-cake {
+  position: relative;
+  z-index: 2;
   width: 100%;
   display: flex;
   align-items: center;
   gap: 16px;
   padding: clamp(14px, 3vw, 22px);
-  border: 1px solid var(--brand-200);
-  border-radius: var(--radius-lg);
-  background: linear-gradient(135deg, #fce7f3, #ede9fe 55%, #e0f2fe);
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
   cursor: pointer;
   text-align: right;
-  box-shadow: var(--shadow-sm);
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  box-shadow: none;
+  transition: transform 0.18s ease;
 }
 
-/* Lift the cake on hover. */
+/* Lift the cake slightly on hover (no background change — the band shows). */
 .ao-cake:hover {
   transform: translateY(-2px);
-  box-shadow: var(--shadow);
+  background: transparent;
+  box-shadow: none;
 }
 
 /* The cake emoji (gently bouncing). */
@@ -639,8 +516,10 @@
   font-size: 13px;
 }
 
-/* The revealed birthdays panel. */
+/* The revealed birthdays panel (above the confetti backdrop). */
 .ao-bday-reveal {
+  position: relative;
+  z-index: 2;
   margin-top: 14px;
   animation: ao-fade 0.2s ease;
 }
@@ -728,557 +607,7 @@
 }
 
 
-/* Dark backdrop behind the side drawer. */
-.ao-drawer-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 200;
-  background: rgba(15, 23, 42, 0.45);
-  animation: ao-backdrop-in 0.2s ease;
-}
-
-/* Backdrop fade-in. */
-@keyframes ao-backdrop-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-/* The sliding drawer panel. */
-.ao-drawer {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: min(390px, 90vw);
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  box-shadow: var(--shadow-lg);
-  animation: ao-drawer-in 0.24s ease;
-}
-
-/* Drawer slide-in. */
-@keyframes ao-drawer-in {
-  from { transform: translateX(-100%); }
-  to { transform: translateX(0); }
-}
-
-/* Drawer header row. */
-.ao-drawer-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 18px;
-  border-bottom: 1px solid var(--border);
-}
-
-/* Drawer title. */
-.ao-drawer-head h3 {
-  margin: 0;
-  font-size: 18px;
-  color: var(--text);
-}
-
-/* Drawer close button. */
-.ao-drawer-close {
-  width: 36px;
-  height: 36px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  border: 1px solid var(--border);
-  background: var(--surface-2);
-  color: var(--text-muted);
-  font-size: 15px;
-}
-
-/* Close button hover. */
-.ao-drawer-close:hover {
-  background: var(--brand-50);
-  color: var(--brand-700);
-}
-
-/* Scrollable drawer body. */
-.ao-drawer-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  padding: 16px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-/* Vertical stack helper. */
-.ao-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-/* A collapsible section in the drawer. */
-.ao-section {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
-  overflow: hidden;
-  transition: box-shadow 0.18s ease, border-color 0.18s ease;
-}
-
-/* Highlight a section on hover / when open. */
-.ao-section:hover,
-.ao-section.is-open {
-  border-color: var(--brand-200);
-  box-shadow: var(--shadow);
-}
-
-/* The section header button. */
-.ao-section-head {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-  cursor: pointer;
-  text-align: right;
-}
-
-/* Tint the section header on hover. */
-.ao-section-head:hover {
-  background: var(--brand-50);
-  transform: none;
-  box-shadow: none;
-}
-
-/* The section's icon badge. */
-.ao-section-icon {
-  flex-shrink: 0;
-  width: 44px;
-  height: 44px;
-  display: grid;
-  place-items: center;
-  border-radius: 13px;
-  font-size: 22px;
-  background: var(--brand-50);
-  border: 1px solid var(--brand-100);
-}
-
-/* Section label (truncated if long). */
-.ao-section-label {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-weight: 800;
-  font-size: 16px;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Count pill on the section header. */
-.ao-section-count {
-  flex-shrink: 0;
-  min-width: 30px;
-  padding: 3px 11px;
-  border-radius: var(--radius-pill);
-  background: var(--brand-600);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 800;
-  text-align: center;
-}
-
-/* Section expand/collapse chevron. */
-.ao-section-chevron {
-  flex-shrink: 0;
-  color: var(--text-muted);
-  font-size: 11px;
-}
-
-/* Scrollable section body. */
-.ao-section-body {
-  padding: 4px 16px 16px;
-  border-top: 1px solid var(--border);
-  animation: ao-fade 0.2s ease;
-  max-height: 55vh;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-
-/* Responsive list of rows inside a section. */
-.ao-list {
-  list-style: none;
-  margin: 10px 0 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 8px;
-}
-
-/* A single stacked row (name on top, details below). */
-.ao-row {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface-2);
-}
-
-/* The main line of a row (never truncated). */
-.ao-row-main {
-  font-weight: 700;
-  color: var(--text);
-  overflow-wrap: anywhere;
-}
-
-/* The sub-line of a row. */
-.ao-row-sub {
-  color: var(--text-muted);
-  font-size: 13px;
-  overflow-wrap: anywhere;
-}
-
-/* Small tag pill on a row (e.g. group name). */
-.ao-row-tag {
-  align-self: flex-start;
-  padding: 2px 9px;
-  border-radius: var(--radius-pill);
-  background: var(--brand-50);
-  color: var(--brand-700);
-  border: 1px solid var(--brand-200);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-
-/* Per-section accent colours for the icon badges. */
-.ao-accent-a .ao-section-icon { background: #eef2ff; border-color: #c7d2fe; }
-.ao-accent-b .ao-section-icon { background: #ecfeff; border-color: #a5f3fc; }
-.ao-accent-c .ao-section-icon { background: #f0fdf4; border-color: #bbf7d0; }
-.ao-accent-d.ao-feature-icon { background: #fff7ed; border-color: #fed7aa; }
-.ao-accent-f.ao-feature-icon { background: #fdf4ff; border-color: #f5d0fe; }
-
-
-/* Phone: tighter headers/grids and a phone-sized calendar. */
-@media (max-width: 640px) {
-  .ao-event-head,
-  .ao-section-head {
-    padding: 12px;
-    gap: 10px;
-  }
-
-  .ao-detail-grid,
-  .ao-today-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .ao-event-status {
-    display: none;
-  }
-
-  /* Calendar fits a phone: tighter spacing, smaller cells. */
-  .ao-cal-header {
-    padding: 16px;
-  }
-
-  .ao-cal-month {
-    font-size: 20px;
-  }
-
-  /* Keep the arrows/plus identical to desktop (which looks good) so their
-     glyphs stay centred; just nudge the group to align nicely on phones. */
-  .ao-cal-arrows {
-    align-items: center;
-  }
-
-  .ao-cal-body {
-    padding: 12px;
-  }
-
-  .ao-cal-grid {
-    gap: 5px;
-  }
-
-  .ao-cal-weekday {
-    font-size: 11px;
-    padding: 8px 0;
-  }
-
-  .ao-cal-empty,
-  .ao-cal-day {
-    min-height: 46px;
-  }
-
-  .ao-cal-day {
-    gap: 3px;
-  }
-
-  .ao-cal-num {
-    width: 32px;
-    height: 32px;
-    font-size: 14px;
-  }
-
-  /* Drawer fills the phone nicely. */
-  .ao-drawer {
-    width: min(360px, 92vw);
-  }
-
-  .ao-drawer-head,
-  .ao-drawer-body {
-    padding: 14px;
-  }
-}
-
-/* Very small phones: even tighter calendar cells. */
-@media (max-width: 400px) {
-  .ao-cal-body {
-    padding: 8px;
-  }
-
-  .ao-cal-weekday {
-    font-size: 10px;
-    padding: 6px 0;
-  }
-
-  .ao-cal-empty,
-  .ao-cal-day {
-    min-height: 42px;
-  }
-
-  .ao-cal-num {
-    width: 30px;
-    height: 30px;
-    font-size: 13px;
-  }
-
-  .ao-cal-dots {
-    gap: 2px;
-  }
-}
-
-/* For users who prefer less motion: turn the animations off. */
-@media (prefers-reduced-motion: reduce) {
-  .ao-today-emoji,
-  .ao-cake-emoji,
-  .ao-drawer,
-  .ao-drawer-backdrop {
-    animation: none;
-  }
-}
-
-/* ---------- Quick management dashboard ---------- */
-
-/* Responsive grid that lays out the quick-management cards. */
-.ao-quick-mgmt {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-  gap: 20px;
-  margin-top: 24px;
-  margin-bottom: 24px;
-}
-
-/* One management card (volunteers / groups). */
-.ao-quick-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow);
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-/* Card header row: title on one side, add button on the other. */
-.ao-quick-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-/* Card title text. */
-.ao-quick-card-header h3 {
-  margin: 0;
-  font-size: 18px;
-  color: var(--text);
-  font-weight: 800;
-}
-
-/* Small "+ add" pill button in the card header. */
-.ao-quick-add-btn {
-  background: var(--brand-50);
-  color: var(--brand-700);
-  border: 1px solid var(--brand-200);
-  border-radius: var(--radius-pill);
-  padding: 6px 14px;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-/* Add button hover: fill with the brand colour. */
-.ao-quick-add-btn:hover {
-  background: var(--brand-600);
-  color: #ffffff;
-  border-color: var(--brand-600);
-}
-
-/* Row that holds the search input. */
-.ao-quick-filter-row {
-  width: 100%;
-}
-
-/* The search input itself. */
-.ao-quick-search {
-  width: 100%;
-  padding: 8px 12px;
-  font-size: 14px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-strong);
-  outline: none;
-  background: var(--surface);
-  color: var(--text);
-}
-
-/* Search input focus ring. */
-.ao-quick-search:focus {
-  border-color: var(--brand-500);
-  box-shadow: 0 0 0 3px var(--brand-50);
-}
-
-/* Scrollable wrapper around the results list. */
-.ao-quick-list-wrapper {
-  max-height: 250px;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 4px;
-  background: var(--surface-2);
-}
-
-/* The results list (stacked rows). */
-.ao-quick-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-/* A single result row: info on one side, actions on the other. */
-.ao-quick-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-sm);
-}
-
-/* Left side of a row: name + sub-text stacked. */
-.ao-quick-row-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-/* The bold name, truncated with an ellipsis if too long. */
-.ao-quick-row-info strong {
-  font-size: 14.5px;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Small pill tag (e.g. the volunteer's group). */
-.ao-quick-row-tag {
-  align-self: flex-start;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 1px 8px;
-  border-radius: var(--radius-pill);
-  background: var(--brand-50);
-  color: var(--brand-700);
-  border: 1px solid var(--brand-200);
-}
-
-/* Muted sub-line under the name. */
-.ao-quick-row-sub {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-/* Right side of a row: the action buttons. */
-.ao-quick-row-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-/* Round icon buttons inside a row. */
-.ao-quick-row-actions button {
-  padding: 6px;
-  width: 30px;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--border-strong);
-  background: var(--surface-2);
-  cursor: pointer;
-  font-size: 12px;
-  transition: all 0.15s ease;
-}
-
-/* Icon button hover: tint with the brand colour. */
-.ao-quick-row-actions button:hover {
-  background: var(--brand-50);
-  border-color: var(--brand-400);
-}
-
-/* Delete button gets a danger-coloured border. */
-.ao-quick-row-actions button.btn-delete-small {
-  border-color: var(--danger-bg);
-}
-
-/* Delete button hover: turn fully danger-coloured. */
-.ao-quick-row-actions button.btn-delete-small:hover {
-  background: var(--danger-bg);
-  color: var(--danger);
-  border-color: var(--danger);
-}
-
-/* "No results" placeholder inside a card. */
-.ao-quick-empty {
-  text-align: center;
-  padding: 24px;
-  color: var(--text-soft);
-  font-size: 14px;
-}
-
-/* ---------- Modals ---------- */
+/* ---------- Add-event modal ---------- */
 
 /* Full-screen dimmed backdrop that centres the modal. */
 .ao-modal-overlay {
@@ -1348,6 +677,11 @@
   gap: 6px;
 }
 
+/* A field group (or the error) that spans the full form width. */
+.ao-form-wide {
+  grid-column: 1 / -1;
+}
+
 /* Field label. */
 .ao-form-group label {
   font-weight: 700;
@@ -1355,9 +689,10 @@
   color: var(--text);
 }
 
-/* Text inputs and selects share the same look. */
+/* Text inputs, selects and the textarea share the same look. */
 .ao-form-group input,
-.ao-form-group select {
+.ao-form-group select,
+.ao-form-group textarea {
   width: 100%;
   padding: 10px 12px;
   border-radius: var(--radius-sm);
@@ -1368,11 +703,36 @@
   color: var(--text);
 }
 
+/* The description textarea: a sensible height, only resizable vertically,
+   and the same font as the rest of the form (some browsers default it). */
+.ao-form-group textarea {
+  min-height: 88px;
+  resize: vertical;
+  font-family: inherit;
+}
+
+/* LTR fields (phone / email) read left-to-right. */
+.ao-form-group input[dir='ltr'] {
+  text-align: left;
+}
+
 /* Field focus ring. */
 .ao-form-group input:focus,
-.ao-form-group select:focus {
+.ao-form-group select:focus,
+.ao-form-group textarea:focus {
   border-color: var(--brand-500);
   box-shadow: 0 0 0 3px var(--brand-50);
+}
+
+/* Inline error banner inside the modal (replaces the old blocking alert). */
+.ao-form-error {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--danger-bg);
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  font-size: 13.5px;
+  font-weight: 600;
 }
 
 /* Footer row holding the modal's buttons, right-aligned. */
@@ -1388,15 +748,15 @@
 .ao-btn-outline {
   background: var(--surface);
   color: var(--text-muted);
-  border: 1px solid var(--border-strong) !important;
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-pill);
   padding: 8px 18px;
   font-weight: 700;
   cursor: pointer;
 }
 
-/* Cancel button hover. */
-.ao-btn-outline:hover {
+/* Cancel button hover (only while it's enabled). */
+.ao-btn-outline:hover:not(:disabled) {
   background: var(--surface-2);
 }
 
@@ -1412,43 +772,13 @@
   box-shadow: var(--shadow-sm);
 }
 
-/* Save button hover. */
-.ao-btn-success:hover {
+/* Save button hover (only while it's enabled). */
+.ao-btn-success:hover:not(:disabled) {
   background: var(--brand-700);
 }
 
-/* ---------- Overview header actions ---------- */
 
-/* Row that groups the header action buttons. */
-.ao-head-actions {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-/* Prominent "+ add event" button in the header. */
-.ao-add-event-btn {
-  background: var(--brand-600);
-  color: #ffffff;
-  border: none;
-  border-radius: var(--radius-pill);
-  padding: 10px 20px;
-  font-weight: 700;
-  font-size: 14.5px;
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  transition: all 0.2s ease;
-}
-
-/* Add-event button hover: lift slightly and deepen the shadow. */
-.ao-add-event-btn:hover {
-  background: var(--brand-700);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow);
-}
-
-/* ---------- Admin home layout (חמ״ל main + calendar/birthdays aside) ---------- */
+/* ---------- Admin home layout (stacked column: calendar, then חמ״ל) ---------- */
 
 /* Single centered column on every screen (the same clean, stacked look as the
    phone): calendar, then חמ״ל, then birthdays — never side by side. */
@@ -1478,79 +808,691 @@
   padding: 0;
 }
 
-/* ---------- Pending-volunteers chip ---------- */
 
-/* Clickable chip showing how many registrants await approval. */
-.ao-pending-chip {
-  display: inline-flex;
+/* ---------- Top stats row (the data cards above everything) ---------- */
+
+/* Responsive card row: wraps on narrow screens. */
+.ao-stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+/* One stat card — clickable, links to the matching management screen. */
+.ao-stat-card {
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  border-radius: var(--radius-pill);
-  background: var(--warning-bg);
-  color: var(--warning);
-  border: 1px solid var(--warning);
-  font-weight: 700;
-  font-size: 14px;
-  cursor: pointer;
-  box-shadow: none;
-  transition: all 0.15s ease;
-}
-
-/* Hover: deepen slightly and lift with a small shadow. */
-.ao-pending-chip:hover {
-  filter: brightness(0.97);
-  transform: none;
+  gap: 4px;
+  padding: 18px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-/* The bold count number. */
-.ao-pending-count {
-  font-size: 18px;
+.ao-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* The big number. */
+.ao-stat-num {
+  font-size: 30px;
   font-weight: 800;
+  color: var(--brand-600);
+  line-height: 1.1;
+}
+
+/* The label under the number. */
+.ao-stat-label {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+/* Every stat number uses the same brand purple — one consistent colour across
+   all the cards (no orange / red highlights). */
+.ao-stat-card.is-pending .ao-stat-num,
+.ao-stat-card.is-absent .ao-stat-num {
+  color: var(--brand-600);
+}
+
+
+/* ---------- Top birthdays bar ---------- */
+
+/* A slim, centered band at the very top that surfaces only today's birthdays. */
+.ao-bday-bar {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 10px 16px;
+  border: 1px solid var(--brand-200);
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, var(--brand-50), var(--info-bg));
+}
+
+/* On a day WITH a birthday the band gets a brighter, festive gradient. */
+.ao-bday-bar--celebrate {
+  background: linear-gradient(135deg, #fce7f3, #ede9fe 55%, #cffafe);
+}
+
+/* Full-cover confetti layer (only rendered on a birthday). */
+.ao-bday-bar-confetti {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* A single falling confetti piece (size / colour / speed via inline vars). */
+.ao-bday-bar-confetti i {
+  position: absolute;
+  top: -12px;
+  width: var(--s);
+  height: calc(var(--s) * 0.45);
+  background: var(--c);
+  border-radius: 1px;
+  opacity: 0;
+  animation: ao-confetti-fall var(--d) linear var(--delay) infinite;
+}
+
+/* The little cake icon leading the bar (gently bounces while celebrating). */
+.ao-bday-bar-cake {
+  position: relative;
+  z-index: 1;
+  font-size: 22px;
   line-height: 1;
 }
 
-/* The descriptive label. */
-.ao-pending-label {
-  font-weight: 700;
+.ao-bday-bar--celebrate .ao-bday-bar-cake {
+  animation: ao-bday-bounce 2.2s ease-in-out infinite;
 }
 
-/* ---------- Compact calendar (side column) ---------- */
-
-/* Tighter padding when the calendar sits in the aside. */
-.ao-cal-compact {
-  padding: 14px;
-}
-
-/* Smaller selected-day event list (name + status badge). */
-.ao-cal-event-list {
-  list-style: none;
-  margin: 8px 0 0;
-  padding: 0;
+/* The "ימי הולדת היום:" label + the celebrant chips. */
+.ao-bday-bar-people {
+  position: relative;
+  z-index: 1;
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
-/* One event row in the compact list. */
-.ao-cal-event-row {
+.ao-bday-bar-title {
+  font-size: 14.5px;
+  font-weight: 800;
+  color: var(--brand-700);
+}
+
+/* Shown when nobody has a birthday today. */
+.ao-bday-bar-empty {
+  position: relative;
+  z-index: 1;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+/* A clickable celebrant chip — opens a WhatsApp greeting for that person. */
+.ao-bday-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  background: #fff;
+  border: 1px solid var(--brand-200);
+  color: var(--brand-700);
+  font-size: 13.5px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ao-bday-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+/* The small age badge inside a chip. */
+.ao-bday-chip-age {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-50);
+  color: var(--brand-700);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+/* A celebrant with no phone on file: visible, but not a link. */
+.ao-bday-chip--nophone {
+  background: var(--surface-2);
+  color: var(--text-muted);
+  border-color: var(--border);
+  cursor: default;
+}
+
+.ao-bday-chip--nophone:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+
+/* ---------- Birthday greeting editor modal ---------- */
+
+.ao-bday-modal {
+  max-width: 460px;
+}
+
+.ao-bday-modal-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* The editable message box. */
+.ao-bday-modal-text {
+  width: 100%;
+  min-height: 120px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text);
+  background: var(--surface);
+  resize: vertical;
+}
+
+.ao-bday-modal-text:focus {
+  outline: none;
+  border-color: var(--brand-500);
+  box-shadow: 0 0 0 3px var(--brand-50);
+}
+
+/* Quick-emoji row. */
+.ao-bday-emojis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.ao-bday-emoji {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  line-height: 1;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.ao-bday-emoji:hover {
+  transform: translateY(-1px);
+  background: var(--brand-50);
+  border-color: var(--brand-200);
+}
+
+.ao-bday-modal-note {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* The "send on WhatsApp" link, styled like the success button. */
+.ao-bday-send {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+
+/* ---------- Responsive ---------- */
+
+/* Phone: tighter grids and a phone-sized calendar. */
+@media (max-width: 640px) {
+  /* Tighten the whole stack so there's no wasted space above the calendar. */
+  .ao-home {
+    gap: 10px;
+  }
+
+  /* Smaller gap between the top birthdays bar and the stat squares. */
+  .ao-bday-bar {
+    margin-bottom: 8px;
+    padding: 8px 12px;
+  }
+
+  /* Compact stat cards: three on the first row, then two wider cards spanning
+     the full row underneath. A single row would make the Hebrew labels cramped. */
+  .ao-stats-row {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .ao-stat-card {
+    grid-column: span 2;
+  }
+
+  .ao-stat-card.is-groups {
+    order: 1;
+  }
+
+  .ao-stat-card:nth-child(2) {
+    order: 2;
+  }
+
+  .ao-stat-card:nth-child(3) {
+    order: 3;
+  }
+
+  .ao-stat-card.is-pending {
+    order: 4;
+  }
+
+  .ao-stat-card.is-absent {
+    order: 5;
+  }
+
+  .ao-stat-card.is-pending,
+  .ao-stat-card:nth-child(5) {
+    grid-column: span 3;
+  }
+
+  .ao-stat-card {
+    padding: 10px 6px;
+  }
+
+  .ao-stat-num {
+    font-size: 22px;
+  }
+
+  .ao-stat-label {
+    font-size: 11.5px;
+  }
+
+  .ao-today-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ao-cal-header {
+    padding: 16px;
+  }
+
+  .ao-cal-month {
+    font-size: 20px;
+  }
+
+  /* Keep the arrows/plus identical to desktop (which looks good) so their
+     glyphs stay centred; just nudge the group to align nicely on phones. */
+  .ao-cal-arrows {
+    align-items: center;
+  }
+
+  .ao-cal-body {
+    padding: 12px;
+  }
+
+  .ao-cal-grid {
+    gap: 5px;
+  }
+
+  .ao-cal-weekday {
+    font-size: 11px;
+    padding: 8px 0;
+  }
+
+  .ao-cal-empty,
+  .ao-cal-day {
+    min-height: 46px;
+  }
+
+  .ao-cal-day {
+    gap: 3px;
+  }
+
+  .ao-cal-num {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+}
+
+/* Very small phones: even tighter calendar cells. */
+@media (max-width: 400px) {
+  .ao-cal-body {
+    padding: 8px;
+  }
+
+  .ao-cal-weekday {
+    font-size: 10px;
+    padding: 6px 0;
+  }
+
+  .ao-cal-empty,
+  .ao-cal-day {
+    min-height: 42px;
+  }
+
+  .ao-cal-num {
+    width: 30px;
+    height: 30px;
+    font-size: 13px;
+  }
+}
+
+/* For users who prefer less motion: turn this file's decorative animations
+   off (the bouncing emojis and the fade-in reveals). */
+@media (prefers-reduced-motion: reduce) {
+  .ao-today-emoji,
+  .ao-cake-emoji,
+  .ao-bday-reveal,
+  .ao-bday-confetti i,
+  .ao-bday-bar-confetti i,
+  .ao-bday-bar--celebrate .ao-bday-bar-cake,
+  .ao-bday-balloon,
+  .ao-modal-content {
+    animation: none;
+  }
+
+  /* Hide the confetti entirely when motion is reduced (it only reads as motion). */
+  .ao-bday-confetti,
+  .ao-bday-bar-confetti {
+    display: none;
+  }
+}
+
+
+/* ---------- Admin home: full-screen, no page scroll (desktop + tablet) ----------
+
+   App adds `authenticated-layout--fit` to the signed-in wrapper on the admin home.
+   We lock the whole area to the viewport height and lay it out as: the stats row
+   on top, then TWO EQUAL panels filling the rest — the RIGHT panel holds the
+   calendar with the חמ״ל alert cards beneath it, and the LEFT panel is the festive
+   birthdays animation + list. Everything is sized to fit, so the page never
+   scrolls. Phones (≤760px) keep the default stacked, scrolling layout. */
+@media (min-width: 761px) {
+
+  /* Exactly one viewport tall, clipping any overflow. The width is NOT forced
+     to full-screen here — it keeps the app's standard centered column width, so
+     the top header bar lines up with every other admin screen (instead of going
+     edge-to-edge only on the home). That also keeps the calendar from getting
+     too wide. */
+  .authenticated-layout--fit {
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .authenticated-layout--fit > .authenticated-header {
+    flex: 0 0 auto;
+    margin-bottom: 8px;
+  }
+
+  /* The shell + content pane fill the remaining height (min-height:0 lets their
+     flexible children shrink instead of overflowing). */
+  .authenticated-layout--fit > .admin-shell {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .authenticated-layout--fit .admin-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .authenticated-layout--fit .admin-overview {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-width: none;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Grid: the slim birthdays bar across the top, then the stats row, then the
+     tall main row — the WIDE calendar on the right and the today/tomorrow events
+     column on the left. The main row fills the height → the calendar gets tall.
+     (In RTL the first grid column is on the right, so "cal" lands right + wide.) */
+  .authenticated-layout--fit .ao-home {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-width: none;
+    margin: 0;
+    display: grid;
+    /* The side column (today/tomorrow events) shrinks on narrower windows so
+       the calendar keeps enough room — otherwise a fixed 340px squeezes the day
+       cells into cramped slivers at ~half-screen widths. */
+    grid-template-columns: 1fr clamp(250px, 26vw, 340px);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-areas:
+      "bday  bday"
+      "stats stats"
+      "cal   sched";
+    gap: 8px;
+  }
+
+  /* The birthdays bar spans the top row. */
+  .authenticated-layout--fit .ao-bday-bar {
+    grid-area: bday;
+    margin: 0;
+  }
+
+  .authenticated-layout--fit .ao-stats-row {
+    grid-area: stats;
+    margin: 0;
+    gap: 12px;
+  }
+
+  .authenticated-layout--fit .ao-stat-card {
+    padding: 6px 12px;
+  }
+
+  .authenticated-layout--fit .ao-stat-num {
+    font-size: 20px;
+  }
+
+  .authenticated-layout--fit .ao-stat-label {
+    font-size: 12.5px;
+  }
+
+  /* Calendar — wide (right) and filling the tall middle row. */
+  .authenticated-layout--fit .ao-cal-card {
+    grid-area: cal;
+    margin: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .authenticated-layout--fit .ao-cal-header {
+    padding: 12px 16px;
+  }
+
+  /* The day grid fills the calendar body; its rows share the height equally. */
+  .authenticated-layout--fit .ao-cal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .authenticated-layout--fit .ao-cal-grid {
+    flex: 1 1 auto;
+    min-height: 0;
+    grid-auto-rows: minmax(0, 1fr);
+    gap: 5px;
+  }
+
+  .authenticated-layout--fit .ao-cal-empty,
+  .authenticated-layout--fit .ao-cal-day {
+    min-height: 0;
+    /* Make each cell a size query container so its contents (below) can scale
+       to the cell itself — keeping them proportional whether the cell ends up
+       wide or narrow as the window resizes. */
+    container-type: size;
+  }
+
+  /* The number circle scales to the cell's SMALLER side (cqmin), so it stays a
+     tidy circle at any cell shape. The clamp caps it and — crucially — its min
+     keeps the number visible even if container queries don't apply. */
+  .authenticated-layout--fit .ao-cal-num {
+    width: clamp(24px, 46cqmin, 44px);
+    height: clamp(24px, 46cqmin, 44px);
+    font-size: clamp(13px, 24cqmin, 18px);
+  }
+
+  /* The Hebrew date scales with the cell too (kept smaller than the number). */
+  .authenticated-layout--fit .ao-cal-heb {
+    font-size: clamp(8px, 15cqmin, 11px);
+  }
+
+  /* Drop the per-day events list on the compact home. */
+  .authenticated-layout--fit .ao-cal-events {
+    display: none;
+  }
+
+  /* Today/tomorrow events — a column on the LEFT that FILLS the same tall row as
+     the calendar, so the panel is the same height as the calendar (and looks
+     like the same kind of card). It scrolls inside itself if the list is long. */
+  .authenticated-layout--fit .ao-home-acc-schedule {
+    grid-area: sched;
+    min-height: 0;
+    display: flex;
+  }
+
+  /* Each wrapper fills its parent's height so the card reaches the calendar's. */
+  .authenticated-layout--fit .ao-home-acc-schedule .acc {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-height: 0;
+  }
+
+  .authenticated-layout--fit .ao-home-acc-schedule .acc-schedule {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    /* Match the calendar card's rounding + soft shadow. */
+    border: 1px solid var(--brand-100);
+    border-radius: 24px;
+    box-shadow: 0 22px 48px rgba(158, 33, 136, 0.13);
+  }
+
+  /* A soft brand-tinted header, echoing the calendar's header strip. */
+  .authenticated-layout--fit .ao-home-acc-schedule .acc-schedule-head {
+    padding: 14px 18px;
+    background: linear-gradient(120deg, var(--brand-50), var(--info-bg));
+  }
+
+  /* The events list takes the remaining height and scrolls on overflow. */
+  .authenticated-layout--fit .ao-home-acc-schedule .acc-schedule-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
+
+
+/* ---------- Day-events popup (the clicked day's events) ----------
+   Surfaces a day's events on the desktop home, where the inline list is hidden.
+   On phones the inline list already shows them, so this popup is hidden there. */
+
+.ao-day-popup-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+/* The popup card. */
+.ao-day-popup {
+  width: 100%;
+  max-width: 420px;
+  max-height: 80vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 20px;
+  animation: ao-fade 0.22s ease-out;
+}
+
+/* Header: the date title + a close button. */
+.ao-day-popup-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 8px 10px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  gap: 10px;
+  border-bottom: 2px solid var(--border);
+  padding-bottom: 12px;
+  margin-bottom: 14px;
 }
 
-/* Event name (truncates if long). */
-.ao-cal-event-name {
-  font-size: 13.5px;
-  font-weight: 600;
+.ao-day-popup-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
   color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.ao-day-popup-close {
+  border: 0;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-pill);
+  font-size: 15px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ao-day-popup-close:hover {
+  background: var(--brand-50);
+  color: var(--brand-700);
+}
+
+/* On phones the inline calendar list shows the events, so hide the popup. */
+@media (max-width: 760px) {
+  .ao-day-popup-overlay {
+    display: none;
+  }
 }

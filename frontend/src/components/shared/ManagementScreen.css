@@ -34,6 +34,12 @@
   border-bottom: 1px solid var(--border);
 }
 
+/* When a screen places its action buttons in the header, push them to the far
+   (leading) edge so they sit opposite the count on the same row. */
+.mgmt-header .mgmt-toolbar {
+  margin-inline-start: auto;
+}
+
 /* Small pill label above the title. */
 .mgmt-eyebrow {
   width: fit-content;
@@ -130,6 +136,11 @@
   gap: 12px;
   flex-wrap: wrap;
   align-items: center;
+}
+
+/* The shared advanced-search bar, when placed below the action toolbar. */
+.mgmt-filters-row {
+  margin-top: 14px;
 }
 
 /* Shared style for the toolbar input + search box. */
@@ -296,6 +307,32 @@
   white-space: nowrap;
 }
 
+/* A clickable, sortable column header — looks like the header text, with a
+   small arrow showing the active sort direction. */
+.mgmt-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.mgmt-sort:hover,
+.mgmt-sort.is-active {
+  color: var(--brand-700);
+}
+
+/* The little ▲ / ▼ direction arrow inside a sort header. */
+.mgmt-sort-arrow {
+  font-size: 10px;
+}
+
 /* Drop the border under the last row. */
 .mgmt-table tr:last-child td {
   border-bottom: 0;
@@ -447,19 +484,57 @@
   }
 }
 
-/* Tablet: stack the header and list-header, tighter table cells. */
+/* Tablet: keep the header on ONE row (count + buttons), just more compact. */
 @media (max-width: 760px) {
   .mgmt-header {
-    flex-direction: column;
-    align-items: stretch;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
   }
 
+  /* A smaller count box so it shares the row with the action buttons. */
   .mgmt-count {
+    min-width: 0;
+    width: 68px;
+    padding: 8px 6px;
+  }
+  .mgmt-count span {
+    font-size: 22px;
+  }
+  .mgmt-count small {
+    margin-top: 2px;
+    font-size: 11px;
+  }
+
+  /* Compact action buttons that shrink to fit the row. */
+  .mgmt-header .mgmt-toolbar {
     width: 100%;
+    min-width: 0;
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px !important;
+    margin-inline-start: 0;
+  }
+
+  .mgmt-header .mgmt-toolbar .mgmt-primary-btn,
+  .mgmt-header .mgmt-toolbar .mgmt-secondary-btn {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding: 7px 4px;
+    font-size: 11px;
+    line-height: 1.15;
+    white-space: normal;
+    text-align: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .mgmt-header-side {
-    align-items: stretch;
+    align-items: center;
   }
 
   .mgmt-list-header {
@@ -488,8 +563,9 @@
   .mgmt-share-toolbar .mgmt-primary-btn,
   .mgmt-share-toolbar .mgmt-secondary-btn {
     width: 100%;
-    padding: 9px 4px;
-    font-size: 12.5px;
+    padding: 7px 4px;
+    font-size: 11px;
+    line-height: 1.15;
     text-align: center;
     justify-content: center;
   }
@@ -599,5 +675,46 @@
   .mgmt-table td.mgmt-empty::before,
   .mgmt-table td.mgmt-loading::before {
     display: none;
+  }
+
+  /* --- Collapsed list: show ONLY the name; tap it to reveal that row's
+     details. We hide the detail cells only on NON-expanded rows, so an expanded
+     row simply falls back to the normal mobile card display (no specificity
+     fight). Empty / loading rows are never hidden. --- */
+  .mgmt-table tbody tr:not(.is-expanded) td:not(.mgmt-name-cell):not(.mgmt-empty):not(.mgmt-loading) {
+    display: none;
+  }
+
+  /* The tappable name row: name on one side, an open/close chevron on the other. */
+  .mgmt-name-cell {
+    cursor: pointer;
+    justify-content: space-between;
+    border-bottom: 0;
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .mgmt-name-cell::before {
+    display: none;
+  }
+  .mgmt-name-cell::after {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    color: var(--brand-600);
+    transform: rotate(45deg);
+    transition: transform 0.18s ease;
+    flex: none;
+    margin-inline-start: 8px;
+  }
+  .mgmt-table tbody tr.is-expanded .mgmt-name-cell::after {
+    transform: rotate(225deg);
+  }
+
+  /* A subtle divider under the name once the row is open. */
+  .mgmt-table tbody tr.is-expanded .mgmt-name-cell {
+    border-bottom: 1px dashed var(--border);
+    margin-bottom: 4px;
   }
 }

@@ -1,0 +1,685 @@
+/* ============================================================
+   GroupDetails — a single group's overview, used by the guide's
+   "הקבוצה שלי" screen and the admin's group details. Mobile-first,
+   professional, with the key info gathered at the top.
+   ============================================================ */
+
+.gd-page {
+  font-family: var(--font);
+  max-width: none;
+  margin: 8px auto 40px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+
+/* ---------- Hero ---------- */
+
+.gd-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  padding: clamp(20px, 4vw, 30px);
+  background: linear-gradient(135deg, var(--brand-600) 0%, #7a1d86 50%, var(--info) 140%);
+  color: #ffffff;
+}
+
+/* Soft light blob for depth. */
+.gd-hero-glow {
+  position: absolute;
+  top: -60px;
+  inset-inline-end: -40px;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.35), transparent 70%);
+  pointer-events: none;
+}
+
+.gd-hero-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.gd-hero-eyebrow {
+  display: inline-block;
+  padding: 3px 12px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.22);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.gd-hero-title {
+  margin: 8px 0 0;
+  /* Force white — the global h1 colour would otherwise vanish on the gradient. */
+  color: #ffffff;
+  font-size: clamp(24px, 5vw, 34px);
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+/* Meta chips under the title (guide name, activity time). */
+.gd-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.gd-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.18);
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+/* Back button on the hero (frosted, on-brand). */
+.gd-back {
+  flex: none;
+  padding: 9px 18px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.18s ease;
+}
+
+.gd-back:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+
+/* ---------- Quick stats ---------- */
+
+.gd-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.gd-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 14px 8px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.gd-stat-num {
+  font-size: clamp(20px, 5vw, 28px);
+  font-weight: 800;
+  line-height: 1;
+  color: var(--brand-600);
+}
+
+.gd-stat-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* Colour-code the attendance tiles. */
+.gd-stat--present .gd-stat-num {
+  color: #15803d;
+}
+.gd-stat--absent .gd-stat-num {
+  color: #b91c1c;
+}
+
+
+/* ---------- Content cards ---------- */
+
+.gd-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.gd-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: clamp(16px, 3vw, 22px);
+}
+
+.gd-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.gd-card-heading-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.gd-card-heading-row .gd-card-title {
+  margin-bottom: 4px;
+}
+
+.gd-card-subtitle {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Small count pill next to a card title. */
+.gd-card-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-50);
+  color: var(--brand-700);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+
+/* ---------- Collapsible cards ---------- */
+
+.gd-collapsible-card {
+  overflow: hidden;
+}
+
+.gd-attendance-card {
+  order: 10;
+}
+
+.gd-card-toggle {
+  width: 100%;
+  margin-bottom: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
+  text-align: right;
+}
+
+.gd-card-toggle:hover {
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.gd-card-toggle .gd-card-title {
+  margin-bottom: 0;
+}
+
+.gd-card-toggle .gd-card-subtitle {
+  margin-top: 4px;
+}
+
+.gd-card-toggle-meta {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gd-card-toggle-text {
+  color: var(--brand-700);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.gd-card-chevron {
+  flex: none;
+  position: relative;
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  color: var(--brand-700);
+  transition: transform 0.18s ease, color 0.18s ease;
+}
+
+.gd-card-chevron::before,
+.gd-card-chevron::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.gd-card-chevron::before {
+  left: 3px;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.gd-card-chevron::after {
+  right: 3px;
+  transform: translateY(-50%) rotate(-45deg);
+}
+
+.gd-card-toggle:hover .gd-card-chevron {
+  color: var(--brand-600);
+}
+
+.gd-collapsible-card.is-open .gd-card-chevron {
+  transform: rotate(180deg);
+}
+
+.gd-card-panel {
+  margin-top: 14px;
+}
+
+
+/* ---------- Weekly attendance ---------- */
+
+.gd-attendance-days {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.gd-attendance-day-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.gd-attendance-day-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 800;
+}
+
+.gd-attendance-day-head strong {
+  display: inline-grid;
+  place-items: center;
+  min-width: 28px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-50);
+  color: var(--brand-700);
+  font-size: 13px;
+}
+
+.gd-attendance-day-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 10px;
+}
+
+.gd-attendance-status-block {
+  min-width: 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.gd-attendance-status-block--present {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.gd-attendance-status-block--absent {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.gd-attendance-status-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 11px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.gd-attendance-status-title strong {
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  font-size: 12px;
+}
+
+.gd-attendance-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.gd-attendance-panel {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.gd-attendance-panel--present {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.gd-attendance-panel--absent {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.gd-attendance-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(8, 23, 38, 0.08);
+  font-weight: 800;
+  color: var(--text);
+}
+
+.gd-attendance-panel-head strong {
+  display: inline-grid;
+  place-items: center;
+  min-width: 28px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  font-size: 14px;
+}
+
+.gd-attendance-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 280px;
+  overflow: auto;
+}
+
+.gd-attendance-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+}
+
+.gd-attendance-name {
+  min-width: 0;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gd-attendance-day {
+  flex: none;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.gd-attendance-status-block .gd-attendance-item {
+  justify-content: flex-start;
+}
+
+.gd-attendance-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.gd-attendance-empty--card {
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+
+/* ---------- Guide ---------- */
+
+.gd-guide {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* Shared round avatar (guide + members). */
+.gd-guide-avatar,
+.gd-member-avatar {
+  flex: none;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--brand-100);
+  color: var(--brand-700);
+  font-weight: 800;
+}
+
+.gd-guide-avatar {
+  width: 46px;
+  height: 46px;
+  font-size: 18px;
+}
+
+.gd-guide-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.gd-guide-name {
+  font-weight: 800;
+  font-size: 16px;
+  color: var(--text);
+}
+
+.gd-guide-line {
+  font-size: 14px;
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+a.gd-guide-line:hover {
+  color: var(--brand-700);
+}
+
+
+/* ---------- Members ---------- */
+
+.gd-members {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.gd-member {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.gd-member-avatar {
+  width: 40px;
+  height: 40px;
+  font-size: 16px;
+}
+
+.gd-member-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.gd-member-name {
+  font-weight: 700;
+  color: var(--text);
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gd-member-sub {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+
+/* ---------- Events ---------- */
+
+.gd-events {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gd-event {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.gd-event-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.gd-event-name {
+  font-weight: 700;
+  color: var(--text);
+  font-size: 15px;
+}
+
+.gd-event-meta {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.gd-event-status {
+  flex: none;
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-50);
+  color: var(--brand-700);
+  border: 1px solid var(--brand-200);
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+
+/* ---------- States ---------- */
+
+.gd-loading,
+.gd-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+
+/* ---------- Phone ---------- */
+
+@media (max-width: 560px) {
+  .gd-page {
+    padding: 0;
+  }
+
+  /* Two stat tiles per row instead of four on a narrow screen. */
+  .gd-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .gd-attendance-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .gd-attendance-day-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .gd-card-heading-row {
+    align-items: stretch;
+  }
+
+  .gd-card-toggle-meta {
+    align-self: flex-start;
+  }
+}

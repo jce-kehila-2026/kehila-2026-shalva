@@ -1,37 +1,32 @@
-/* AdminAttendance — read-only attendance history styles. */
+/* AdminAttendance — read-only weekly attendance styles. */
 
 /* Page wrapper. */
 .adm-att {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
 }
 
 /* ---------- Heading ---------- */
-
-/* Small eyebrow above the title. */
 .adm-att-eyebrow {
   font-size: 13px;
   font-weight: 700;
   color: var(--brand-600);
 }
 
-/* Page title. */
 .adm-att-title {
-  margin: 2px 0 4px;
-  font-size: clamp(22px, 3vw, 28px);
+  margin: 0 0 2px;
+  font-size: clamp(20px, 2.6vw, 26px);
   font-weight: 800;
   color: var(--text);
 }
 
-/* Muted subtitle. */
 .adm-att-subtitle {
   margin: 0;
   color: var(--text-muted);
-  font-size: 14.5px;
+  font-size: 13.5px;
 }
 
-/* Error/warning banner. */
 .adm-att-note {
   padding: 12px 16px;
   border-radius: var(--radius);
@@ -40,50 +35,13 @@
   font-weight: 600;
 }
 
-/* ---------- Summary cards ---------- */
-
-/* Responsive grid of the four headline numbers. */
-.adm-att-summary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 14px;
-}
-
-/* One summary card. */
-.adm-att-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-  padding: 18px;
-  text-align: center;
-}
-
-/* The big number. */
-.adm-att-card span {
-  display: block;
-  font-size: 28px;
-  font-weight: 800;
-  color: var(--brand-700);
-}
-
-/* The card label. */
-.adm-att-card p {
-  margin: 4px 0 0;
-  color: var(--text-muted);
-  font-size: 13.5px;
-}
-
 /* ---------- Filters ---------- */
-
-/* Filter row: dropdown + search side by side. */
 .adm-att-filters {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
 }
 
-/* Shared look for the select and search inputs. */
 .adm-att-select,
 .adm-att-search {
   padding: 10px 14px;
@@ -95,21 +53,492 @@
   outline: none;
 }
 
-/* Let the search box grow to fill the row. */
 .adm-att-search {
   flex: 1 1 240px;
+  min-height: 40px;
 }
 
-/* Focus ring for both fields. */
 .adm-att-select:focus,
 .adm-att-search:focus {
   border-color: var(--brand-500);
   box-shadow: 0 0 0 3px var(--brand-50);
 }
 
-/* ---------- Meeting list ---------- */
+/* ---------- Group Cards Grid (List View) ---------- */
+.adm-att-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(218px, 1fr));
+  gap: 8px;
+  margin-top: 4px;
+}
 
-/* Empty / loading placeholder. */
+.adm-att-group-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 11px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+  text-align: right;
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  width: 100%;
+}
+
+.adm-att-group-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--brand-300);
+  box-shadow: var(--shadow);
+  background: var(--surface);
+}
+
+.adm-att-group-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.adm-att-group-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.adm-att-group-name {
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--brand-700);
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adm-att-group-guide {
+  font-size: 12px;
+  color: var(--text-soft);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adm-att-volunteers-count {
+  flex: none;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--brand-600);
+  background: var(--brand-50);
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+
+/* Per-group attendance breakdown chips (this week): present / absent / unmarked.
+   Colours mirror the summary tiles in the weekly view. */
+.adm-att-group-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.adm-att-stat-chip {
+  font-size: 11.25px;
+  font-weight: 700;
+  line-height: 1.15;
+  padding: 3px 6px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.adm-att-stat-chip.is-present {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #15803d;
+}
+
+.adm-att-stat-chip.is-absent {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.adm-att-stat-chip.is-unmarked {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+  color: var(--text-soft);
+}
+
+/* Groups with absences this week get a subtle red accent in the compact grid. */
+.adm-att-group-card.has-absence {
+  border-color: #fca5a5;
+  box-shadow: 0 0 0 1px #fecaca, var(--shadow-sm);
+}
+
+/* ---------- Weekly Review View ---------- */
+.adm-att-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.adm-att-title-block h2 {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--text);
+  margin: 0;
+}
+
+.adm-att-title-block p {
+  margin: 4px 0 0;
+  color: var(--brand-600);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.adm-att-review-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: clamp(14px, 2vw, 20px);
+}
+
+.adm-att-review-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.adm-att-top-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.95fr) minmax(420px, 1.35fr);
+  gap: 12px;
+  align-items: stretch;
+  margin-bottom: 10px;
+}
+
+.adm-att-week-switcher {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.adm-att-week-label {
+  min-width: 0;
+  text-align: center;
+}
+
+.adm-att-week-label span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.adm-att-week-label strong {
+  display: block;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.adm-att-back-btn {
+  padding: 8px 18px;
+  background: var(--surface);
+  color: var(--brand-700);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.adm-att-back-btn:hover {
+  background: var(--brand-50);
+  border-color: var(--brand-200);
+}
+
+/* Summary stats tiles for weekly view */
+.adm-att-summary-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 0;
+}
+
+.adm-att-stat-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 8px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.adm-att-stat-tile span {
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.adm-att-stat-tile p {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.adm-att-stat-tile.is-volunteers {
+  background: var(--brand-50);
+  border-color: var(--brand-200);
+}
+.adm-att-stat-tile.is-volunteers span {
+  color: var(--brand-700);
+}
+
+.adm-att-stat-tile.is-present {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+.adm-att-stat-tile.is-present span {
+  color: #15803d;
+}
+
+.adm-att-stat-tile.is-absent {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+.adm-att-stat-tile.is-absent span {
+  color: #b91c1c;
+}
+
+.adm-att-stat-tile.is-unmarked {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+}
+.adm-att-stat-tile.is-unmarked span {
+  color: var(--text-soft);
+}
+
+.adm-att-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 10px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.adm-att-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.adm-week-board {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: auto;
+  max-height: min(58vh, 520px);
+}
+
+.adm-week-grid {
+  display: grid;
+  grid-template-columns: minmax(170px, 1.45fr) repeat(7, minmax(34px, 1fr));
+  min-width: 0;
+}
+
+.adm-week-grid-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.adm-week-person-head,
+.adm-week-day-head,
+.adm-week-person,
+.adm-week-cell {
+  min-width: 0;
+  border-inline-start: 1px solid var(--border);
+}
+
+.adm-week-person-head,
+.adm-week-person {
+  border-inline-start: 0;
+}
+
+.adm-week-person-head,
+.adm-week-day-head {
+  padding: 8px 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.adm-week-day-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  text-align: center;
+}
+
+.adm-week-day-head small {
+  color: var(--text-soft);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.adm-week-row {
+  min-height: 38px;
+  border-bottom: 1px solid var(--border);
+}
+
+.adm-week-row:last-child {
+  border-bottom: 0;
+}
+
+.adm-week-row:nth-child(even) {
+  background: rgba(158, 33, 136, 0.025);
+}
+
+.adm-week-person {
+  display: flex;
+  align-items: center;
+  padding: 7px 10px;
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 800;
+}
+
+.adm-week-person span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adm-week-cell {
+  display: grid;
+  place-items: center;
+  padding: 6px 4px;
+}
+
+.adm-week-dot {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.55);
+}
+
+.adm-week-dot.is-present {
+  background: #22c55e;
+  border-color: #86efac;
+}
+
+.adm-week-dot.is-absent {
+  background: #ef4444;
+  border-color: #fecaca;
+}
+
+.adm-week-dot.is-unmarked {
+  background: #e5e7eb;
+  border-color: #cbd5e1;
+}
+
+.adm-week-not-scheduled {
+  color: var(--text-muted);
+  font-weight: 700;
+  font-size: 15px;
+}
+
+/* ---------- Week Navigation ---------- */
+.adm-att .week-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  padding: 12px 18px;
+  border-radius: var(--radius);
+  margin-bottom: 18px;
+  gap: 10px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.adm-att .week-nav-btn {
+  padding: 8px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  color: var(--brand-700);
+  font-weight: 700;
+  font-size: 13.5px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.adm-att .week-nav-btn:hover {
+  background: var(--brand-50);
+  border-color: var(--brand-200);
+}
+
+.adm-att .week-nav-today-btn {
+  padding: 8px 16px;
+  background: var(--brand-600);
+  border: none;
+  border-radius: var(--radius-pill);
+  color: white;
+  font-weight: 700;
+  font-size: 13.5px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.adm-att .week-nav-today-btn:hover {
+  background: var(--brand-700);
+}
+
+.adm-att .week-label {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* ---------- Meeting list ---------- */
 .adm-att-empty {
   padding: 40px;
   text-align: center;
@@ -119,177 +548,246 @@
   border-radius: var(--radius-lg);
 }
 
-/* Stacked meeting cards. */
-.adm-att-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-/* One meeting card. */
-.adm-att-meeting {
-  background: var(--surface);
+/* ---------- Expanded Table Grid ---------- */
+.adm-att-table-container {
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-  overflow: hidden;
-}
-
-/* Highlight the border of an expanded meeting. */
-.adm-att-meeting.is-open {
-  border-color: var(--brand-200);
-}
-
-/* Clickable meeting header row (resets the global button pill + shadow so no
-   rounded shape appears when clicking the card). */
-.adm-att-meeting-head {
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow-x: auto;
   width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 18px;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  cursor: pointer;
-  text-align: right;
-  box-shadow: none;
 }
 
-/* Header hover: a subtle tint, no lift. */
-.adm-att-meeting-head:hover {
-  transform: none;
-  box-shadow: none;
+.adm-att-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 650px;
+  text-align: right;
+}
+
+.adm-att-table th,
+.adm-att-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.adm-att-table th {
+  background: var(--surface-2);
+  color: var(--text-soft);
+  font-weight: 700;
+  font-size: 13px;
+  border-bottom: 2px solid var(--border-strong);
+}
+
+.adm-att-table td.sticky-col,
+.adm-att-table th.sticky-col {
+  position: sticky;
+  right: 0;
+  background: var(--surface);
+  z-index: 2;
+  border-left: 2px solid var(--border-strong) !important;
+  min-width: 140px;
+}
+
+.adm-att-table th.sticky-col {
   background: var(--surface-2);
 }
 
-/* Group name + date stacked on the right. */
-.adm-att-meeting-main {
+.adm-att-table tr:hover {
+  background: rgba(82, 167, 221, 0.02);
+}
+
+.adm-att-table tr:hover td.sticky-col {
+  background: var(--surface-2);
+}
+
+.th-content {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  flex: 1 1 auto;
-  min-width: 0;
+  align-items: center;
+  gap: 4px;
 }
 
-/* Bold group name. */
-.adm-att-meeting-group {
+.day-name {
+  font-size: 13px;
   font-weight: 800;
-  font-size: 15.5px;
-  color: var(--text);
 }
 
-/* Muted meeting date. */
-.adm-att-meeting-date {
-  font-size: 12.5px;
+.day-date {
+  font-size: 11px;
   color: var(--text-muted);
+  font-weight: 600;
 }
 
-/* The present/absent badge pair. */
-.adm-att-badges {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
+.adm-att-cell {
+  text-align: center;
 }
 
-/* A count badge. */
-.adm-att-badge {
+.adm-cell-status {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
   font-size: 12px;
-  font-weight: 700;
-  padding: 3px 10px;
-  border-radius: var(--radius-pill);
 }
 
-/* Present badge (green). */
-.adm-att-badge.is-present {
+.adm-cell-status.is-present {
   background: var(--success-bg);
   color: var(--success);
 }
 
-/* Absent badge (red). */
-.adm-att-badge.is-absent {
+.adm-cell-status.is-absent {
   background: var(--danger-bg);
   color: var(--danger);
 }
 
-/* Expand/collapse chevron. */
-.adm-att-chevron {
-  color: var(--text-soft);
-  font-size: 11px;
-  flex-shrink: 0;
+.adm-cell-status.is-unmarked {
+  color: var(--text-muted);
+  font-weight: normal;
 }
 
-/* ---------- Expanded people list ---------- */
-
-/* The per-volunteer list inside an open meeting. */
-.adm-att-people {
-  list-style: none;
-  margin: 0;
-  padding: 4px 18px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  border-top: 1px solid var(--border);
-}
-
-/* One person row — a soft brand-tinted (pink-purple) pill, no dot. */
-.adm-att-person {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 9px 12px;
-  background: var(--brand-50);
-  border: 1px solid var(--brand-100);
-  border-radius: var(--radius-sm);
-}
-
-/* Coloured presence dot. */
-.adm-att-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-/* Present = green dot. */
-.adm-att-dot.is-present {
-  background: var(--success);
-}
-
-/* Absent = red dot. */
-.adm-att-dot.is-absent {
-  background: var(--danger);
-}
-
-/* Not marked by the guide = gray dot. */
-.adm-att-dot.is-unmarked {
-  background: var(--text-soft);
-}
-
-/* Volunteer name fills the row (brand-coloured). */
 .adm-att-person-name {
-  flex: 1 1 auto;
   color: var(--brand-700);
   font-weight: 700;
   font-size: 14px;
 }
 
-/* Small status label at the end, coloured by state. */
-.adm-att-person-status {
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--text-muted);
-}
-
-.adm-att-person-status.is-present {
-  color: var(--success);
-}
-
-.adm-att-person-status.is-absent {
-  color: var(--danger);
-}
-
-.adm-att-person-status.is-unmarked {
+.adm-att-empty-row {
+  text-align: center;
   color: var(--text-soft);
+  padding: 20px !important;
+  font-weight: 600;
+}
+
+@media (max-width: 600px) {
+  .adm-att {
+    gap: 12px;
+  }
+
+  .adm-att-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .adm-att-group-card {
+    padding: 10px 11px;
+  }
+
+  .adm-att-group-stats {
+    gap: 4px;
+  }
+
+  .adm-att-review-card {
+    padding: 12px;
+    border-radius: var(--radius-lg);
+  }
+
+  .adm-att-review-head {
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .adm-att-title-block h2 {
+    font-size: 20px;
+  }
+
+  .adm-att-title-block p {
+    font-size: 13px;
+  }
+
+  .adm-att-back-btn {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  .adm-att-top-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .adm-att-week-switcher {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding: 8px;
+  }
+
+  .adm-att-week-label {
+    grid-column: 1 / -1;
+    order: -1;
+  }
+
+  .adm-att-week-label strong {
+    white-space: normal;
+    font-size: 12.5px;
+  }
+
+  .adm-att-summary-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .adm-att-stat-tile {
+    padding: 9px 6px;
+  }
+
+  .adm-att-stat-tile span {
+    font-size: 22px;
+  }
+
+  .adm-att-stat-tile p {
+    font-size: 12px;
+  }
+
+  .adm-att-legend {
+    justify-content: center;
+    margin-bottom: 8px;
+  }
+
+  .adm-week-board {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .adm-week-grid {
+    grid-template-columns: minmax(88px, 1.25fr) repeat(7, minmax(24px, 1fr));
+  }
+
+  .adm-week-person-head,
+  .adm-week-day-head {
+    padding: 7px 4px;
+    font-size: 10.5px;
+  }
+
+  .adm-week-day-head small {
+    font-size: 9.5px;
+  }
+
+  .adm-week-person {
+    padding: 7px 6px;
+    font-size: 12.5px;
+  }
+
+  .adm-week-cell {
+    padding: 6px 2px;
+  }
+
+  .adm-week-dot {
+    width: 14px;
+    height: 14px;
+    border-width: 1.5px;
+  }
+
+  .adm-att .week-nav {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+  .adm-att .week-nav-btn,
+  .adm-att .week-nav-today-btn {
+    width: 100%;
+    padding: 8px 6px;
+    font-size: 12px;
+  }
 }

@@ -1,34 +1,71 @@
-/* Wrapper: the three dropdowns stacked above the optional preview. */
+/* Wrapper: shared date selector used anywhere a date is entered. */
 .birth-date-picker {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 9px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  min-width: 0;
+}
+
+/* Field label, aligned like the reference: above the three dropdowns. */
+.bdp-label {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: right;
 }
 
 /* The day / month / year dropdown row. */
 .bdp-selects {
   display: grid;
-  grid-template-columns: 1fr 1.4fr 1.1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
 /* A single dropdown. */
-.bdp-select {
+.birth-date-picker .bdp-select {
   width: 100%;
   box-sizing: border-box;
-  padding: 11px 10px;
+  min-height: 46px;
+  padding: 0 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--text);
   font: inherit;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
+  outline: none;
+  box-shadow: var(--shadow-xs, 0 1px 2px rgba(15, 23, 42, 0.04));
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.birth-date-picker .bdp-text-input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  outline: none;
+  box-shadow: var(--shadow-xs, 0 1px 2px rgba(15, 23, 42, 0.04));
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
 }
 
 /* Dropdown focus ring. */
-.bdp-select:focus {
-  outline: 2px solid var(--brand-200);
+.birth-date-picker .bdp-select:focus,
+.birth-date-picker .bdp-text-input:focus {
   border-color: var(--brand-400);
+  box-shadow: 0 0 0 3px var(--brand-50);
+  background: var(--surface);
 }
 
 /* The "🎂 date · age" preview line. */
@@ -44,7 +81,15 @@
 
 /* Small phones: tighter dropdown padding. */
 @media (max-width: 420px) {
-  .bdp-select {
-    padding: 10px 8px;
+  .birth-date-picker .bdp-select {
+    min-height: 44px;
+    padding: 0 8px;
+    font-size: 13.5px;
+  }
+
+  .birth-date-picker .bdp-text-input {
+    min-height: 44px;
+    padding: 0 8px;
+    font-size: 13.5px;
   }
 }

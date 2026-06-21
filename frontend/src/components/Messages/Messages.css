@@ -1,0 +1,434 @@
+/* Messages — compose box, audience picker and recipient cards. Built to read
+   clearly on desktop and to stack into a comfortable single column on phones. */
+
+/* Screen title. */
+.msg-title {
+  margin: 0;
+  font-size: clamp(22px, 4vw, 28px);
+  font-weight: 800;
+  color: var(--brand-700);
+}
+
+
+/* ---------- Step blocks ---------- */
+
+/* Each numbered step is a padded band separated by a hairline. */
+.msg-step {
+  padding: clamp(18px, 3vw, 26px) clamp(18px, 4vw, 30px);
+  border-top: 1px solid var(--border);
+}
+
+/* The header row already separates the first step, so it needs no top border. */
+.msg-step:first-of-type {
+  border-top: 0;
+}
+
+/* Step heading: a numbered brand circle + the title. */
+.msg-step-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.msg-step-num {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--brand-600);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.msg-step-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+
+/* ---------- Step 1: compose ---------- */
+
+/* Quick-template chips above the textarea. */
+.msg-templates {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.msg-chip {
+  padding: 9px 16px;
+  border: 1.5px solid var(--brand-200);
+  border-radius: var(--radius-pill);
+  background: var(--brand-50);
+  color: var(--brand-700);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.msg-chip:hover {
+  background: var(--brand-600);
+  border-color: var(--brand-600);
+  color: #fff;
+}
+
+/* The "clear" chip is quieter — it's a reset, not a template. */
+.msg-chip--clear {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+
+.msg-chip--clear:hover {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+/* The message box. */
+.msg-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 150px;
+  padding: 18px 20px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  /* A soft tinted "note" background reads warmer than stark white. */
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: inherit;
+  /* Bigger, airier text with a touch more weight — easier and nicer to read. */
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.85;
+  resize: vertical;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+/* Quieter placeholder so the real message stands out. */
+.msg-textarea::placeholder {
+  color: var(--text-soft);
+  font-weight: 400;
+}
+
+/* On-brand text selection (instead of the browser's harsh default). */
+.msg-textarea::selection {
+  background: var(--brand-100, rgba(158, 33, 136, 0.16));
+}
+
+.msg-textarea:focus {
+  outline: none;
+  border-color: var(--brand-500);
+  background: var(--surface);
+  box-shadow: 0 0 0 4px var(--brand-50);
+}
+
+/* Small character counter under the box. */
+.msg-charcount {
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  text-align: left;
+}
+
+
+/* ---------- Step 2: audience ---------- */
+
+/* Mode tabs share the row evenly. */
+.msg-modes {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.msg-mode-btn {
+  flex: 1 1 auto;
+  min-width: 130px;
+  padding: 11px 18px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.msg-mode-btn:hover {
+  border-color: var(--brand-600);
+}
+
+.msg-mode-btn.is-active {
+  background: var(--brand-600);
+  border-color: var(--brand-600);
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Group checkboxes. */
+.msg-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
+}
+
+.msg-group-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.msg-group-check input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--brand-600);
+}
+
+/* Highlight a checked group. */
+.msg-group-check:has(input:checked) {
+  border-color: var(--brand-600);
+  background: var(--brand-50);
+}
+
+/* Person search box. */
+.msg-search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 13px 16px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 15px;
+}
+
+.msg-search:focus {
+  outline: none;
+  border-color: var(--brand-500);
+  box-shadow: 0 0 0 4px var(--brand-50);
+}
+
+/* A small muted hint (e.g. "no groups yet"). */
+.msg-hint {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+
+/* ---------- Step 3: send ---------- */
+
+/* Counts on the right (RTL start), actions pushed to the other end. */
+.msg-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+/* A count pill. */
+.msg-stat {
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.msg-stat strong {
+  font-size: 15px;
+  color: var(--text);
+}
+
+.msg-stat--ok strong {
+  color: #1faa55;
+}
+
+/* The action buttons sit at the far (left, in RTL) end of the row. */
+.msg-summary-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-inline-start: auto;
+}
+
+/* The single "send to everyone" button — WhatsApp green, unmissable. */
+.msg-send-all-btn {
+  padding: 11px 22px;
+  border: none;
+  border-radius: var(--radius);
+  background: #1faa55;
+  color: #fff;
+  font-size: 14.5px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(31, 170, 85, 0.3);
+  transition: background 0.15s ease;
+}
+
+.msg-send-all-btn:hover:not(:disabled) {
+  background: #178a45;
+}
+
+.msg-send-all-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+  box-shadow: none;
+}
+
+/* Copy-message button — a quiet secondary action. */
+.msg-copy-btn {
+  padding: 11px 18px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.msg-copy-btn:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.msg-copy-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+
+/* ---------- Recipient cards ---------- */
+
+/* A responsive grid of recipient cards (one column on phones). */
+.msg-recipients {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.msg-recipient {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Initial avatar. */
+.msg-recipient-avatar {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--brand-600), var(--info));
+  color: #fff;
+  font-weight: 800;
+}
+
+/* Name + meta stack, takes the free space between avatar and button. */
+.msg-recipient-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.msg-recipient-name {
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.msg-recipient-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Role badge (volunteer / guide) — two accent colours for a quick visual cue. */
+.msg-role {
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.msg-role--vol {
+  background: var(--brand-50);
+  color: var(--brand-700);
+}
+
+.msg-role--guide {
+  background: rgba(82, 167, 221, 0.14);
+  color: var(--info);
+}
+
+.msg-recipient-group {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+/* Friendly empty state. */
+.msg-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+
+
+/* ---------- Phone ---------- */
+
+@media (max-width: 640px) {
+  /* Each mode tab takes a full row, so the labels never get cramped. */
+  .msg-mode-btn {
+    flex: 1 1 100%;
+  }
+
+  /* The action buttons stretch to fill the row and stay easy to tap. */
+  .msg-summary-actions {
+    width: 100%;
+    margin-inline-start: 0;
+  }
+
+  .msg-send-all-btn,
+  .msg-copy-btn {
+    flex: 1 1 auto;
+  }
+
+  /* Recipients become a single, comfortable column. */
+  .msg-recipients {
+    grid-template-columns: 1fr;
+  }
+}

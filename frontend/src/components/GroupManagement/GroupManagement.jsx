@@ -2,17 +2,32 @@
 // assign / remove a guide, edit a group's name and time, and open its details.
 // Data is kept in sync across the "groups" and "guides" collections.
 
-// React hooks for state, effects, memoization and stable callbacks.
-import { useCallback, useEffect, useMemo, useState } from 'react';
+// React hooks for state, effects, memoization, stable callbacks and refs.
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 
 // Firestore helpers for reading and writing documents.
-import { addDoc, collection, doc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
+import { collection, doc, getDocs, query, setDoc, where, writeBatch } from 'firebase/firestore';
 
-// Our Firestore database instance.
-import { db } from '../../firebase';
+// Storage helpers for uploading a group's cover image.
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+
+// Our Firestore database + Storage instances.
+import { db, storage } from '../../firebase';
 
 // The per-group details view.
 import GroupDetails from './GroupDetails';
+
+// The styled cover-image picker used in the create / edit modals.
+import CoverImageField from './CoverImageField';
+
+// The closed list of activity times (בוקר / צהריים / ערב).
+import { GROUP_TIMES } from '../../utils/groupOptions';
+
+// Downloads the empty groups template (dropdowns for time/guide/day).
+import { downloadGroupsTemplate } from '../../utils/excelTemplates';
+
+// Shared collapsible advanced-search bar (free text + per-field filters).
+import SearchFilters from '../shared/SearchFilters/SearchFilters';
 
 // Shared management-screen styles + this screen's own styles.
 import '../shared/ManagementScreen.css';
@@ -24,6 +39,38 @@ const toRecord = (documentSnapshot) => ({
   id: documentSnapshot.id,
   ...documentSnapshot.data(),
 });
+
+
+// Image types we allow uploading (kept in sync with storage.rules).
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+// Basic client-side check before uploading a cover image. Returns true when
+// the file is an allowed image type and small enough; otherwise warns.
+const isValidImage = (file) => {
+  if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+    alert('יש לבחור תמונה מסוג JPG, PNG או WEBP.');
+    return false;
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    alert('התמונה גדולה מדי (מקסימום 5MB).');
+    return false;
+  }
+
+  return true;
+};
+
+
+// Upload a cover image to Storage under the group's own folder and return its
+// public download URL. The timestamp in the name avoids stale-cache issues
+// when an image is replaced.
+const uploadCoverImage = async (file, groupId) => {
+  const extension = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const storageRef = ref(storage, `groups/${groupId}/cover-${Date.now()}.${extension}`);
+
+  await uploadBytes(storageRef, file);
+  return getDownloadURL(storageRef);
+};
 
 
 // Best available display name for a guide, with graceful fallbacks.
@@ -40,7 +87,7 @@ const getGuideName = (guide) => {
 };
 
 
-const GroupManagement = () => {
+const GroupManagement = ({ registerBack }) => {
   // The group currently opened in the details view (null = list view).
   const [selectedGroupId, setSelectedGroupId] = useState(null);
 
@@ -49,14 +96,58 @@ const GroupManagement = () => {
   const [volunteers, setVolunteers] = useState([]);
   const [guides, setGuides] = useState([]);
 
+  // Excel import: in-flight flag + the hidden file input.
+  const [isImporting, setIsImporting] = useState(false);
+  const importFileRef = useRef(null);
+
+  // Dashboard back button: close the details view first, then leave.
+  useEffect(() => {
+    if (!registerBack) return;
+    registerBack(() => {
+      if (selectedGroupId) {
+        setSelectedGroupId(null);
+        return true;
+      }
+      return false;
+    });
+  }, [registerBack, selectedGroupId]);
+
   // "Add group" form fields + modal visibility.
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupTime, setNewGroupTime] = useState('');
   const [newGroupDescription, setNewGroupDescription] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
+  // The new group's id is generated up front so its cover image can be uploaded
+  // (to groups/{id}/...) before the document itself is created on submit.
+  const [newGroupId, setNewGroupId] = useState('');
+  const [newGroupImageUrl, setNewGroupImageUrl] = useState('');
+  const [uploadingNewImage, setUploadingNewImage] = useState(false);
+
   // Search text for filtering the list.
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Sort direction for the group-name column. Clicking the header toggles it
+  // (the list is sorted A→Z by default).
+  const [sortDir, setSortDir] = useState('asc');
+  const toggleSort = () => setSortDir((dir) => (dir === 'asc' ? 'desc' : 'asc'));
+
+  // On phones the list collapses to names only; this is the row tapped open.
+  const [expandedId, setExpandedId] = useState(null);
+  const toggleExpand = (id) => setExpandedId((current) => (current === id ? null : id));
+
+  // Structured "advanced filters" (empty string means "don't filter").
+  const [filters, setFilters] = useState({ time: '', assigned: '' });
+
+  // Update one filter by name (handed to the shared SearchFilters component).
+  const updateFilter = (name, value) => {
+    setFilters((current) => ({ ...current, [name]: value }));
+  };
+
+  // Reset every structured filter.
+  const clearFilters = () => {
+    setFilters({ time: '', assigned: '' });
+  };
 
   // "Assign guide" modal state.
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
@@ -66,7 +157,10 @@ const GroupManagement = () => {
   // "Edit group" modal state.
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [groupToEdit, setGroupToEdit] = useState(null);
-  const [editForm, setEditForm] = useState({ groupName: '', time: '', description: '' });
+  const [editForm, setEditForm] = useState({ groupName: '', time: '', description: '', imageUrl: '' });
+
+  // True while a cover image is uploading to Storage.
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   // Load groups, volunteers and guides together.
   const fetchData = useCallback(async () => {
@@ -95,14 +189,19 @@ const GroupManagement = () => {
     fetchData();
   }, [fetchData]);
 
-  // Open the "add group" modal with empty fields.
+  // Open the "add group" modal with empty fields. We pre-generate the new
+  // group's id so its cover image can be uploaded before the group is created.
   const openAddModal = () => {
     setNewGroupName('');
     setNewGroupTime('');
+    setNewGroupDescription('');
+    setNewGroupImageUrl('');
+    setNewGroupId(doc(collection(db, 'groups')).id);
     setIsAddModalOpen(true);
   };
 
-  // Create a new group document.
+  // Create a new group document (at the pre-generated id, so it matches any
+  // image already uploaded to that id's folder).
   const handleCreateGroup = async (event) => {
     event.preventDefault();
 
@@ -111,13 +210,14 @@ const GroupManagement = () => {
     if (!groupName) return;
 
     try {
-      // Add the group (no guide assigned yet).
-      await addDoc(collection(db, 'groups'), {
+      // Create the group (no guide assigned yet), cover image included.
+      await setDoc(doc(db, 'groups', newGroupId), {
         groupName,
         guideId: '',
         guideName: '',
         time: newGroupTime.trim(),
         description: newGroupDescription.trim(),
+        imageUrl: newGroupImageUrl,
         createdAt: new Date(),
       });
 
@@ -125,6 +225,7 @@ const GroupManagement = () => {
       setNewGroupName('');
       setNewGroupTime('');
       setNewGroupDescription('');
+      setNewGroupImageUrl('');
       setIsAddModalOpen(false);
       await fetchData();
     } catch (error) {
@@ -151,23 +252,38 @@ const GroupManagement = () => {
     const groupName = groupToAssign.groupName || groupToAssign.name || '';
 
     try {
+      // All the related writes go in one atomic batch, so a group and a guide
+      // mapping never disagree about who leads what.
+      const batch = writeBatch(db);
+
       // Free any other group this guide already leads (a guide leads one group
       // at a time), so the same guide never shows up in two groups at once.
       const previousGroups = await getDocs(query(collection(db, 'groups'), where('guideId', '==', selectedGuideId)));
-      for (const previousGroup of previousGroups.docs) {
+      previousGroups.docs.forEach((previousGroup) => {
         if (previousGroup.id !== groupToAssign.id) {
-          await updateDoc(doc(db, 'groups', previousGroup.id), { guideId: '', guideName: '' });
+          batch.update(doc(db, 'groups', previousGroup.id), { guideId: '', guideName: '' });
         }
+      });
+
+      // If THIS group already had a (different) guide, clear that old guide's
+      // mapping too — otherwise the old guide keeps seeing the group in their
+      // dashboard (which reads guides/{uid}).
+      if (groupToAssign.guideId && groupToAssign.guideId !== selectedGuideId) {
+        batch.set(
+          doc(db, 'guides', groupToAssign.guideId),
+          { groupId: '', groupName: 'Unassigned' },
+          { merge: true },
+        );
       }
 
       // Record the guide on the group document.
-      await updateDoc(doc(db, 'groups', groupToAssign.id), {
+      batch.update(doc(db, 'groups', groupToAssign.id), {
         guideId: selectedGuideId,
         guideName,
       });
 
       // Record the group on the guide's mapping document.
-      await setDoc(
+      batch.set(
         doc(db, 'guides', selectedGuideId),
         {
           groupId: groupToAssign.id,
@@ -175,6 +291,8 @@ const GroupManagement = () => {
         },
         { merge: true },
       );
+
+      await batch.commit();
 
       // Close the modal and refresh.
       setIsAssignModalOpen(false);
@@ -193,15 +311,18 @@ const GroupManagement = () => {
     if (!window.confirm('האם להסיר את המדריך מהקבוצה?')) return;
 
     try {
+      // Clear both sides in one atomic batch.
+      const batch = writeBatch(db);
+
       // Clear the guide on the group document.
-      await updateDoc(doc(db, 'groups', group.id), {
+      batch.update(doc(db, 'groups', group.id), {
         guideId: '',
         guideName: '',
       });
 
       // Clear the group on the guide's mapping document.
       if (group.guideId) {
-        await setDoc(
+        batch.set(
           doc(db, 'guides', group.guideId),
           {
             groupId: '',
@@ -211,6 +332,7 @@ const GroupManagement = () => {
         );
       }
 
+      await batch.commit();
       await fetchData();
     } catch (error) {
       console.error('שגיאה בהסרת מדריך:', error);
@@ -223,10 +345,70 @@ const GroupManagement = () => {
     setGroupToEdit(group);
     setEditForm({
       groupName: group.groupName || group.name || '',
-      time: group.time || '',
+      // Legacy free-text times (e.g. "8") are dropped — only the closed list
+      // is valid, so saving the form also cleans the old value.
+      time: GROUP_TIMES.includes(group.time) ? group.time : '',
       description: group.description || '',
+      imageUrl: group.imageUrl || '',
     });
     setIsEditModalOpen(true);
+  };
+
+  // Upload a chosen image for the group being EDITED. The URL is kept on the
+  // form and written to Firestore when the admin saves.
+  const handleImageUpload = async (event) => {
+    const file = event.target.files && event.target.files[0];
+    if (!file || !groupToEdit || !isValidImage(file)) {
+      event.target.value = '';
+      return;
+    }
+
+    setUploadingImage(true);
+
+    try {
+      const downloadUrl = await uploadCoverImage(file, groupToEdit.id);
+      setEditForm((previous) => ({ ...previous, imageUrl: downloadUrl }));
+    } catch (error) {
+      console.error('שגיאה בהעלאת התמונה:', error);
+      alert('אירעה שגיאה בהעלאת התמונה. ודא/י שחוקי ה-Storage נפרסו.');
+    } finally {
+      setUploadingImage(false);
+
+      // Reset the input so the same file can be re-selected if needed.
+      event.target.value = '';
+    }
+  };
+
+  // Clear the edited group's image (takes effect when the form is saved).
+  const handleRemoveImage = () => {
+    setEditForm((previous) => ({ ...previous, imageUrl: '' }));
+  };
+
+  // Upload a chosen image for the NEW group (to its pre-generated id folder).
+  const handleNewImageUpload = async (event) => {
+    const file = event.target.files && event.target.files[0];
+    if (!file || !newGroupId || !isValidImage(file)) {
+      event.target.value = '';
+      return;
+    }
+
+    setUploadingNewImage(true);
+
+    try {
+      const downloadUrl = await uploadCoverImage(file, newGroupId);
+      setNewGroupImageUrl(downloadUrl);
+    } catch (error) {
+      console.error('שגיאה בהעלאת התמונה:', error);
+      alert('אירעה שגיאה בהעלאת התמונה. ודא/י שחוקי ה-Storage נפרסו.');
+    } finally {
+      setUploadingNewImage(false);
+      event.target.value = '';
+    }
+  };
+
+  // Clear the new group's chosen image.
+  const handleRemoveNewImage = () => {
+    setNewGroupImageUrl('');
   };
 
   // Save edits to a group's name and time.
@@ -242,23 +424,30 @@ const GroupManagement = () => {
 
     const time = editForm.time.trim();
     const description = editForm.description.trim();
+    const imageUrl = editForm.imageUrl || '';
 
     try {
-      // Update the group document.
-      await updateDoc(doc(db, 'groups', groupToEdit.id), {
+      // Update the group and the guide's denormalized name together (atomic).
+      const batch = writeBatch(db);
+
+      // Update the group document (the cover image included).
+      batch.update(doc(db, 'groups', groupToEdit.id), {
         groupName,
         time,
         description,
+        imageUrl,
       });
 
       // Keep the assigned guide's denormalized group name in sync.
       if (groupToEdit.guideId) {
-        await setDoc(
+        batch.set(
           doc(db, 'guides', groupToEdit.guideId),
           { groupName },
           { merge: true },
         );
       }
+
+      await batch.commit();
 
       // Close the modal and refresh.
       setIsEditModalOpen(false);
@@ -270,7 +459,154 @@ const GroupManagement = () => {
     }
   };
 
+  // Delete the group entirely: remove the group document, free its assigned
+  // guide, and detach its volunteers (they stay in the system, just with no
+  // group). Everything happens in one atomic batch.
+  const handleDeleteGroup = async () => {
+    if (!groupToEdit) return;
+
+    const groupName = groupToEdit.groupName || groupToEdit.name || 'קבוצה ללא שם';
+
+    // The volunteers that belong to this group (matched like the list count).
+    const groupVolunteers = volunteers.filter((volunteer) => (
+      volunteer.groupId === groupToEdit.id ||
+      volunteer.groupName === groupToEdit.groupName ||
+      volunteer.groupName === groupToEdit.name
+    ));
+
+    // Confirm, spelling out exactly what will happen.
+    const message = groupVolunteers.length > 0
+      ? `למחוק את הקבוצה "${groupName}"?\n${groupVolunteers.length} מתנדבים ינותקו מהקבוצה (יישארו במערכת ללא שיוך).\nהפעולה אינה הפיכה.`
+      : `למחוק את הקבוצה "${groupName}"? הפעולה אינה הפיכה.`;
+    if (!window.confirm(message)) return;
+
+    try {
+      const batch = writeBatch(db);
+
+      // Remove the group document.
+      batch.delete(doc(db, 'groups', groupToEdit.id));
+
+      // Free the assigned guide, if any.
+      if (groupToEdit.guideId) {
+        batch.set(doc(db, 'guides', groupToEdit.guideId), { groupId: '', groupName: 'Unassigned' }, { merge: true });
+      }
+
+      // Detach the group's volunteers (keep them, clear their group fields).
+      groupVolunteers.forEach((volunteer) => {
+        batch.update(doc(db, 'volunteers', volunteer.id), { groupId: '', groupName: '', group: '' });
+      });
+
+      await batch.commit();
+
+      // Close the modal and refresh.
+      setIsEditModalOpen(false);
+      setGroupToEdit(null);
+      await fetchData();
+    } catch (error) {
+      console.error('שגיאה במחיקת הקבוצה:', error);
+      alert('אירעה שגיאה במחיקת הקבוצה');
+    }
+  };
+
   // Open a group's details view.
+  // Bulk-import groups from the Excel template. Each row creates a NEW group
+  // (existing names are skipped); only valid activity times are kept, a
+  // matched guide is linked on both sides, and volunteers listed by name are
+  // assigned to the new group — all in one atomic batch.
+  const handleGroupsFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setIsImporting(true);
+
+    try {
+      // Parse the workbook (the Excel reader loads on demand).
+      const XLSX = await import('xlsx');
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+
+      // Never create a duplicate of an existing group name.
+      const existingNames = new Set(groups.map((g) => (g.groupName || g.name || '').trim()));
+
+      const batch = writeBatch(db);
+      let added = 0;
+      let skipped = 0;
+
+      rows.forEach((row) => {
+        const groupName = String(row['שם קבוצה *'] || row['שם קבוצה'] || '').trim();
+        if (!groupName) return;
+
+        if (existingNames.has(groupName)) {
+          skipped += 1;
+          return;
+        }
+        existingNames.add(groupName);
+
+        // Only the closed list of times is accepted (no "8"-style values).
+        const rawTime = String(row['זמן פעילות'] || '').trim();
+
+        // Match the responsible guide by display name.
+        const guideNameRaw = String(row['מדריך אחראי'] || '').trim();
+        const matchedGuide = guides.find((guide) => getGuideName(guide).trim() === guideNameRaw);
+
+        const newGroupRef = doc(collection(db, 'groups'));
+
+        batch.set(newGroupRef, {
+          groupName,
+          time: GROUP_TIMES.includes(rawTime) ? rawTime : '',
+          location: String(row['מיקום / חדר'] || '').trim(),
+          activityDay: String(row['יום פעילות'] || '').trim(),
+          notes: String(row['הערות'] || '').trim(),
+          guideId: matchedGuide?.id || '',
+          guideName: matchedGuide ? getGuideName(matchedGuide) : '',
+          createdAt: new Date(),
+        });
+
+        // Mirror the assignment on the guide's side (the attendance screen
+        // finds the guide's group through guides/{uid}.groupId).
+        if (matchedGuide) {
+          batch.set(
+            doc(db, 'guides', matchedGuide.id),
+            { groupId: newGroupRef.id, groupName },
+            { merge: true },
+          );
+        }
+
+        // Assign listed volunteers (comma-separated names) to the new group.
+        String(row['מתנדבים משויכים (שמות, מופרדים בפסיק)'] || row['מתנדבים משויכים'] || '')
+          .split(',')
+          .map((name) => name.trim())
+          .filter(Boolean)
+          .forEach((volunteerName) => {
+            const match = volunteers.find((volunteer) => (
+              (volunteer.name || `${volunteer.firstName || ''} ${volunteer.lastName || ''}`.trim()) === volunteerName
+            ));
+
+            if (match) {
+              batch.update(doc(db, 'volunteers', match.id), { groupId: newGroupRef.id, groupName });
+            }
+          });
+
+        added += 1;
+      });
+
+      if (added > 0) {
+        await batch.commit();
+        await fetchData();
+      }
+
+      alert(`יובאו ${added} קבוצות חדשות${skipped ? `, דולגו ${skipped} שכבר קיימות` : ''}.`);
+    } catch (error) {
+      console.error('שגיאה בייבוא קבוצות:', error);
+      alert('אירעה שגיאה בייבוא הקובץ. ודאו שזהו קובץ התבנית.');
+    } finally {
+      setIsImporting(false);
+      if (importFileRef.current) {
+        importFileRef.current.value = null;
+      }
+    }
+  };
+
   const handleViewDetails = (groupId) => {
     setSelectedGroupId(groupId);
   };
@@ -296,14 +632,69 @@ const GroupManagement = () => {
     )).length
   );
 
-  // Groups filtered by the search box.
+  // Groups filtered by the free-text search AND the structured filters, then
+  // sorted alphabetically by name (the header toggles the direction).
   const filteredGroups = useMemo(() => {
     const search = searchQuery.trim().toLowerCase();
-    if (!search) return groups;
-    return groups.filter((group) =>
-      (group.groupName || group.name || '').toLowerCase().includes(search),
-    );
-  }, [groups, searchQuery]);
+
+    const result = groups.filter((group) => {
+      // Advanced filter — activity time (בוקר / צהריים / ערב).
+      if (filters.time && (group.time || '') !== filters.time) {
+        return false;
+      }
+
+      // Advanced filter — whether a guide is assigned to the group.
+      if (filters.assigned) {
+        const hasGuide = Boolean(group.guideId || group.guideName);
+        if (filters.assigned === 'assigned' && !hasGuide) return false;
+        if (filters.assigned === 'unassigned' && hasGuide) return false;
+      }
+
+      // Free-text search — across the name, time, description and guide name.
+      if (search) {
+        const text = [
+          group.groupName,
+          group.name,
+          group.time,
+          group.description,
+          group.guideName,
+        ].filter(Boolean).join(' ').toLowerCase();
+
+        if (!text.includes(search)) return false;
+      }
+
+      return true;
+    });
+
+    // Sort by the group's name, honouring the chosen direction.
+    return result.sort((a, b) => {
+      const nameA = (a.groupName || a.name || '').trim();
+      const nameB = (b.groupName || b.name || '').trim();
+      const comparison = nameA.localeCompare(nameB, 'he');
+      return sortDir === 'asc' ? comparison : -comparison;
+    });
+  }, [groups, searchQuery, filters, sortDir]);
+
+  // The advanced-panel fields: filter by activity time and assignment status.
+  const groupFilterFields = [
+    {
+      name: 'time',
+      label: 'זמן פעילות',
+      type: 'select',
+      placeholder: 'כל הזמנים',
+      options: GROUP_TIMES,
+    },
+    {
+      name: 'assigned',
+      label: 'שיוך מדריך',
+      type: 'select',
+      placeholder: 'הכול',
+      options: [
+        { value: 'assigned', label: 'משויך למדריך' },
+        { value: 'unassigned', label: 'טרם שויך' },
+      ],
+    },
+  ];
 
   // When a group is opened, show its details view instead of the list.
   if (selectedGroupId) {
@@ -319,24 +710,63 @@ const GroupManagement = () => {
     <main className="mgmt-container" dir="rtl">
       <section className="mgmt-card">
 
-        {/* Header: just the group count (the sidebar labels the screen). */}
+        {/* Header: the group count on one side, and the action buttons (create
+            / import / download) on the same row — raised up here from below. */}
         <header className="mgmt-header">
           <div className="mgmt-count">
             <span>{filteredGroups.length}</span>
             <small>קבוצות</small>
           </div>
-        </header>
 
-        {/* Toolbar: add button, search, optional volunteers shortcut. */}
-        <section className="mgmt-section">
           <div className="mgmt-toolbar">
             <button className="mgmt-primary-btn" onClick={openAddModal}>+ צור קבוצה חדשה</button>
+
+            {/* Hidden file input + Excel import / empty-template buttons. */}
             <input
-              type="search"
-              className="mgmt-search"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="🔍 חפש קבוצה לפי שם..."
+              type="file"
+              accept=".xlsx, .xls, .csv"
+              style={{ display: 'none' }}
+              ref={importFileRef}
+              onChange={handleGroupsFileUpload}
+            />
+            <button
+              className="mgmt-secondary-btn"
+              onClick={() => importFileRef.current?.click()}
+              disabled={isImporting}
+            >
+              {isImporting ? '⏳ מייבא...' : '📥 ייבוא קבוצות'}
+            </button>
+            <button
+              className="mgmt-secondary-btn"
+              onClick={async () => {
+                // Pull guides + volunteers fresh at click time.
+                const [usersSnap, volunteersSnap] = await Promise.all([
+                  getDocs(collection(db, 'users')),
+                  getDocs(collection(db, 'volunteers')),
+                ]);
+                const freshGuides = usersSnap.docs
+                  .map(toRecord)
+                  .filter((user) => user.role === 'guide' && !user.disabled);
+                downloadGroupsTemplate(freshGuides, volunteersSnap.docs.map(toRecord));
+              }}
+            >
+              ⬇️ הורדת תבנית אקסל
+            </button>
+          </div>
+        </header>
+
+        {/* Free-text search (name / time / guide / description) + collapsible
+            advanced filters (activity time, assignment status). */}
+        <section className="mgmt-section">
+          <div className="mgmt-filters-row">
+            <SearchFilters
+              searchValue={searchQuery}
+              onSearchChange={setSearchQuery}
+              searchPlaceholder="🔍 חיפוש קבוצה לפי שם, זמן או מדריך..."
+              fields={groupFilterFields}
+              values={filters}
+              onChange={updateFilter}
+              onClear={clearFilters}
             />
           </div>
         </section>
@@ -350,10 +780,15 @@ const GroupManagement = () => {
           <div className="mgmt-table-wrap">
             <table className="mgmt-table">
 
-              {/* Column headers. */}
+              {/* Column headers. The name header is a button that sorts A↔Z. */}
               <thead>
                 <tr>
-                  <th>שם הקבוצה</th>
+                  <th>
+                    <button type="button" className="mgmt-sort is-active" onClick={toggleSort}>
+                      שם הקבוצה
+                      <span className="mgmt-sort-arrow" aria-hidden="true">{sortDir === 'asc' ? '▲' : '▼'}</span>
+                    </button>
+                  </th>
                   <th>מדריך משויך</th>
                   <th className="mgmt-col-num">כמות מתנדבים</th>
                   <th>פעולות</th>
@@ -375,8 +810,14 @@ const GroupManagement = () => {
                     const guideDisplayName = getGuideDisplayName(group);
 
                     return (
-                      <tr key={group.id}>
-                        <td data-label="שם הקבוצה"><strong>{groupName}</strong></td>
+                      <tr key={group.id} className={expandedId === group.id ? 'is-expanded' : ''}>
+                        <td
+                          data-label="שם הקבוצה"
+                          className="mgmt-name-cell"
+                          onClick={() => toggleExpand(group.id)}
+                        >
+                          <strong>{groupName}</strong>
+                        </td>
 
                         {/* Assigned guide badge (or "not assigned"). */}
                         <td data-label="מדריך משויך">
@@ -432,16 +873,19 @@ const GroupManagement = () => {
                 />
               </div>
 
-              {/* Meeting time. */}
+              {/* Activity time — a closed list, not free text. */}
               <div className="form-group">
-                <label>שעת מפגש:</label>
-                <input
-                  type="text"
+                <label>זמן פעילות:</label>
+                <select
                   className="styled-input full-width-input"
                   value={newGroupTime}
                   onChange={(event) => setNewGroupTime(event.target.value)}
-                  placeholder="לדוגמה: יום ראשון 17:00"
-                />
+                >
+                  <option value="">-- בחר זמן פעילות --</option>
+                  {GROUP_TIMES.map((timeOption) => (
+                    <option key={timeOption} value={timeOption}>{timeOption}</option>
+                  ))}
+                </select>
               </div>
 
               {/* Group description (shown on the public home; admin-editable). */}
@@ -456,10 +900,19 @@ const GroupManagement = () => {
                 />
               </div>
 
+              {/* Cover image for the new group. */}
+              <CoverImageField
+                label="תמונת הקבוצה:"
+                imageUrl={newGroupImageUrl}
+                uploading={uploadingNewImage}
+                onSelect={handleNewImageUpload}
+                onRemove={handleRemoveNewImage}
+              />
+
               {/* Cancel / create. */}
               <div className="modal-actions">
                 <button type="button" className="btn btn-outline" onClick={() => setIsAddModalOpen(false)}>ביטול</button>
-                <button type="submit" className="btn btn-success" disabled={!newGroupName.trim()}>צור קבוצה</button>
+                <button type="submit" className="btn btn-success" disabled={!newGroupName.trim() || uploadingNewImage}>צור קבוצה</button>
               </div>
             </form>
           </div>
@@ -517,16 +970,20 @@ const GroupManagement = () => {
                 />
               </div>
 
-              {/* Meeting time. */}
+              {/* Activity time — strictly the closed list (a legacy free-text
+                  value shows as unselected and must be replaced). */}
               <div className="form-group">
-                <label>שעת מפגש:</label>
-                <input
-                  type="text"
+                <label>זמן פעילות:</label>
+                <select
                   className="styled-input full-width-input"
-                  value={editForm.time}
+                  value={GROUP_TIMES.includes(editForm.time) ? editForm.time : ''}
                   onChange={(event) => setEditForm({ ...editForm, time: event.target.value })}
-                  placeholder="לדוגמה: יום ראשון 17:00"
-                />
+                >
+                  <option value="">-- בחר זמן פעילות --</option>
+                  {GROUP_TIMES.map((timeOption) => (
+                    <option key={timeOption} value={timeOption}>{timeOption}</option>
+                  ))}
+                </select>
               </div>
 
               {/* Group description (shown on the public home; admin-editable). */}
@@ -541,10 +998,26 @@ const GroupManagement = () => {
                 />
               </div>
 
-              {/* Cancel / save. */}
+              {/* Cover image — uploaded to Storage, shown on the public showcase. */}
+              <CoverImageField
+                label="תמונת הקבוצה:"
+                imageUrl={editForm.imageUrl}
+                uploading={uploadingImage}
+                onSelect={handleImageUpload}
+                onRemove={handleRemoveImage}
+              />
+
+              {/* Delete (pushed to the far side) · Cancel / save. */}
               <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn btn-danger group-delete-btn"
+                  onClick={handleDeleteGroup}
+                >
+                  מחיקת קבוצה
+                </button>
                 <button type="button" className="btn btn-outline" onClick={() => setIsEditModalOpen(false)}>ביטול</button>
-                <button type="submit" className="btn btn-success" disabled={!editForm.groupName.trim()}>שמור שינויים</button>
+                <button type="submit" className="btn btn-success" disabled={!editForm.groupName.trim() || uploadingImage}>שמור שינויים</button>
               </div>
             </form>
           </div>

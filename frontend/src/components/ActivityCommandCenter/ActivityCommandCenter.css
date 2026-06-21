@@ -10,7 +10,7 @@
   margin-inline: auto;
 }
 
-/* Header row: back button beside the title block. */
+/* Header row: back button (only rendered when used as a standalone screen). */
 .acc-head {
   display: flex;
   align-items: flex-start;
@@ -28,32 +28,24 @@
   cursor: pointer;
 }
 
-/* Small eyebrow label above the title. */
-.acc-eyebrow {
-  display: inline-block;
-  font-size: 0.85rem;
-  color: var(--brand-600);
-  font-weight: 600;
+/* Warning shown when one or more of the hub's collections failed to load
+   (so a "0" isn't mistaken for "nothing to do"). */
+.acc-warning {
+  padding: 10px 14px;
+  border: 1px solid #fcd34d;
+  background: #fffbeb;
+  color: #92400e;
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  font-size: 14px;
+  text-align: right;
 }
 
-/* Main page title. */
-.acc-title {
-  margin: var(--space-1) 0 0;
-  font-size: 1.6rem;
-  color: var(--text);
-}
-
-/* Subtitle under the title. */
-.acc-subtitle {
-  margin: var(--space-1) 0 0;
-  color: var(--text-muted);
-}
-
-/* Alert cards grid (auto-fits to the available width). */
-/* The three stat cards always share one row (never 2 + 1 alone). */
+/* Alert cards row. Fills the width (2 cards normally; a third appears only when
+   a leading card is provided). */
 .acc-cards {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: var(--space-3);
 }
 
@@ -71,35 +63,19 @@
   box-shadow: var(--shadow-sm);
 }
 
-/* Coloured top accent per card type (brand-aligned status colours). */
+/* Coloured top accent per card type. */
 
-/* Pending-registrations accent (the clickable card on the admin home). */
-.acc-card--pending {
-  border-top: 4px solid var(--warning);
-}
-
-/* Make the pending count pop in its accent colour. */
-.acc-card--pending .acc-card-num {
-  color: var(--warning);
-}
-
-/* Today's events accent. */
-.acc-card--today {
-  border-top: 4px solid var(--info);
-}
-
-/* Missing attendance accent. */
+/* Missing-attendance accent (needs action → danger). */
 .acc-card--missing {
   border-top: 4px solid var(--danger);
 }
 
-/* Birthdays accent. */
+/* Birthdays accent (brand colour). */
 .acc-card--bday {
   border-top: 4px solid var(--brand-500);
 }
 
-/* When a card is rendered as a button (the pending card), match the card look
-   and give it a clickable hover lift. */
+/* The cards are buttons (they link out) — match the card look and add a lift. */
 button.acc-card {
   font: inherit;
   text-align: center;
@@ -107,9 +83,16 @@ button.acc-card {
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-button.acc-card:hover {
+button.acc-card:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: var(--shadow);
+}
+
+/* Disabled action cards stay readable but no longer pretend to navigate. */
+button.acc-card:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  transform: none;
 }
 
 /* Big counter number on a card. */
@@ -125,6 +108,7 @@ button.acc-card:hover {
   font-size: 0.95rem;
 }
 
+
 /* ---------- Collapsible schedule card (today + tomorrow) ---------- */
 
 /* The card wrapping both day sections. */
@@ -136,7 +120,7 @@ button.acc-card:hover {
   overflow: hidden;
 }
 
-/* Clickable header that toggles the schedule. Resets the global button styles. */
+/* Schedule header — shared by the desktop (static) and phone (toggle) variants. */
 .acc-schedule-head {
   display: flex;
   align-items: center;
@@ -147,14 +131,16 @@ button.acc-card:hover {
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-  cursor: pointer;
   text-align: start;
 }
 
-/* Header hover just tints the row. */
-.acc-schedule-head:hover {
-  transform: none;
-  box-shadow: none;
+/* Phone-only: the header is a button that opens/closes the card. */
+.acc-schedule-head--toggle {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.acc-schedule-head--toggle:hover {
   background: var(--surface-2);
 }
 
@@ -181,11 +167,17 @@ button.acc-card:hover {
   font-weight: 800;
 }
 
-/* Expand / collapse chevron. */
+/* Expand / collapse chevron (phone only). It points down when the card is
+   collapsed and flips up (rotated 180°) when the card is open. */
 .acc-schedule-chevron {
   flex: none;
+  display: inline-flex;
   color: var(--text-soft);
-  font-size: 0.8rem;
+  transition: transform 0.2s ease;
+}
+
+.acc-schedule-chevron.is-open {
+  transform: rotate(180deg);
 }
 
 /* Body holding the two day sections (shown only when open). */
@@ -236,6 +228,9 @@ button.acc-card:hover {
   gap: var(--space-3);
 }
 
+
+/* ---------- Event card ---------- */
+
 /* A single event card. */
 .acc-event {
   border: 1px solid var(--border);
@@ -250,8 +245,8 @@ button.acc-card:hover {
   border-color: var(--brand-400);
 }
 
-/* Clickable event header (summary + counters). Resets the global button's
-   pill radius + shadow so no rounded "pill" outline bleeds into the card. */
+/* Clickable event header (summary). Resets the global button's pill radius +
+   shadow so no rounded "pill" outline bleeds into the card. */
 .acc-event-head {
   display: flex;
   align-items: center;
@@ -299,49 +294,16 @@ button.acc-card:hover {
   color: var(--text-soft);
 }
 
-/* Attendance counters cluster. */
-.acc-event-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  flex: none;
-}
-
-/* A single counter chip. */
-.acc-stat {
-  padding: 2px var(--space-2);
-  border-radius: var(--radius-pill);
-  font-size: 0.8rem;
-  white-space: nowrap;
-  background: var(--surface-2);
-  color: var(--text-muted);
-}
-
-/* Expected-count chip. */
-.acc-stat--expected {
-  background: var(--brand-50);
-  color: var(--brand-700);
-}
-
-/* Arrived-count chip. */
-.acc-stat--present {
-  background: #dcfce7;
-  color: #166534;
-}
-
-/* Not-yet-marked chip. */
-.acc-stat--missing {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
 /* Open/closed chevron. */
 .acc-event-chevron {
   flex: none;
   color: var(--text-soft);
 }
 
-/* Expanded panel under an event (description + copy-message button). */
+
+/* ---------- Expanded event panel (description + copy action) ---------- */
+
+/* The panel revealed under an open event. */
 .acc-roster {
   display: flex;
   flex-direction: column;
@@ -351,7 +313,7 @@ button.acc-card:hover {
   background: var(--surface-2);
 }
 
-/* Event description block. */
+/* Event description heading. */
 .acc-event-desc h4 {
   margin: 0 0 6px;
   font-size: 1rem;
@@ -359,6 +321,7 @@ button.acc-card:hover {
   color: var(--text);
 }
 
+/* Event description text (keeps line breaks). */
 .acc-event-desc p {
   margin: 0;
   color: var(--text-muted);
@@ -366,7 +329,7 @@ button.acc-card:hover {
   white-space: pre-line;
 }
 
-/* Roster action row (copy message). */
+/* Panel action row (copy message). */
 .acc-roster-actions {
   display: flex;
   justify-content: flex-end;
@@ -382,98 +345,19 @@ button.acc-card:hover {
   cursor: pointer;
 }
 
-/* Volunteer rows list. */
-.acc-vol-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-/* A single volunteer row. */
-.acc-vol {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  border: 1px solid var(--border);
+/* Copy failure message inside an expanded event. */
+.acc-copy-error {
+  padding: 10px 12px;
   border-radius: var(--radius-sm);
-  background: var(--surface);
-}
-
-/* Name + phone block. */
-.acc-vol-id {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-  min-width: 120px;
-}
-
-/* Volunteer name. */
-.acc-vol-name {
+  background: var(--danger-bg);
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  color: var(--danger);
   font-weight: 600;
-  color: var(--text);
+  font-size: 14px;
 }
 
-/* Volunteer phone. */
-.acc-vol-phone {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-}
 
-/* The three status buttons cluster. */
-.acc-vol-status {
-  display: flex;
-  gap: var(--space-2);
-  flex: none;
-}
-
-/* A single status pill button. */
-.acc-pill {
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  background: var(--surface);
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 0.85rem;
-}
-
-/* Active "present" pill. */
-.acc-pill--present.is-active {
-  background: #16a34a;
-  border-color: #16a34a;
-  color: #ffffff;
-}
-
-/* Active "late" pill. */
-.acc-pill--late.is-active {
-  background: #b45309;
-  border-color: #b45309;
-  color: #ffffff;
-}
-
-/* Active "absent" pill. */
-.acc-pill--absent.is-active {
-  background: #dc2626;
-  border-color: #dc2626;
-  color: #ffffff;
-}
-
-/* Short note input. */
-.acc-vol-note {
-  flex: 1;
-  min-width: 120px;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--text);
-}
+/* ---------- Loading / empty states ---------- */
 
 /* Big centered loading / empty state. */
 .acc-empty {
@@ -491,20 +375,19 @@ button.acc-card:hover {
   color: var(--text-muted);
 }
 
-/* Stack the event header on small screens. */
+
+/* ---------- Phone ---------- */
+
 @media (max-width: 640px) {
 
-  /* Keep the stat cards in one tidy 3-up row (instead of 2 + 1 alone). */
+  /* Tighten the gap so the two cards sit comfortably on a phone. */
   .acc-cards {
-    grid-template-columns: repeat(3, 1fr);
     gap: 8px;
   }
 
-  /* Compact the cards so all three fit a phone width. */
+  /* Compact the cards a touch. */
   .acc-card {
     padding: 12px 8px;
-    text-align: center;
-    align-items: center;
   }
 
   /* Smaller number + label on the compact cards. */
@@ -514,23 +397,31 @@ button.acc-card:hover {
 
   .acc-card-label {
     font-size: 0.72rem;
-    text-align: center;
   }
 
-  /* Event card: name/date on the first line, counters + chevron on the next. */
+  /* Event card: name/date on the first line, chevron drops below if needed. */
   .acc-event-head {
     flex-wrap: wrap;
     gap: var(--space-2);
   }
 
-  /* Info takes the whole first line so the counters drop below it. */
+  /* Info takes the whole first line. */
   .acc-event-info {
     flex: 1 1 100%;
   }
+}
 
-  /* Counters fill the second line and wrap neatly. */
-  .acc-event-stats {
-    flex: 1 1 auto;
-    justify-content: flex-start;
+/* Users who prefer less motion shouldn't get this file's hover-lift animations. */
+@media (prefers-reduced-motion: reduce) {
+  button.acc-card,
+  .acc-schedule-head,
+  .acc-event-head,
+  .acc-copy-btn,
+  .acc-back {
+    transition: none;
+  }
+
+  button.acc-card:hover:not(:disabled) {
+    transform: none;
   }
 }

@@ -1,32 +1,9 @@
 // Import styles for the EventDetails component.
 import './EventDetails.css'
 
-// Temporary event data until Firebase is connected.
-const MOCK_EVENT = {
-  // Main event details
-  name: 'יום ספורט קהילתי',
-  date: '15 ביוני 2026, 10:00',
-  location: 'מרכז שלווה, ירושלים',
-
-  // Long text shown in the description section
-  description: [
-    'יום פעילות ספורטיבית מותאמת לכלל המשתתפים. התוכנית כוללת חימום קבוצתי, תחנות ספורט, הפסקת ארוחת בוקר ופעילות סיום משותפת.',
-    'נא להגיע עם בגדים נוחים ובקבוק מים.',
-  ].join('\n'),
-
-  // Group connected to this event
-  assignedGroup: 'קבוצה ב׳ - מדריכים בכירים',
-
-  // Used to choose the status badge style
-  status: 'מתוכנן',
-
-  // Contact person for the event
-  contact: {
-    name: 'דנה כהן',
-    phone: '050-1234567',
-    email: 'dana@example.com',
-  },
-}
+// Shared status logic, so this screen shows the SAME status as every other one
+// (derived from the event's date) instead of a separate stored value.
+import { computeEventStatus } from '../../utils/eventStatus'
 
 // Default text for missing event fields.
 const FALLBACK = 'לא צוין'
@@ -60,8 +37,9 @@ function phoneHref(phone) {
   return `tel:${String(phone).replace(/[^\d+]/g, '')}`
 }
 
-// Main Event Details component. Uses mock data until a real event is passed in.
-export default function EventDetails({ event = MOCK_EVENT, onBack }) {
+// Main Event Details component. Renders the given event; missing fields fall
+// back to "לא צוין".
+export default function EventDetails({ event = null, onBack }) {
   // Handles the Back button using a custom callback or browser history.
   const handleBack = () => {
     if (typeof onBack === 'function') {
@@ -80,7 +58,10 @@ export default function EventDetails({ event = MOCK_EVENT, onBack }) {
   const date = event?.date || FALLBACK
   const location = event?.location || FALLBACK
   const description = event?.description || FALLBACK
-  const status = event?.status || FALLBACK
+
+  // Status is derived from the date (future = מתוכנן, today = פעיל, past =
+  // הסתיים; בוטל is a manual override), matching the other screens.
+  const status = event ? computeEventStatus(event) : FALLBACK
 
   // Support both the new field name and older group field name.
   const group = event?.assignedGroup || event?.group || FALLBACK
@@ -163,6 +144,51 @@ export default function EventDetails({ event = MOCK_EVENT, onBack }) {
           <h3>תיאור האירוע</h3>
           <p>{description}</p>
         </section>
+
+        {/* Event pictures (if any) */}
+        {event?.imageUrls && event.imageUrls.length > 0 && (
+          <section className="event-details-description" aria-label="תמונות מהאירוע" style={{ marginTop: '20px' }}>
+            <h3>תמונות מהאירוע ({event.imageUrls.length})</h3>
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', 
+              gap: '12px',
+              marginTop: '12px'
+            }}>
+              {event.imageUrls.map((url, idx) => (
+                <a 
+                  key={idx} 
+                  href={url} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  style={{ 
+                    borderRadius: '12px', 
+                    overflow: 'hidden', 
+                    border: '1px solid var(--border)', 
+                    display: 'block', 
+                    height: '140px',
+                    boxShadow: 'var(--shadow-sm)',
+                    position: 'relative'
+                  }}
+                >
+                  <img 
+                    src={url} 
+                    alt={`תמונה מהאירוע ${idx + 1}`} 
+                    style={{ 
+                      width: '100%', 
+                      height: '100%', 
+                      objectFit: 'cover',
+                      display: 'block',
+                      transition: 'transform 0.2s'
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                    onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                  />
+                </a>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Screen actions */}
         <div className="event-details-actions">

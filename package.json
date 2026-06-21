@@ -9,6 +9,11 @@
     "build": "npm --prefix frontend run build",
     "lint": "npm --prefix frontend run lint",
     "preview": "npm --prefix frontend run preview",
-    "install:frontend": "npm --prefix frontend install"
+    "install:frontend": "npm --prefix frontend install",
+    "test:rules": "firebase emulators:exec --only firestore,storage --project demo-kehila \"npm --prefix frontend run test:rules\"",
+    "deploy:hosting": "npm run build && firebase deploy --only hosting"
+  },
+  "devDependencies": {
+    "firebase-tools": "^15.20.0"
   }
 }

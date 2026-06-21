@@ -1,3 +1,10 @@
+/* Breathing room between the search/filter bar and the results below it.
+   The shared .mgmt-filters-row only adds space ABOVE itself, so without this
+   the first card sits right up against the search box. */
+.reg-filters-row {
+  margin-bottom: 18px;
+}
+
 /* Responsive grid of registration cards. */
 .reg-list {
   display: grid;
@@ -83,6 +90,38 @@
   font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.reg-card-status.status-signed {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.reg-card-status.status-police {
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+
+.reg-card-status.status-medical {
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.reg-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.reg-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 /* The detail fields list; grows to fill the card height. */
@@ -217,5 +256,37 @@
 @media (max-width: 600px) {
   .reg-list {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Phone: collapse each card to its name; tap the header to expand the rest —
+   matching the names-only behaviour of the other management screens. */
+@media (max-width: 640px) {
+  .reg-card-fields,
+  .reg-card-approve,
+  .reg-card-foot {
+    display: none;
+  }
+
+  .reg-card.is-expanded .reg-card-fields {
+    display: grid;
+  }
+  .reg-card.is-expanded .reg-card-approve,
+  .reg-card.is-expanded .reg-card-foot {
+    display: flex;
+  }
+
+  /* The header is the tap target, with an open/close chevron. */
+  .reg-card-head {
+    cursor: pointer;
+  }
+  .reg-card-head::after {
+    content: '▾';
+    flex-shrink: 0;
+    color: var(--brand-600);
+    font-weight: 800;
+  }
+  .reg-card.is-expanded .reg-card-head::after {
+    content: '▴';
   }
 }

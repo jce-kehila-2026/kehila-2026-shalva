@@ -238,6 +238,11 @@
   margin-bottom: 18px;
 }
 
+/* The shared advanced-search bar, placed below the list title. */
+.event-management-filters {
+  margin-bottom: 18px;
+}
+
 /* Search field width on desktop. */
 .event-management-search {
   max-width: 390px;
@@ -384,18 +389,60 @@
 
 /* Header: name on one side, status badge on the other. */
 .event-card-head {
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
+  text-align: right;
+  cursor: pointer;
+}
+
+.event-card-head:hover {
+  background: transparent;
+  box-shadow: none;
+  transform: none;
 }
 
 /* Event name. */
 .event-card-name {
+  flex: 1;
   margin: 0;
   font-size: 17px;
   font-weight: 800;
   color: var(--text);
+}
+
+.event-card-chevron {
+  display: none;
+  flex: none;
+  position: relative;
+  width: 18px;
+  height: 18px;
+  color: var(--brand-700);
+  transition: transform 0.18s ease;
+}
+
+.event-card-chevron::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 5px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.event-card.is-expanded .event-card-chevron {
+  transform: rotate(180deg);
 }
 
 /* Detail rows (label + value). */
@@ -518,10 +565,15 @@
     padding: 24px 12px;
   }
 
-  .event-management-header,
   .event-management-list-header {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .event-management-header {
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: nowrap;
   }
 
   .event-management-form,
@@ -535,7 +587,26 @@
   }
 
   .event-management-count {
-    width: 100%;
+    width: auto;
+    min-width: 68px;
+    padding: 8px 6px;
+  }
+
+  .event-management-count span {
+    font-size: 22px;
+  }
+
+  .event-management-count small {
+    margin-top: 2px;
+    font-size: 11px;
+  }
+
+  .event-management-header .event-management-primary-btn {
+    min-height: 44px;
+    padding: 7px 12px;
+    font-size: 12px;
+    line-height: 1.15;
+    white-space: normal;
   }
 
   .event-management-search {
@@ -545,6 +616,45 @@
 
 /* Phone: turn the events table into stacked cards (no horizontal scroll). */
 @media (max-width: 640px) {
+  .event-cards {
+    gap: 12px;
+  }
+
+  .event-card {
+    gap: 0;
+    padding: 14px;
+  }
+
+  .event-card-head {
+    min-height: 42px;
+  }
+
+  .event-card-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .event-card-chevron {
+    display: inline-block;
+  }
+
+  .event-card:not(.is-expanded) .event-card-details,
+  .event-card:not(.is-expanded) .event-card-actions {
+    display: none;
+  }
+
+  .event-card.is-expanded .event-card-details {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--border, #eceaf3);
+  }
+
+  .event-card.is-expanded .event-card-actions {
+    margin-top: 12px;
+  }
+
   /* Drop the scroll frame around the table. */
   .event-management-table-wrap {
     border: 0;

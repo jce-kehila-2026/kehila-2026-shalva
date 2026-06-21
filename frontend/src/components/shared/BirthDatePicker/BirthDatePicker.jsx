@@ -2,8 +2,8 @@
 // birth (or event) date is entered. Emits a "YYYY-MM-DD" string via onChange
 // (or "" while incomplete). Pass a changing `key` to re-initialise it.
 
-// React state hook.
-import { useState } from 'react';
+// React state hooks.
+import { useEffect, useState } from 'react';
 
 // Styles for this widget.
 import './BirthDatePicker.css';
@@ -63,9 +63,23 @@ function parseValue(value) {
 }
 
 
-function BirthDatePicker({ value = '', onChange, id, required = false, showPreview = false, pastYears = 100, futureYears = 0 }) {
+function BirthDatePicker({
+  value = '',
+  onChange,
+  id,
+  label,
+  required = false,
+  showPreview = false,
+  pastYears = 100,
+  futureYears = 0,
+}) {
   // The selected day / month / year (initialised from `value`).
   const [parts, setParts] = useState(() => parseValue(value));
+
+  // Keep the visible selects in sync when the parent clears/replaces the value.
+  useEffect(() => {
+    setParts(parseValue(value));
+  }, [value]);
 
   // True once all three parts are filled in.
   const complete = parts.day !== '' && parts.month !== '' && parts.year !== '';
@@ -106,6 +120,8 @@ function BirthDatePicker({ value = '', onChange, id, required = false, showPrevi
 
   return (
     <div className="birth-date-picker">
+      {label && <div className="bdp-label">{label}</div>}
+
       <div className="bdp-selects">
 
         {/* Day dropdown. */}

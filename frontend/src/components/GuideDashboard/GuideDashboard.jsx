@@ -5,8 +5,8 @@
 // React hooks for state and side effects.
 import { useEffect, useState } from 'react';
 
-// Firestore helpers for reading a single document.
-import { doc, getDoc } from 'firebase/firestore';
+// Firestore helpers: read a single document + query the groups collection.
+import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
 
 // Our Firebase auth + database instances.
 import { auth, db } from '../../firebase';
@@ -20,7 +20,14 @@ import GroupDetails from '../GroupManagement/GroupDetails';
 import './GuideDashboard.css';
 
 
-const GuideDashboard = ({ user, onLogout, currentView, setCurrentView }) => {
+// First character of a name, for the avatar circle.
+const getInitial = (name) => {
+  const trimmed = (name || '').trim();
+  return trimmed ? trimmed[0].toUpperCase() : '';
+};
+
+
+const GuideDashboard = ({ user, currentView, setCurrentView }) => {
   // The loaded guide profile (null until fetched).
   const [guideData, setGuideData] = useState(null);
 
@@ -62,13 +69,41 @@ const GuideDashboard = ({ user, onLogout, currentView, setCurrentView }) => {
         const guideSnap = await getDoc(guideRef);
         const guideFields = guideSnap.exists() ? guideSnap.data() : {};
 
-        // Merge the auth user with the stored guide fields.
+        // The assignment may live only on the GROUP side (groups/{}.guideId) and
+        // not be copied back to guides/{uid}. So if the guide doc has no real
+        // group, look up the group that points to this guide — the guide then
+        // sees their group no matter which side saved the link.
+        let resolvedGroupId = guideFields.groupId || '';
+        let resolvedGroupName = (guideFields.groupName || '').trim();
+        const noGroupYet =
+          !resolvedGroupId ||
+          !resolvedGroupName ||
+          resolvedGroupName.toLowerCase() === 'unassigned';
+
+        if (noGroupYet) {
+          const ownedGroups = await getDocs(
+            query(collection(db, 'groups'), where('guideId', '==', currentUser.uid)),
+          );
+          if (!ownedGroups.empty) {
+            const groupDoc = ownedGroups.docs[0];
+            const groupData = groupDoc.data();
+            resolvedGroupId = resolvedGroupId || groupDoc.id;
+            const foundName = (groupData.groupName || groupData.name || '').trim();
+            if (foundName) {
+              resolvedGroupName = foundName;
+            }
+          }
+        }
+
+        // Merge the auth user with the stored guide fields + the resolved group.
         setGuideData({
           id: currentUser.uid,
           email: currentUser.email,
           firstName: currentUser.firstName || guideFields.firstName || '',
           lastName: currentUser.lastName || guideFields.lastName || '',
           ...guideFields,
+          groupId: resolvedGroupId,
+          groupName: resolvedGroupName,
         });
       } catch (error) {
         // On error, fall back to just the auth user's basics.
@@ -141,32 +176,100 @@ const GuideDashboard = ({ user, onLogout, currentView, setCurrentView }) => {
   }
 
   // Default view: the action menu.
+  const guideName = guideData?.firstName || guideData?.email || 'מדריך';
+
+  // Today's date, written out in Hebrew (e.g. "יום ראשון, 14 ביוני").
+  // Shown in the hero so the screen feels current and personal.
+  const todayLabel = new Date().toLocaleDateString('he-IL', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
+
   return (
     <div className="guide-dashboard-container" dir="rtl">
 
-      {/* Greeting + assigned group. */}
-      <header className="guide-header">
-        <h1>לוח בקרה - מדריך</h1>
-        <p>
-          ברוך הבא {guideData?.firstName || guideData?.email || 'מדריך'}.
-        </p>
-        <p className="guide-group-label">
-          קבוצה משויכת: <strong>{guideGroup.groupName || 'טרם שויכה קבוצה'}</strong>
-        </p>
+      {/* Hero header: avatar + greeting + the assigned group as a pill. */}
+      <header className="guide-hero">
+        <span className="guide-hero-glow guide-hero-glow-1" aria-hidden="true" />
+        <span className="guide-hero-glow guide-hero-glow-2" aria-hidden="true" />
+
+        <div className="guide-hero-content">
+          <span className="guide-avatar">{getInitial(guideName)}</span>
+          <div className="guide-hero-text">
+            <span className="guide-role-badge">מדריך/ה</span>
+            <h1 className="guide-hello">שלום, {guideName}</h1>
+            <p className="guide-group-pill">
+              {guideGroup.groupName
+                ? <>הקבוצה שלך: <strong>{guideGroup.groupName}</strong></>
+                : 'טרם שויכה לך קבוצה'}
+            </p>
+            {/* Today's date — keeps the screen feeling live. */}
+            <p className="guide-hero-date">{todayLabel}</p>
+          </div>
+        </div>
       </header>
 
-      {/* The guide's action buttons (group details + attendance marking). */}
+      {/* Action cards (group details + attendance marking).
+          Both cards share the same white surface; the colour and energy come
+          from the icon badge, the hover lift and the chevron — not from filling
+          one card, so they stay visually consistent. */}
       <main className="guide-actions">
-        <button className="action-button secondary" onClick={() => updateActiveView('group')}>👤 הקבוצה שלי</button>
-        <button className="action-button primary" onClick={() => updateActiveView('attendance')}>📝 סימון נוכחות</button>
-      </main>
 
-      {/* Optional logout footer. */}
-      {typeof onLogout === 'function' && (
-        <footer className="guide-footer">
-          <button className="logout-button" onClick={onLogout}>התנתקות</button>
-        </footer>
-      )}
+        {/* Card 1: the guide's group. */}
+        <button
+          className="guide-action-card"
+          onClick={() => updateActiveView('group')}
+        >
+          {/* Brand-tinted icon badge: a small group of people. */}
+          <span className="guide-action-icon guide-action-icon--group" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+          </span>
+
+          <span className="guide-action-text">
+            <span className="guide-action-title">הקבוצה שלי</span>
+            <span className="guide-action-sub">פרטי הקבוצה ורשימת המתנדבים</span>
+          </span>
+
+          {/* Chevron hints the card is tappable; it nudges on hover. */}
+          <span className="guide-action-chevron" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </span>
+        </button>
+
+        {/* Card 2: mark attendance for today. */}
+        <button
+          className="guide-action-card"
+          onClick={() => updateActiveView('attendance')}
+        >
+          {/* Accent icon badge: a clipboard with a check. */}
+          <span className="guide-action-icon guide-action-icon--attendance" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 2h6a1 1 0 0 1 1 1v2H8V3a1 1 0 0 1 1-1z" />
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+              <path d="M9 14l2 2 4-4" />
+            </svg>
+          </span>
+
+          <span className="guide-action-text">
+            <span className="guide-action-title">סימון נוכחות</span>
+            <span className="guide-action-sub">מי הגיע/ה היום למפגש</span>
+          </span>
+
+          <span className="guide-action-chevron" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </span>
+        </button>
+      </main>
     </div>
   );
 };

@@ -1,10 +1,14 @@
-// ActivityCommandCenter — daily operations hub: today's & tomorrow's events,
-// fast attendance marking, WhatsApp reminders and smart alert cards.
+// ActivityCommandCenter — the admin's daily operations hub ("חמ״ל"). It is
+// embedded in the admin home (AdminOverview), below the calendar. It surfaces
+// what needs attention right now: how many volunteers are missing from today's
+// attendance, whose birthday is this week, and today's + tomorrow's events
+// (each with a one-tap "copy a WhatsApp reminder" action). It does NOT mark
+// attendance itself — the cards link out to the screens where that happens.
 
-// React hooks for state, effects and memoization.
-import { useEffect, useMemo, useState } from 'react';
+// React hooks for state, derived values, effects, callbacks and mutable refs.
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-// Firestore helpers for reading collections and writing attendance.
+// Firestore helpers for reading the collections this hub summarises.
 import { collection, getDocs } from 'firebase/firestore';
 
 // Our Firestore database instance.
@@ -13,90 +17,122 @@ import { db } from '../../firebase';
 // Shared event-date helper (local "YYYY-MM-DD" parsing).
 import { parseEventDate } from '../../utils/eventStatus';
 
-// WhatsApp message template (used for the copy-to-group message).
+// Shared birth-date parsing (kept in one place across screens).
+import { parseBirthDate } from '../../utils/people';
+
+// WhatsApp reminder template + the editable "send on WhatsApp" button.
 import { eventReminderMessage } from '../../utils/whatsapp';
+import WhatsAppButton from '../shared/WhatsAppButton/WhatsAppButton';
+
+// Shared attendance status normalisation (tolerates the older Hebrew strings).
+import { normalizeAttendanceStatus, getRecordStatus } from '../../utils/attendance';
 
 // Styles for this screen.
 import './ActivityCommandCenter.css';
 
 
-// The three attendance states stored on each record.
-const STATUS = {
-  present: 'נוכח',
-  late: 'איחר',
-  absent: 'נעדר',
-};
-
 // Label used when an event has no assigned group.
 const NO_GROUP = 'ללא שיוך';
 
-// Field names that might hold a birth date across the collections.
-const BIRTH_DATE_FIELDS = ['birthDate', 'birthday', 'dob', 'dateOfBirth', 'birth_date'];
-
-// One day in milliseconds.
+// One day in milliseconds (for whole-day date math).
 const DAY_MS = 86400000;
-
 
 // Midnight of a date, so day comparisons ignore the time of day.
 function startOfDay(date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
-// Parse a birth date from any supported field name / value shape.
-function parseBirthDate(person) {
-  for (const field of BIRTH_DATE_FIELDS) {
-    const value = person[field];
-    if (!value) continue;
 
-    let date = null;
+// Add calendar days in local time — safer than adding DAY_MS, because a
+// daylight-saving transition can make a local day shorter or longer than 24h.
+function addDays(date, days) {
+  const next = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  next.setDate(next.getDate() + days);
+  return next;
+}
 
-    if (typeof value === 'string') {
-      const parsed = new Date(value);
-      if (!Number.isNaN(parsed.getTime())) date = parsed;
-    } else if (typeof value.toDate === 'function') {
-      date = value.toDate();
-    } else if (value instanceof Date) {
-      date = value;
-    } else if (typeof value.seconds === 'number') {
-      date = new Date(value.seconds * 1000);
-    }
 
-    if (date && !Number.isNaN(date.getTime())) return date;
+// A day-level key (YYYY-MM-DD) from any shape: a Date, a Firestore Timestamp,
+// a { seconds } object, or a date string. Used to line attendance records
+// (stored per group + day) up with the day an event falls on.
+function toDateKey(value) {
+  if (!value) {
+    return '';
   }
 
-  return null;
+  // Coerce every supported shape into a Date.
+  let date = null;
+
+  if (value instanceof Date) {
+    date = value;
+  } else if (typeof value.toDate === 'function') {
+    date = value.toDate();
+  } else if (typeof value.seconds === 'number') {
+    date = new Date(value.seconds * 1000);
+  } else if (typeof value === 'string') {
+    date = parseEventDate(value);
+  }
+
+  if (!date || Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  // Zero-pad the month + day so keys match consistently.
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
 }
+
 
 // True when the person's birthday falls within the next `days` days.
 function birthdaySoon(person, today, days) {
   const birth = parseBirthDate(person);
-  if (!birth) return false;
+
+  if (!birth) {
+    return false;
+  }
 
   // This year's birthday (roll to next year if it already passed).
   let next = new Date(today.getFullYear(), birth.getMonth(), birth.getDate());
+
   if (startOfDay(next) < startOfDay(today)) {
     next = new Date(today.getFullYear() + 1, birth.getMonth(), birth.getDate());
   }
 
   // Whole-day difference from today.
   const diff = Math.round((startOfDay(next) - startOfDay(today)) / DAY_MS);
+
   return diff >= 0 && diff <= days;
 }
+
 
 // Format an event date as a readable Hebrew date.
 function formatHebrewDate(value) {
   const date = parseEventDate(value);
-  if (!date) return value || 'ללא תאריך';
+
+  if (!date) {
+    return value || 'ללא תאריך';
+  }
+
   return date.toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 
-// `groupFilter` ({ id, name }) scopes the view to one group (guides); admins
-// pass nothing. `onBack` renders a back button (guide flow) when provided.
-// `leadingCard` is an optional node shown as the first alert card (the admin
-// home uses it for the "pending registrations" card). `onNavigate(view)` lets
-// the other stat cards jump to their related admin screen.
-function ActivityCommandCenter({ groupFilter = null, onBack, leadingCard = null, onNavigate }) {
+// `groupFilter` ({ id, name }) scopes the WHOLE hub (events, birthdays and the
+// absent count) to one group; admins pass nothing. `onBack` renders a back
+// button when this is used as a standalone screen. `leadingCard` is an optional
+// node shown as the first alert card. `onNavigate` lets the alert cards jump to
+// their related screen. `reloadToken` makes the hub refetch when bumped.
+// `sections` chooses which parts to render: 'all' (default), 'cards' (just the
+// at-a-glance alert counters) or 'schedule' (just the today/tomorrow card). This
+// lets the admin home place the two parts in different spots on the screen.
+function ActivityCommandCenter({ groupFilter = null, onBack, leadingCard = null, onNavigate, reloadToken = 0, sections = 'all' }) {
+  // Which parts to show (derived from the `sections` prop).
+  const showCards = sections === 'all' || sections === 'cards';
+  const showSchedule = sections === 'all' || sections === 'schedule';
+
   // Raw collections (each degrades to [] if its read is blocked).
   const [events, setEvents] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -107,49 +143,105 @@ function ActivityCommandCenter({ groupFilter = null, onBack, leadingCard = null,
   // True while the first load runs.
   const [loading, setLoading] = useState(true);
 
-  // The event expanded into the attendance panel (null when none).
+  // True when at least one collection failed to load (numbers may be partial).
+  const [hadLoadError, setHadLoadError] = useState(false);
+
+  // The event expanded into its panel (null when none).
   const [selectedEventId, setSelectedEventId] = useState(null);
 
-  // Whether the today/tomorrow schedule card is expanded (starts collapsed).
-  const [scheduleOpen, setScheduleOpen] = useState(false);
+  // On phones the "today + tomorrow" events card can be collapsed to save
+  // space; on desktop it stays open. `isMobile` tracks the phone breakpoint
+  // (the same 640px used in the CSS). The lazy initialiser reads the current
+  // width up front, so the card renders in the right mode with no flicker.
+  const [isMobile, setIsMobile] = useState(
+    () => window.matchMedia('(max-width: 640px)').matches,
+  );
 
+  // Whether the events card is expanded. Only matters on phones — on desktop
+  // the card is always shown regardless of this flag. Starts CLOSED so the
+  // phone view opens compact; the visitor taps the header to reveal the events.
+  const [isScheduleOpen, setIsScheduleOpen] = useState(false);
 
-  // True for ~2s after the group message is copied.
-  const [copied, setCopied] = useState(false);
+  // Stays true while mounted, so async callbacks don't set state after unmount.
+  const isMountedRef = useRef(true);
 
-  // Load every collection once when the screen opens.
+  // Whether navigation is wired up (the cards only act when it is).
+  const canNavigate = typeof onNavigate === 'function';
+
+  // Track mount status.
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // Keep `isMobile` in sync with the viewport width, so the events card switches
+  // between "collapsible" (phone) and "always open" (desktop) when the window is
+  // resized or rotated.
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 640px)');
+
+    const sync = () => setIsMobile(query.matches);
+    sync();
+
+    query.addEventListener('change', sync);
+    return () => query.removeEventListener('change', sync);
+  }, []);
+
+  // Load every collection once (and again whenever reloadToken changes).
   useEffect(() => {
     let isMounted = true;
 
-    // Read one collection, returning [] on failure so a block just shows empty.
+    // Read one collection. Returns the items plus a `failed` flag, so the caller
+    // can warn the user when some data is missing (instead of showing a fake 0).
     const fetchDocs = async (name) => {
       try {
         const snapshot = await getDocs(collection(db, name));
-        return snapshot.docs.map((document) => ({ id: document.id, ...document.data() }));
+
+        // Spread the data first, then set id last — so a stray "id" field inside
+        // the document can never overwrite Firestore's real document id.
+        return {
+          items: snapshot.docs.map((documentSnapshot) => ({
+            ...documentSnapshot.data(),
+            id: documentSnapshot.id,
+          })),
+          failed: false,
+        };
       } catch (error) {
         console.error(`שגיאה בטעינת ${name}:`, error);
-        return [];
+        return { items: [], failed: true };
       }
     };
 
     // Load all collections in parallel and publish them to state.
     const load = async () => {
-      const [eventsRaw, groupsRaw, volunteersRaw, usersRaw, attendanceRaw] =
-        await Promise.all([
-          fetchDocs('events'),
-          fetchDocs('groups'),
-          fetchDocs('volunteers'),
-          fetchDocs('users'),
-          fetchDocs('attendance'),
-        ]);
+      const [eventsResult, groupsResult, volunteersResult, usersResult, attendanceResult] = await Promise.all([
+        fetchDocs('events'),
+        fetchDocs('groups'),
+        fetchDocs('volunteers'),
+        fetchDocs('users'),
+        fetchDocs('attendance'),
+      ]);
 
-      if (!isMounted) return;
+      // Bail out if we unmounted while waiting.
+      if (!isMounted) {
+        return;
+      }
 
-      setEvents(eventsRaw);
-      setGroups(groupsRaw);
-      setVolunteers(volunteersRaw);
-      setUsers(usersRaw);
-      setAttendance(attendanceRaw);
+      setEvents(eventsResult.items);
+      setGroups(groupsResult.items);
+      setVolunteers(volunteersResult.items);
+      setUsers(usersResult.items);
+      setAttendance(attendanceResult.items);
+
+      // Flag a partial load if any single collection failed.
+      setHadLoadError(
+        [eventsResult, groupsResult, volunteersResult, usersResult, attendanceResult]
+          .some((result) => result.failed),
+      );
+
       setLoading(false);
     };
 
@@ -158,123 +250,134 @@ function ActivityCommandCenter({ groupFilter = null, onBack, leadingCard = null,
     return () => {
       isMounted = false;
     };
-  }, []);
+    // Reloads when the parent bumps reloadToken (e.g. after adding an event).
+  }, [reloadToken]);
+
+  // True when an item (event / volunteer / attendance record) belongs to the
+  // filtered group. With no filter, everything passes. Groups are referenced by
+  // id or by name across the data model, so we accept either.
+  const matchesGroupFilter = useCallback((item) => {
+    if (!groupFilter) {
+      return true;
+    }
+
+    // Normalise values (tolerate stray whitespace or a non-string id).
+    const normalize = (value) => (value === undefined || value === null ? '' : String(value).trim());
+
+    const wantedId = normalize(groupFilter.id);
+    const wantedName = normalize(groupFilter.name);
+
+    // Items reference their group by id or by name across the data model.
+    const itemIds = [item.groupId].map(normalize).filter(Boolean);
+    const itemNames = [item.groupName, item.group, item.assignedGroup].map(normalize).filter(Boolean);
+
+    return (
+      (wantedId !== '' && itemIds.includes(wantedId))
+      || (wantedName !== '' && itemNames.includes(wantedName))
+    );
+  }, [groupFilter]);
 
   // Index groups by name (events reference their group by name, not id).
   const groupByName = useMemo(() => {
     const map = new Map();
+
     groups.forEach((group) => {
       const name = group.groupName || group.name || '';
-      if (name) map.set(name, group);
+
+      if (name) {
+        map.set(name, group);
+      }
     });
+
     return map;
   }, [groups]);
 
-  // Bucket the volunteers by group name (for per-event rosters + counts).
-  const volunteersByGroup = useMemo(() => {
-    const map = new Map();
-    volunteers.forEach((volunteer) => {
-      const name = volunteer.groupName || volunteer.group || '';
-      if (!name) return;
-      if (!map.has(name)) map.set(name, []);
-      map.get(name).push(volunteer);
-    });
-    return map;
-  }, [volunteers]);
+  // Today and tomorrow at local midnight, used to bucket the upcoming events.
+  const todayStart = startOfDay(new Date());
+  const todayTime = todayStart.getTime();
+  const tomorrowTime = addDays(todayStart, 1).getTime();
 
-  // Index event-scoped attendance by `${eventId}_${volunteerId}`.
-  const attendanceByKey = useMemo(() => {
-    const map = new Map();
-    attendance.forEach((record) => {
-      if (record.eventId && record.volunteerId) {
-        map.set(`${record.eventId}_${record.volunteerId}`, record);
-      }
-    });
-    return map;
-  }, [attendance]);
-
-  // Today and tomorrow at midnight, used to bucket the upcoming events.
-  const todayTime = startOfDay(new Date()).getTime();
-  const tomorrowTime = todayTime + DAY_MS;
-
-  // Build today's + tomorrow's events, enriched with group / guide / counts.
+  // Build today's + tomorrow's events, enriched with their group's guide + time
+  // and sorted by time of day (a chronological ops board).
   const upcoming = useMemo(() => {
-    // Decorate one event with its group, roster and attendance tallies.
+    // Enrich one event with its group's guide name and meeting time.
     const decorate = (event) => {
       const assignedGroup = event.assignedGroup || NO_GROUP;
       const group = groupByName.get(assignedGroup) || null;
-      const roster = volunteersByGroup.get(assignedGroup) || [];
-
-      // Tally the three attendance states for this event.
-      let present = 0;
-      let late = 0;
-      let absent = 0;
-      roster.forEach((volunteer) => {
-        const record = attendanceByKey.get(`${event.id}_${volunteer.id}`);
-        if (!record) return;
-        if (record.status === STATUS.present) present += 1;
-        else if (record.status === STATUS.late) late += 1;
-        else if (record.status === STATUS.absent) absent += 1;
-      });
-
-      const expected = roster.length;
-      const marked = present + late + absent;
 
       return {
         ...event,
         assignedGroup,
-        groupId: group?.id || '',
         guideName: group?.guideName || '',
         time: group?.time || '',
-        roster,
-        expected,
-        present,
-        late,
-        absent,
-        arrived: present + late,
-        unmarked: Math.max(expected - marked, 0),
       };
     };
-
-    // Keep only events that match the optional group filter.
-    const matchesFilter = (event) =>
-      !groupFilter?.name || (event.assignedGroup || NO_GROUP) === groupFilter.name;
 
     const today = [];
     const tomorrow = [];
 
     events.forEach((event) => {
-      if (!matchesFilter(event)) return;
+      if (!matchesGroupFilter(event)) {
+        return;
+      }
 
       const date = parseEventDate(event.date);
-      if (!date) return;
 
+      if (!date) {
+        return;
+      }
+
+      // Bucket into today / tomorrow by whole day.
       const day = startOfDay(date).getTime();
-      if (day === todayTime) today.push(decorate(event));
-      else if (day === tomorrowTime) tomorrow.push(decorate(event));
+
+      if (day === todayTime) {
+        today.push(decorate(event));
+      } else if (day === tomorrowTime) {
+        tomorrow.push(decorate(event));
+      }
     });
 
+    // Show each day's events in chronological order (events with no time last).
+    const sortByTime = (a, b) => (a.time || '~').localeCompare(b.time || '~', 'he');
+
+    today.sort(sortByTime);
+    tomorrow.sort(sortByTime);
+
     return { today, tomorrow };
-  }, [events, groupByName, volunteersByGroup, attendanceByKey, groupFilter, todayTime, tomorrowTime]);
+  }, [events, groupByName, matchesGroupFilter, todayTime, tomorrowTime]);
 
-
-  // People (volunteers + active guides) with a birthday in the next 7 days.
+  // People (volunteers + active guides) with a birthday in the next 7 days,
+  // scoped to the filtered group when one is set.
   const birthdaysThisWeek = useMemo(() => {
     const today = new Date();
     const guideUsers = users.filter((person) => person.role === 'guide' && !person.disabled);
-    return [...volunteers, ...guideUsers].filter((person) => birthdaySoon(person, today, 7)).length;
-  }, [volunteers, users]);
 
-  // Total volunteers not yet marked across today's events (alert card).
-  const unmarkedToday = useMemo(
-    () => upcoming.today.reduce((sum, event) => sum + event.unmarked, 0),
-    [upcoming],
-  );
+    return [...volunteers, ...guideUsers]
+      .filter(matchesGroupFilter)
+      .filter((person) => birthdaySoon(person, today, 7))
+      .length;
+  }, [volunteers, users, matchesGroupFilter]);
 
+  // Volunteers marked absent today, scoped to the filtered group when one is set.
+  const absentTodayCount = useMemo(() => {
+    const todayKey = toDateKey(new Date());
 
-  // Copy a ready-to-paste broadcast message for the event's group, with all
-  // the details (name, when, location) plus the event description.
-  const copyGroupMessage = async (event) => {
+    return attendance.filter((record) => {
+      if (!matchesGroupFilter(record)) {
+        return false;
+      }
+
+      const dateKey = record.dateKey || toDateKey(record.date);
+      const isToday = dateKey === todayKey;
+      const isAbsent = normalizeAttendanceStatus(getRecordStatus(record)) === 'absent';
+
+      return isToday && isAbsent;
+    }).length;
+  }, [attendance, matchesGroupFilter]);
+
+  // Build a ready-to-send broadcast message for the event's group (name, when,
+  // location, plus the description).
+  const buildEventMessage = (event) => {
     let message = eventReminderMessage({
       eventName: event.name,
       date: formatHebrewDate(event.date),
@@ -287,19 +390,12 @@ function ActivityCommandCenter({ groupFilter = null, onBack, leadingCard = null,
       message += `\nפרטים: ${event.description}`;
     }
 
-    try {
-      await navigator.clipboard.writeText(message);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch (error) {
-      console.error('העתקת ההודעה נכשלה:', error);
-    }
+    return message;
   };
 
-  // Render the opened event's panel: its description + a button that copies a
-  // ready-to-send group message (with all the details) to the clipboard.
-  const renderRosterPanel = (event) => (
-    <div className="acc-roster">
+  // Render the opened event's panel: its description + a "send on WhatsApp" button.
+  const renderEventPanel = (event, panelId) => (
+    <div id={panelId} className="acc-roster">
 
       {/* Event description (or a friendly note when there is none). */}
       {event.description ? (
@@ -311,28 +407,34 @@ function ActivityCommandCenter({ groupFilter = null, onBack, leadingCard = null,
         <div className="acc-empty-inline">אין תיאור לאירוע.</div>
       )}
 
-      {/* Copy a group broadcast message (with all the details) to the clipboard. */}
+      {/* Send a WhatsApp message for THIS event's group. The message is editable
+          before sending; with no fixed number, WhatsApp opens the chat picker so
+          the admin chooses the group's chat (group + participants). */}
       <div className="acc-roster-actions">
-        <button type="button" className="acc-copy-btn" onClick={() => copyGroupMessage(event)}>
-          {copied ? 'ההודעה הועתקה ✓' : 'העתקת הודעה לקבוצה'}
-        </button>
+        <WhatsAppButton
+          message={buildEventMessage(event)}
+          requirePhone={false}
+          label="שליחה בוואטסאפ לקבוצה"
+        />
       </div>
     </div>
   );
 
-  // Render one event card (summary header + counters; opens the roster panel).
+  // Render one event card (summary header that opens the description panel).
   const renderEventCard = (event) => {
     const isOpen = selectedEventId === event.id;
+    const panelId = `acc-event-panel-${event.id}`;
 
     return (
       <div className={`acc-event ${isOpen ? 'is-open' : ''}`} key={event.id}>
 
-        {/* Card header: toggles the attendance panel. */}
+        {/* Card header: toggles the panel open / closed. */}
         <button
           type="button"
           className="acc-event-head"
           onClick={() => setSelectedEventId(isOpen ? null : event.id)}
           aria-expanded={isOpen}
+          aria-controls={panelId}
         >
           {/* Name + date/time + group/guide. */}
           <span className="acc-event-info">
@@ -349,8 +451,8 @@ function ActivityCommandCenter({ groupFilter = null, onBack, leadingCard = null,
           <span className="acc-event-chevron" aria-hidden="true">{isOpen ? '▲' : '▼'}</span>
         </button>
 
-        {/* Expanded roster + actions (only when open). */}
-        {isOpen && renderRosterPanel(event)}
+        {/* Expanded description + actions (only when open). */}
+        {isOpen && renderEventPanel(event, panelId)}
       </div>
     );
   };
@@ -358,45 +460,61 @@ function ActivityCommandCenter({ groupFilter = null, onBack, leadingCard = null,
   // Render a day section (today / tomorrow) with its events or an empty note.
   const renderDay = (title, list, emptyText) => (
     <div className="acc-day">
-      {/* Day header with an inline event count (replaces the old "today" card). */}
+
+      {/* Day header with an inline event count. */}
       <h3 className="acc-day-title">
         <span>{title}</span>
         <span className="acc-day-count">{list.length}</span>
       </h3>
-      {list.length > 0
-        ? <div className="acc-events">{list.map(renderEventCard)}</div>
-        : <div className="acc-empty-inline">{emptyText}</div>}
+
+      {list.length > 0 ? (
+        <div className="acc-events">{list.map(renderEventCard)}</div>
+      ) : (
+        <div className="acc-empty-inline">{emptyText}</div>
+      )}
     </div>
   );
 
   return (
     <section className="acc" dir="rtl" aria-label="חמ״ל פעילות">
 
-      {/* Optional back button (only when used as a standalone screen). No
-          title/subtitle — the admin home embeds this without a heading. */}
+      {/* Optional back button (only when used as a standalone screen). The admin
+          home embeds this without a heading. */}
       {typeof onBack === 'function' && (
         <header className="acc-head">
           <button type="button" className="acc-back" onClick={onBack}>חזרה</button>
         </header>
       )}
 
-      {/* Loading placeholder, otherwise the alert cards + event lists. */}
+      {/* Loading placeholder, otherwise the alert cards + the schedule. */}
       {loading ? (
-        <div className="acc-empty">טוען נתונים...</div>
+        <div className="acc-empty" role="status">טוען נתונים...</div>
       ) : (
         <>
+          {/* Warn when some data didn't load, so a "0" isn't mistaken for "none". */}
+          {hadLoadError && (
+            <div className="acc-warning" role="status">
+              חלק מנתוני החמ״ל לא נטענו. המספרים עשויים להיות חלקיים.
+            </div>
+          )}
+
           {/* Alert cards: quick at-a-glance counters. The optional leading card
-              (pending registrations, from the admin home) sits first. */}
+              (e.g. pending registrations) sits first when one is provided. */}
+          {showCards && (
           <div className="acc-cards">
             {leadingCard}
 
-            {/* Missing-attendance count — opens the attendance tracking screen. */}
+            {/* Absent-attendance count — opens the attendance screen. */}
             <button
               type="button"
               className="acc-card acc-card--missing"
-              onClick={() => onNavigate && onNavigate('attendance')}
+              onClick={() => onNavigate('attendance')}
+              disabled={!canNavigate}
+              aria-label={canNavigate
+                ? `חסרים בנוכחות: ${absentTodayCount} — מעבר למסך הנוכחות`
+                : `חסרים בנוכחות: ${absentTodayCount}`}
             >
-              <span className="acc-card-num">{unmarkedToday}</span>
+              <span className="acc-card-num">{absentTodayCount}</span>
               <span className="acc-card-label">חסרים בנוכחות</span>
             </button>
 
@@ -404,39 +522,71 @@ function ActivityCommandCenter({ groupFilter = null, onBack, leadingCard = null,
             <button
               type="button"
               className="acc-card acc-card--bday"
-              onClick={() => onNavigate && onNavigate('birthdays')}
+              onClick={() => onNavigate('birthdays')}
+              disabled={!canNavigate}
+              aria-label={canNavigate
+                ? `ימי הולדת השבוע: ${birthdaysThisWeek} — מעבר למסך ימי ההולדת`
+                : `ימי הולדת השבוע: ${birthdaysThisWeek}`}
             >
               <span className="acc-card-num">{birthdaysThisWeek}</span>
               <span className="acc-card-label">ימי הולדת השבוע</span>
             </button>
           </div>
+          )}
 
-          {/* Today's + tomorrow's events grouped in one collapsible card
-              (starts hidden; click the header to show / hide). */}
-          <div className={`acc-schedule ${scheduleOpen ? 'is-open' : ''}`}>
+          {/* Today's + tomorrow's events. On phones this is a collapsible card
+              (tap the header to open/close); on desktop it stays static and
+              always open. `isExpanded` decides whether the body is shown. */}
+          {showSchedule && (() => {
+            // On desktop the card is always open; on phones it follows the toggle.
+            const isExpanded = !isMobile || isScheduleOpen;
 
-            {/* Header toggles the whole schedule open / closed. */}
-            <button
-              type="button"
-              className="acc-schedule-head"
-              onClick={() => setScheduleOpen((open) => !open)}
-              aria-expanded={scheduleOpen}
-            >
-              <span className="acc-schedule-title">אירועי היום ומחר</span>
-              <span className="acc-schedule-count">
-                {upcoming.today.length + upcoming.tomorrow.length}
-              </span>
-              <span className="acc-schedule-chevron" aria-hidden="true">{scheduleOpen ? '▲' : '▼'}</span>
-            </button>
+            // The total event count, reused in both header variants.
+            const eventCount = upcoming.today.length + upcoming.tomorrow.length;
 
-            {/* Both day sections live inside the card (only when open). */}
-            {scheduleOpen && (
-              <div className="acc-schedule-body">
-                {renderDay('היום', upcoming.today, 'אין אירועים היום')}
-                {renderDay('מחר', upcoming.tomorrow, 'אין אירועים מחר')}
+            return (
+              <div className={`acc-schedule ${isExpanded ? 'is-open' : 'is-closed'}`}>
+
+                {/* Phone: the header is a button that opens/closes the card.
+                    Desktop: a plain, non-interactive header. */}
+                {isMobile ? (
+                  <button
+                    type="button"
+                    className="acc-schedule-head acc-schedule-head--toggle"
+                    onClick={() => setIsScheduleOpen((open) => !open)}
+                    aria-expanded={isScheduleOpen}
+                    aria-controls="acc-schedule-body"
+                  >
+                    <span className="acc-schedule-title">אירועי היום ומחר</span>
+                    <span className="acc-schedule-count">{eventCount}</span>
+
+                    {/* Chevron points down when open, sideways when collapsed. */}
+                    <span
+                      className={`acc-schedule-chevron ${isScheduleOpen ? 'is-open' : ''}`}
+                      aria-hidden="true"
+                    >
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M6 9l6 6 6-6" />
+                      </svg>
+                    </span>
+                  </button>
+                ) : (
+                  <div className="acc-schedule-head acc-schedule-head--static">
+                    <span className="acc-schedule-title">אירועי היום ומחר</span>
+                    <span className="acc-schedule-count">{eventCount}</span>
+                  </div>
+                )}
+
+                {/* Both day sections live inside the card — shown when expanded. */}
+                {isExpanded && (
+                  <div className="acc-schedule-body" id="acc-schedule-body">
+                    {renderDay('היום', upcoming.today, 'אין אירועים היום')}
+                    {renderDay('מחר', upcoming.tomorrow, 'אין אירועים מחר')}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            );
+          })()}
         </>
       )}
     </section>

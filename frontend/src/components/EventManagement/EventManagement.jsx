@@ -1,3 +1,8 @@
+// EventManagement — create, edit and delete community events. The list stays
+// live via an onSnapshot subscription, statuses are derived from the event
+// date (shared eventStatus util), and `readOnly` turns the screen into a
+// browse-only view for viewers.
+
 // React hooks for state, effects and memoization.
 import { useEffect, useMemo, useState } from 'react'
 
@@ -10,14 +15,13 @@ import {
   getDocs,
   onSnapshot,
   serverTimestamp,
+  setDoc,
   updateDoc,
 } from 'firebase/firestore'
 
-// Our Firestore database instance.
-import { db } from '../../firebase'
-
-// Default group names (fallback when the live groups list is empty).
-import { GROUP_NAMES } from '../../utils/groupOptions'
+// Our Firestore database + Storage instances.
+import { db, storage } from '../../firebase'
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 
 // Date picker used for the event date field.
 import BirthDatePicker from '../shared/BirthDatePicker/BirthDatePicker'
@@ -27,6 +31,9 @@ import './EventManagement.css'
 
 // Shared event status helper (so all screens show the same status).
 import { computeEventStatus } from '../../utils/eventStatus'
+
+// Shared collapsible advanced-search bar (free text + per-field filters).
+import SearchFilters from '../shared/SearchFilters/SearchFilters'
 
 
 // Firestore collection used for storing and reading events.
@@ -54,7 +61,26 @@ const EMPTY_FORM = {
   contactName: '',
   contactPhone: '',
   contactEmail: '',
+  imageUrls: [],
 }
+
+
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+const isValidImage = (file) => {
+  if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+    alert(`הקובץ ${file.name} אינו תמונה מסוג JPG, PNG או WEBP.`);
+    return false;
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    alert(`התמונה ${file.name} גדולה מדי (מקסימום 5MB).`);
+    return false;
+  }
+
+  return true;
+};
+
 
 
 // Map an event status to a CSS class (status colours live in the CSS file).
@@ -90,6 +116,7 @@ function createFormFromEvent(event) {
     contactName: event.contact?.name || '',
     contactPhone: event.contact?.phone || '',
     contactEmail: event.contact?.email || '',
+    imageUrls: event.imageUrls || [],
   }
 }
 
@@ -108,6 +135,7 @@ function createEventFromForm(form) {
       phone: form.contactPhone.trim(),
       email: form.contactEmail.trim(),
     },
+    imageUrls: form.imageUrls || [],
   }
 }
 
@@ -125,6 +153,7 @@ function normalizeEvent(documentSnapshot) {
     assignedGroup: data.assignedGroup || 'ללא שיוך',
     status: data.status || 'מתוכנן',
     contact: data.contact || {},
+    imageUrls: data.imageUrls || [],
   }
 }
 
@@ -145,7 +174,7 @@ function getSubmitButtonText({ saving, isEditing }) {
 
 // Event management: add, edit, delete, search and open event details.
 // `readOnly` hides all editing (used for viewers, who can only browse).
-export default function EventManagement({ onOpenEventDetails, readOnly = false }) {
+export default function EventManagement({ onOpenEventDetails, readOnly = false, registerBack }) {
   // Events loaded from Firestore.
   const [events, setEvents] = useState([])
 
@@ -155,12 +184,60 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false }
   // Holds the selected event id while editing; null means add mode.
   const [editingEventId, setEditingEventId] = useState(null)
 
+  // Holds the event ID for upload/saving purposes (pre-generated for additions).
+  const [currentEventId, setCurrentEventId] = useState('')
+
+  // True while files are uploading to storage.
+  const [uploading, setUploading] = useState(false)
+
+  // Holds the event whose pictures we are viewing in the modal (null when none).
+  const [viewingPicturesEvent, setViewingPicturesEvent] = useState(null)
+
   // Search text used to filter the event table.
   const [searchTerm, setSearchTerm] = useState('')
 
-  // Whether the events list is revealed (admins open it with a button; it
-  // always shows for read-only viewers who have no add form).
-  const [showList, setShowList] = useState(false)
+  // Structured "advanced filters" (empty string means "don't filter").
+  const [filters, setFilters] = useState({ status: '', assignedGroup: '' })
+
+  // Update one filter by name (handed to the shared SearchFilters component).
+  const updateFilter = (name, value) => {
+    setFilters((current) => ({ ...current, [name]: value }))
+  }
+
+  // Reset every structured filter.
+  const clearFilters = () => {
+    setFilters({ status: '', assignedGroup: '' })
+  }
+
+  // Whether the add/edit form is open. The list always shows first; the form
+  // opens only via the "הוספת אירוע" button or when editing an event.
+  const [showForm, setShowForm] = useState(false)
+
+  // On phones event cards start collapsed, like the other management lists.
+  const [expandedEventId, setExpandedEventId] = useState(null)
+
+  // Dashboard back button: an open form returns to the list first.
+  useEffect(() => {
+    if (!registerBack) return
+    registerBack(() => {
+      if (showForm) {
+        setForm(EMPTY_FORM)
+        setEditingEventId(null)
+        setCurrentEventId('')
+        setShowForm(false)
+        return true
+      }
+      return false
+    })
+  }, [registerBack, showForm])
+
+  // Opens the form for creating a new event, pre-generating a Firestore ID.
+  const handleOpenAddForm = () => {
+    setForm(EMPTY_FORM)
+    setEditingEventId(null)
+    setCurrentEventId(doc(collection(db, EVENTS_COLLECTION_NAME)).id)
+    setShowForm(true)
+  }
 
   // UI state for loading, saving, and Firestore errors.
   const [loading, setLoading] = useState(true)
@@ -238,11 +315,7 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false }
         console.error('Error loading groups:', groupsError)
       }
 
-      // Fall back to the static list if nothing came back.
-      if (names.length === 0) {
-        names = [...GROUP_NAMES]
-      }
-
+      // Live groups only — selection lists always mirror the real system.
       // Store a de-duplicated list.
       if (active) {
         setGroupOptions([...new Set(names)])
@@ -257,30 +330,64 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false }
     }
   }, [])
 
-  // Events filtered by the search box (recomputed only when inputs change).
+  // Events filtered by the free-text search AND the structured filters
+  // (recomputed only when inputs change).
   const filteredEvents = useMemo(() => {
     // Normalize the search text.
     const searchValue = searchTerm.trim().toLowerCase()
 
-    // No search: show everything.
-    if (!searchValue) {
-      return events
-    }
-
-    // Match the search against the event's combined text.
     return events.filter((event) => {
-      const searchableText = [
-        event.name,
-        event.location,
-        event.assignedGroup,
-        event.status,
-      ]
-        .join(' ')
-        .toLowerCase()
+      // Advanced filter — status, matched against the DISPLAYED (derived from
+      // the date) status, so it lines up with the badge the admin sees.
+      if (filters.status && computeEventStatus(event) !== filters.status) {
+        return false
+      }
 
-      return searchableText.includes(searchValue)
+      // Advanced filter — assigned group.
+      if (filters.assignedGroup && event.assignedGroup !== filters.assignedGroup) {
+        return false
+      }
+
+      // Free-text search — across every text column of the event.
+      if (searchValue) {
+        const searchableText = [
+          event.name,
+          event.location,
+          event.assignedGroup,
+          event.status,
+          event.date,
+          event.description,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+
+        if (!searchableText.includes(searchValue)) {
+          return false
+        }
+      }
+
+      return true
     })
-  }, [events, searchTerm])
+  }, [events, searchTerm, filters])
+
+  // The advanced-panel fields: filter by status and by assigned group.
+  const eventFilterFields = [
+    {
+      name: 'status',
+      label: 'סטטוס',
+      type: 'select',
+      placeholder: 'כל הסטטוסים',
+      options: STATUSES,
+    },
+    {
+      name: 'assignedGroup',
+      label: 'קבוצה משויכת',
+      type: 'select',
+      placeholder: 'כל הקבוצות',
+      options: [...groupOptions, NO_GROUP],
+    },
+  ]
 
   // Dropdown options: live groups + "no group", plus the currently selected
   // value (so editing an old event keeps its group even if it's gone now).
@@ -301,6 +408,47 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false }
     setForm((currentForm) => ({
       ...currentForm,
       [name]: value,
+    }))
+  }
+
+  // Handle uploading multiple event images to Firebase Storage.
+  const handleImageUpload = async (e) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    setUploading(true)
+    const uploadedUrls = [...(form.imageUrls || [])]
+
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        if (!isValidImage(file)) continue
+
+        const extension = (file.name.split('.').pop() || 'jpg').toLowerCase()
+        const storageRef = ref(storage, `events/${currentEventId}/img-${Date.now()}-${i}.${extension}`)
+        await uploadBytes(storageRef, file)
+        const url = await getDownloadURL(storageRef)
+        uploadedUrls.push(url)
+      }
+
+      setForm((prev) => ({
+        ...prev,
+        imageUrls: uploadedUrls,
+      }))
+    } catch (error) {
+      console.error('Error uploading images:', error)
+      window.alert('אירעה שגיאה בהעלאת התמונות. ודא/י שחוקי ה-Storage נפרסו.')
+    } finally {
+      setUploading(false)
+      e.target.value = ''
+    }
+  }
+
+  // Remove an uploaded image from the list by its index.
+  const handleRemoveImage = (indexToRemove) => {
+    setForm((prev) => ({
+      ...prev,
+      imageUrls: (prev.imageUrls || []).filter((_, idx) => idx !== indexToRemove),
     }))
   }
 
@@ -334,18 +482,21 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false }
           updatedAt: serverTimestamp(),
         })
       } else {
-        // Create a new document.
-        await addDoc(collection(db, EVENTS_COLLECTION_NAME), {
+        // Create a new document using the pre-generated currentEventId.
+        await setDoc(doc(db, EVENTS_COLLECTION_NAME, currentEventId), {
           ...eventData,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         })
       }
 
-      // Reset the form back to add mode (bump the key so the date picker clears).
+      // Reset the form back to add mode (bump the key so the date picker
+      // clears) and return to the list view.
       setForm(EMPTY_FORM)
       setEditingEventId(null)
+      setCurrentEventId('')
       setFormResetKey((key) => key + 1)
+      setShowForm(false)
     } catch (firebaseError) {
       // Report a failed save.
       console.error('Error saving event:', firebaseError)
@@ -360,10 +511,11 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false }
   // Load an existing event into the form and switch to edit mode.
   const handleEdit = (eventToEdit) => {
     setEditingEventId(eventToEdit.id)
+    setCurrentEventId(eventToEdit.id)
     setForm(createFormFromEvent(eventToEdit))
 
-    // Close the list popup so the edit form is visible.
-    setShowList(false)
+    // Open the form pre-filled with this event.
+    setShowForm(true)
 
     // Scroll up to the form.
     window.scrollTo({
@@ -400,6 +552,7 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false }
   const handleCancelEdit = () => {
     setForm(EMPTY_FORM)
     setEditingEventId(null)
+    setCurrentEventId('')
   }
 
   // Open the full details view for an event (or notify it's not wired yet).
@@ -417,16 +570,22 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false }
   const eventListSection = (
     <section className="event-management-list-section">
 
-      {/* Section title + search. */}
+      {/* Section title. */}
       <div className="event-management-list-header">
         <h2>רשימת אירועים</h2>
+      </div>
 
-        <input
-          type="search"
-          className="event-management-search"
-          value={searchTerm}
-          onChange={(event) => setSearchTerm(event.target.value)}
-          placeholder="חיפוש לפי שם, מיקום, קבוצה או סטטוס"
+      {/* Free-text search (name / location / group / status / date) +
+          collapsible advanced filters (status, assigned group). */}
+      <div className="event-management-filters">
+        <SearchFilters
+          searchValue={searchTerm}
+          onSearchChange={setSearchTerm}
+          searchPlaceholder="🔍 חיפוש לפי שם, מיקום, קבוצה או סטטוס..."
+          fields={eventFilterFields}
+          values={filters}
+          onChange={updateFilter}
+          onClear={clearFilters}
         />
       </div>
 
@@ -439,21 +598,51 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false }
         <div className="event-cards">
           {/* A card per event, or an empty-state note. */}
           {filteredEvents.length > 0 ? (
-            filteredEvents.map((eventItem) => (
-              <article className="event-card" key={eventItem.id}>
+            filteredEvents.map((eventItem) => {
+              const isExpanded = expandedEventId === eventItem.id
+              const detailsId = `event-card-details-${eventItem.id}`
+
+              return (
+              <article className={`event-card ${isExpanded ? 'is-expanded' : ''}`} key={eventItem.id}>
 
                 {/* Card header: name + status badge. */}
-                <div className="event-card-head">
+                <button
+                  type="button"
+                  className="event-card-head"
+                  onClick={() => setExpandedEventId((currentId) => (currentId === eventItem.id ? null : eventItem.id))}
+                  aria-expanded={isExpanded}
+                  aria-controls={detailsId}
+                >
                   <h3 className="event-card-name">{eventItem.name}</h3>
                   <span
                     className={`event-management-status ${statusClass(computeEventStatus(eventItem))}`}
                   >
                     {computeEventStatus(eventItem)}
                   </span>
-                </div>
+                  <span className="event-card-chevron" aria-hidden="true" />
+                </button>
 
                 {/* Key details (label + value rows). */}
-                <dl className="event-card-details">
+                <dl className="event-card-details" id={detailsId}>
+                  {eventItem.imageUrls && eventItem.imageUrls.length > 0 && (
+                    <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '8px', marginBottom: '8px', borderBottom: '1px dashed var(--border)' }}>
+                      {eventItem.imageUrls.map((url, idx) => (
+                        <img 
+                          key={idx} 
+                          src={url} 
+                          alt={`תמונה ${idx + 1}`} 
+                          style={{ 
+                            width: '50px', 
+                            height: '50px', 
+                            objectFit: 'cover', 
+                            borderRadius: '6px', 
+                            border: '1px solid var(--border)',
+                            flexShrink: 0
+                          }} 
+                        />
+                      ))}
+                    </div>
+                  )}
                   <div className="event-card-row">
                     <dt>תאריך</dt>
                     <dd>{eventItem.date || '—'}</dd>
@@ -468,14 +657,29 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false }
                   </div>
                 </dl>
 
-                {/* Actions: "פרטים" opens the detail screen; edit/delete for admins. */}
+                {/* Actions. Admins manage with edit/delete only (the card
+                    already shows the details); read-only viewers keep the
+                    "פרטים" button — it's their only way into an event. */}
                 <div className="event-management-row-actions event-card-actions">
-                  <button type="button" onClick={() => handleOpenDetails(eventItem)}>
-                    פרטים
-                  </button>
-
-                  {!readOnly && (
+                  {readOnly ? (
                     <>
+                      {eventItem.imageUrls && eventItem.imageUrls.length > 0 && (
+                        <button type="button" onClick={() => setViewingPicturesEvent(eventItem)}>
+                          תמונות
+                        </button>
+                      )}
+                      <button type="button" onClick={() => handleOpenDetails(eventItem)}>
+                        פרטים
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {eventItem.imageUrls && eventItem.imageUrls.length > 0 && (
+                        <button type="button" onClick={() => setViewingPicturesEvent(eventItem)}>
+                          תמונות
+                        </button>
+                      )}
+
                       <button type="button" onClick={() => handleEdit(eventItem)}>
                         עריכה
                       </button>
@@ -487,7 +691,8 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false }
                   )}
                 </div>
               </article>
-            ))
+              )
+            })
           ) : (
             <div className="event-management-empty">אין אירועים להצגה כרגע.</div>
           )}
@@ -506,6 +711,17 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false }
             <span>{events.length}</span>
             <small>אירועים</small>
           </div>
+
+          {/* Opens the add-event form (the list is the default view). */}
+          {!readOnly && !showForm && (
+            <button
+              type="button"
+              className="event-management-primary-btn"
+              onClick={handleOpenAddForm}
+            >
+              + הוספת אירוע
+            </button>
+          )}
         </header>
 
         {/* Error banner shown if the events failed to load. */}
@@ -515,208 +731,324 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false }
           </div>
         )}
 
-        {/* Add / edit event form (hidden for read-only viewers). */}
-        {!readOnly && (
-        <form className="event-management-form" onSubmit={handleSubmit}>
+        {/* Add / edit event — opens in a modal window, matching the other
+            management screens (volunteers / guides) so it looks uniform. */}
+        {!readOnly && showForm && (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal-content" style={{ maxWidth: '700px' }}>
 
-          {/* Title changes between add and edit mode. */}
-          <h2>
-            {isEditing ? 'עריכת אירוע' : 'הוספת אירוע חדש'}
-          </h2>
+            {/* Title changes between add and edit mode. */}
+            <div className="modal-header">
+              {isEditing ? 'עריכת אירוע' : 'הוספת אירוע חדש'}
+            </div>
 
-          {/* Two-column grid of the main fields. */}
-          <div className="event-management-form-grid">
+            {/* `volunteer-form` is the shared modal-form layout (a vertical
+                stack). The inner grid keeps the fields in two compact columns,
+                exactly like the volunteers modal. */}
+            <form className="volunteer-form" onSubmit={handleSubmit}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
 
-            {/* Event name. */}
-            <label>
-              שם האירוע
+                {/* Event name. */}
+                <div className="form-group">
+                  <label>שם האירוע</label>
+                  <input
+                    className="styled-input full-width-input"
+                    type="text"
+                    name="name"
+                    value={form.name}
+                    onChange={handleChange}
+                    placeholder="לדוגמה: יום ספורט קהילתי"
+                  />
+                </div>
 
-              <input
-                type="text"
-                name="name"
-                value={form.name}
-                onChange={handleChange}
-                placeholder="לדוגמה: יום ספורט קהילתי"
-              />
-            </label>
+                {/* Event date (custom picker). */}
+                <div className="form-group">
+                  <BirthDatePicker
+                    key={editingEventId ?? `new-${formResetKey}`}
+                    value={form.date}
+                    onChange={(date) => setForm((currentForm) => ({ ...currentForm, date }))}
+                    label="תאריך"
+                    pastYears={3}
+                    futureYears={6}
+                  />
+                </div>
 
-            {/* Event date (custom picker). */}
-            <label>
-              תאריך
+                {/* Location. */}
+                <div className="form-group">
+                  <label>מיקום</label>
+                  <input
+                    className="styled-input full-width-input"
+                    type="text"
+                    name="location"
+                    value={form.location}
+                    onChange={handleChange}
+                    placeholder="לדוגמה: מרכז שלווה, ירושלים"
+                  />
+                </div>
 
-              <BirthDatePicker
-                key={editingEventId ?? `new-${formResetKey}`}
-                value={form.date}
-                onChange={(date) => setForm((currentForm) => ({ ...currentForm, date }))}
-                pastYears={3}
-                futureYears={6}
-              />
-            </label>
+                {/* Assigned group dropdown. */}
+                <div className="form-group">
+                  <label>שיוך קבוצה</label>
+                  <select
+                    className="styled-input full-width-input"
+                    name="assignedGroup"
+                    value={form.assignedGroup}
+                    onChange={handleChange}
+                  >
+                    {selectableGroups.map((group) => (
+                      <option key={group} value={group}>
+                        {group}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            {/* Location. */}
-            <label>
-              מיקום
+                {/* Status dropdown. */}
+                <div className="form-group">
+                  <label>סטטוס</label>
+                  <select
+                    className="styled-input full-width-input"
+                    name="status"
+                    value={form.status}
+                    onChange={handleChange}
+                  >
+                    {STATUSES.map((status) => (
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-              <input
-                type="text"
-                name="location"
-                value={form.location}
-                onChange={handleChange}
-                placeholder="לדוגמה: מרכז שלווה, ירושלים"
-              />
-            </label>
+                {/* Contact name. */}
+                <div className="form-group">
+                  <label>איש קשר</label>
+                  <input
+                    className="styled-input full-width-input"
+                    type="text"
+                    name="contactName"
+                    value={form.contactName}
+                    onChange={handleChange}
+                    placeholder="שם איש קשר"
+                  />
+                </div>
 
-            {/* Assigned group dropdown. */}
-            <label>
-              שיוך קבוצה
+                {/* Contact phone. */}
+                <div className="form-group">
+                  <label>טלפון איש קשר</label>
+                  <input
+                    className="styled-input full-width-input"
+                    type="tel"
+                    name="contactPhone"
+                    value={form.contactPhone}
+                    onChange={handleChange}
+                    placeholder="050-0000000"
+                    dir="ltr"
+                  />
+                </div>
 
-              <select
-                name="assignedGroup"
-                value={form.assignedGroup}
-                onChange={handleChange}
-              >
-                {selectableGroups.map((group) => (
-                  <option key={group} value={group}>
-                    {group}
-                  </option>
-                ))}
-              </select>
-            </label>
+                {/* Contact email. */}
+                <div className="form-group">
+                  <label>אימייל איש קשר</label>
+                  <input
+                    className="styled-input full-width-input"
+                    type="email"
+                    name="contactEmail"
+                    value={form.contactEmail}
+                    onChange={handleChange}
+                    placeholder="name@example.com"
+                    dir="ltr"
+                  />
+                </div>
 
-            {/* Status dropdown. */}
-            <label>
-              סטטוס
+                {/* Full-width description field. */}
+                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                  <label>תיאור האירוע</label>
+                  <textarea
+                    className="styled-input full-width-input"
+                    name="description"
+                    value={form.description}
+                    onChange={handleChange}
+                    placeholder="כתוב תיאור קצר של האירוע"
+                    rows="4"
+                  />
+                </div>
 
-              <select
-                name="status"
-                value={form.status}
-                onChange={handleChange}
-              >
-                {STATUSES.map((status) => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
-              </select>
-            </label>
+                {/* Event images. */}
+                <div style={{ gridColumn: '1 / -1', marginTop: '10px' }}>
+                  <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '8px' }}>תמונות האירוע</label>
 
-            {/* Contact name. */}
-            <label>
-              איש קשר
+                  {/* List of uploaded images */}
+                  {form.imageUrls && form.imageUrls.length > 0 && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px', marginBottom: '12px' }}>
+                      {form.imageUrls.map((url, idx) => (
+                        <div key={idx} style={{ position: 'relative', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)', height: '90px' }}>
+                          <img src={url} alt={`תמונה ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveImage(idx)}
+                            style={{
+                              position: 'absolute',
+                              top: '4px',
+                              left: '4px',
+                              background: 'rgba(239, 68, 68, 0.9)',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '50%',
+                              width: '22px',
+                              height: '22px',
+                              padding: '0',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              fontSize: '11px',
+                              boxShadow: 'none'
+                            }}
+                            title="הסרת תמונה"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
-              <input
-                type="text"
-                name="contactName"
-                value={form.contactName}
-                onChange={handleChange}
-                placeholder="שם איש קשר"
-              />
-            </label>
-
-            {/* Contact phone. */}
-            <label>
-              טלפון איש קשר
-
-              <input
-                type="tel"
-                name="contactPhone"
-                value={form.contactPhone}
-                onChange={handleChange}
-                placeholder="050-0000000"
-                dir="ltr"
-              />
-            </label>
-
-            {/* Contact email. */}
-            <label>
-              אימייל איש קשר
-
-              <input
-                type="email"
-                name="contactEmail"
-                value={form.contactEmail}
-                onChange={handleChange}
-                placeholder="name@example.com"
-                dir="ltr"
-              />
-            </label>
-          </div>
-
-          {/* Full-width description field. */}
-          <label className="event-management-description-label">
-            תיאור האירוע
-
-            <textarea
-              name="description"
-              value={form.description}
-              onChange={handleChange}
-              placeholder="כתוב תיאור קצר של האירוע"
-              rows="4"
-            />
-          </label>
-
-          {/* Submit + list-toggle + cancel buttons. */}
-          <div className="event-management-actions">
-            <button
-              type="submit"
-              className="event-management-primary-btn"
-              disabled={saving}
-            >
-              {getSubmitButtonText({ saving, isEditing })}
-            </button>
-
-            {/* Reveal / hide the events list (the card grid). */}
-            <button
-              type="button"
-              className="event-management-secondary-btn"
-              onClick={() => setShowList((show) => !show)}
-            >
-              {showList ? 'הסתר רשימת אירועים' : 'רשימת אירועים'}
-            </button>
-
-            {/* Cancel only appears while editing (spans the full row). */}
-            {isEditing && (
-              <button
-                type="button"
-                className="event-management-secondary-btn event-management-cancel-btn"
-                onClick={handleCancelEdit}
-              >
-                ביטול עריכה
-              </button>
-            )}
-          </div>
-        </form>
-        )}
-
-        {/* Read-only viewers see the list inline; admins open it in a modal
-            window via the "רשימת אירועים" button. */}
-        {readOnly && eventListSection}
-
-        {!readOnly && showList && (
-          <div className="event-management-modal-overlay" onClick={() => setShowList(false)}>
-            <div
-              className="event-management-modal"
-              role="dialog"
-              aria-modal="true"
-              onClick={(event) => event.stopPropagation()}
-            >
-              {/* Sticky bar holding the close button. */}
-              <div className="event-management-modal-bar">
-                <button
-                  type="button"
-                  className="event-management-modal-close"
-                  onClick={() => setShowList(false)}
-                  aria-label="סגירה"
-                >
-                  ✕
-                </button>
+                  {/* File Upload Input Button */}
+                  <label style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    padding: '12px',
+                    border: '2px dashed var(--brand-500)',
+                    borderRadius: '12px',
+                    cursor: uploading ? 'default' : 'pointer',
+                    background: 'var(--surface-2)',
+                    opacity: uploading ? 0.7 : 1,
+                    transition: 'background 0.2s',
+                    textAlign: 'center',
+                    margin: '0'
+                  }}>
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={handleImageUpload}
+                      disabled={uploading}
+                      style={{ display: 'none' }}
+                    />
+                    <span style={{ fontWeight: '700', color: 'var(--brand-700)', fontSize: '14px' }}>
+                      🖼️ {uploading ? 'מעלה תמונות...' : 'הוספת תמונות מהמכשיר'}
+                    </span>
+                  </label>
+                  <small style={{ display: 'block', marginTop: '4px', color: 'var(--text-soft)', fontSize: '12px' }}>
+                    JPG / PNG / WEBP · עד ‎5MB לתמונה
+                  </small>
+                </div>
               </div>
 
-              {eventListSection}
+              {/* Cancel (closes the modal) + submit — same order and style as
+                  the other modals. */}
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => {
+                    handleCancelEdit()
+                    setShowForm(false)
+                  }}
+                >
+                  ביטול
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-success"
+                  disabled={saving}
+                >
+                  {getSubmitButtonText({ saving, isEditing })}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+        )}
+
+        {/* The events list is the screen's main view, for everyone. */}
+        {eventListSection}
+      </section>
+
+      {/* Pictures preview modal */}
+      {viewingPicturesEvent && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => setViewingPicturesEvent(null)}>
+          <div className="modal-content" style={{ maxWidth: '600px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>תמונות של {viewingPicturesEvent.name}</span>
+              <button 
+                type="button" 
+                onClick={() => setViewingPicturesEvent(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text)',
+                  fontSize: '20px',
+                  cursor: 'pointer',
+                  padding: '4px 8px',
+                  boxShadow: 'none'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', 
+              gap: '12px', 
+              maxHeight: '60vh', 
+              overflowY: 'auto', 
+              padding: '10px 0' 
+            }}>
+              {viewingPicturesEvent.imageUrls && viewingPicturesEvent.imageUrls.map((url, idx) => (
+                <a 
+                  key={idx} 
+                  href={url} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  style={{ 
+                    borderRadius: '8px', 
+                    overflow: 'hidden', 
+                    border: '1px solid var(--border)', 
+                    display: 'block', 
+                    height: '110px',
+                    position: 'relative'
+                  }}
+                >
+                  <img 
+                    src={url} 
+                    alt={`תמונה ${idx + 1}`} 
+                    style={{ 
+                      width: '100%', 
+                      height: '100%', 
+                      objectFit: 'cover',
+                      display: 'block',
+                      transition: 'transform 0.2s'
+                    }} 
+                    onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                    onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                  />
+                </a>
+              ))}
+            </div>
+            
+            <div className="modal-actions" style={{ justifyContent: 'center' }}>
+              <button type="button" className="btn btn-outline" onClick={() => setViewingPicturesEvent(null)}>
+                סגור
+              </button>
             </div>
           </div>
-        )}
-      </section>
+        </div>
+      )}
     </main>
   )
 }

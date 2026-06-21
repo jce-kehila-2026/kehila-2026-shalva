@@ -1,3 +1,8 @@
+// Reports — admin reports hub. Loads volunteers, events and attendance,
+// builds per-group and per-meeting summary tables (using the shared
+// attendance normalizer), and exports any report as CSV that opens
+// correctly in Excel in Hebrew (BOM-prefixed).
+
 // React hooks for state, effects, memoization and stable callbacks.
 import { useEffect, useMemo, useState } from 'react'
 
@@ -12,6 +17,12 @@ import './Reports.css'
 
 // Shared event status helper (so reports match the other screens).
 import { computeEventStatus } from '../../utils/eventStatus'
+
+// Shared attendance normalization (kept in one place across screens).
+import { normalizeAttendanceStatus, getRecordStatus } from '../../utils/attendance'
+
+// Shared day / month / year date selector.
+import BirthDatePicker from '../shared/BirthDatePicker/BirthDatePicker'
 
 
 // Firestore collection names used by the reports screen.
@@ -150,45 +161,7 @@ function getAttendanceGroup(attendanceItem) {
 }
 
 
-// Normalize the many possible attendance values into 'present' / 'absent' / 'unknown'.
-function normalizeAttendanceStatus(value) {
-  // Booleans map directly.
-  if (value === true) {
-    return 'present'
-  }
-
-  if (value === false) {
-    return 'absent'
-  }
-
-  // Otherwise compare a lower-cased text form.
-  const text = String(value || '').trim().toLowerCase()
-
-  // Words that mean "present".
-  if (['present', 'yes', 'true', '1', 'נוכח', 'כן'].includes(text)) {
-    return 'present'
-  }
-
-  // Words that mean "absent".
-  if (['absent', 'no', 'false', '0', 'נעדר', 'לא'].includes(text)) {
-    return 'absent'
-  }
-
-  // Anything else is unknown.
-  return 'unknown'
-}
-
-
-// Read the status field from an attendance item, trying several field names.
-function getRecordStatus(record) {
-  return (
-    record.status ??
-    record.attendance ??
-    record.present ??
-    record.isPresent ??
-    record.value
-  )
-}
+// (normalizeAttendanceStatus + getRecordStatus now live in utils/attendance.)
 
 
 // Count present / absent / unknown across a nested list of attendance records.
@@ -297,9 +270,12 @@ function getAttendanceDate(attendanceItem) {
     return 'ללא תאריך'
   }
 
-  // Plain string date (e.g. "2026-05-31").
+  // Plain string date (e.g. "2026-05-31") — format it like the Timestamp dates
+  // so the whole column reads consistently (and the same day from different
+  // sources collapses into one meeting row instead of two).
   if (typeof value === 'string') {
-    return value
+    const parsed = new Date(value)
+    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString('he-IL')
   }
 
   // Firestore Timestamp.
@@ -319,31 +295,6 @@ function getAttendanceDate(attendanceItem) {
 
   // Unrecognized shape.
   return 'ללא תאריך'
-}
-
-
-// Total attendance stats (meetings + present/absent/unknown) for the summary cards.
-function calculateAttendanceStats(attendanceRecords) {
-  return attendanceRecords.reduce(
-    (summary, attendanceItem) => {
-      // Counts for this record.
-      const counts = getAttendanceCounts(attendanceItem)
-
-      // Add this record into the running totals.
-      return {
-        meetings: summary.meetings + 1,
-        present: summary.present + counts.present,
-        absent: summary.absent + counts.absent,
-        unknown: summary.unknown + counts.unknown,
-      }
-    },
-    {
-      meetings: 0,
-      present: 0,
-      absent: 0,
-      unknown: 0,
-    },
-  )
 }
 
 
@@ -542,19 +493,31 @@ function isWithinRange(value, fromDate, toDate) {
 
 
 // Reports screen: attendance, group and event reports with PDF / Excel export.
-export default function Reports() {
+export default function Reports({ registerBack }) {
   // Firebase data used by all reports.
   const [data, setData] = useState(EMPTY_DATA)
 
   // UI states for loading, errors, selected tab, and search.
   const [loading, setLoading] = useState(true)
   const [errors, setErrors] = useState([])
-  const [activeReport, setActiveReport] = useState(REPORT_TYPES.EVENTS)
+  // The currently shown report. Defaults straight to the attendance report —
+  // the separate "pick a report" screen was removed (the tabs already switch).
+  const [activeReport, setActiveReport] = useState(REPORT_TYPES.ATTENDANCE)
   const [searchTerm, setSearchTerm] = useState('')
 
   // Date-range filter (inclusive). Empty strings mean "no bound on that side".
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
+
+  // Group filter ('' means all groups).
+  const [groupFilter, setGroupFilter] = useState('')
+
+  // No internal back layer anymore (the report picker was removed), so the
+  // dashboard back button exits Reports directly.
+  useEffect(() => {
+    if (!registerBack) return
+    registerBack(() => false)
+  }, [registerBack])
 
 
   // Load report data once when the screen opens.
@@ -606,23 +569,6 @@ export default function Reports() {
     setToDate('')
   }
 
-  // Totals for the attendance summary cards (within the date range).
-  const attendanceStats = useMemo(
-    () => calculateAttendanceStats(dateFilteredAttendance),
-    [dateFilteredAttendance],
-  )
-
-  // Grand total of all attendance records.
-  const attendanceTotal =
-    attendanceStats.present +
-    attendanceStats.absent +
-    attendanceStats.unknown
-
-  // Present percentage (0 when there's nothing to divide by).
-  const attendanceRate =
-    attendanceTotal > 0
-      ? Math.round((attendanceStats.present / attendanceTotal) * 100)
-      : 0
 
   // Group report rows, derived from the (date-filtered) data.
   const groupRows = useMemo(
@@ -641,13 +587,18 @@ export default function Reports() {
     // Normalize the search text.
     const search = searchTerm.trim().toLowerCase()
 
+    // Apply the group filter first (when one is chosen).
+    const groupScopedEvents = groupFilter
+      ? dateFilteredEvents.filter((event) => getEventGroup(event) === groupFilter)
+      : dateFilteredEvents
+
     // No search: show everything in the date range.
     if (!search) {
-      return dateFilteredEvents
+      return groupScopedEvents
     }
 
     // Match the search against the event's combined text.
-    return dateFilteredEvents.filter((event) => {
+    return groupScopedEvents.filter((event) => {
       const text = [
         event.name,
         event.date,
@@ -660,30 +611,40 @@ export default function Reports() {
 
       return text.includes(search)
     })
-  }, [dateFilteredEvents, searchTerm])
+  }, [dateFilteredEvents, searchTerm, groupFilter])
 
   // Group rows filtered by group name.
   const filteredGroups = useMemo(() => {
     const search = searchTerm.trim().toLowerCase()
 
+    // Group filter narrows to a single group row.
+    const scopedGroups = groupFilter
+      ? groupRows.filter((group) => group.name === groupFilter)
+      : groupRows
+
     if (!search) {
-      return groupRows
+      return scopedGroups
     }
 
-    return groupRows.filter((group) =>
+    return scopedGroups.filter((group) =>
       group.name.toLowerCase().includes(search),
     )
-  }, [groupRows, searchTerm])
+  }, [groupRows, searchTerm, groupFilter])
 
   // Attendance rows filtered by date or group name.
   const filteredAttendance = useMemo(() => {
     const search = searchTerm.trim().toLowerCase()
 
+    // Group filter keeps only that group's meetings.
+    const scopedAttendance = groupFilter
+      ? attendanceRows.filter((attendanceItem) => attendanceItem.group === groupFilter)
+      : attendanceRows
+
     if (!search) {
-      return attendanceRows
+      return scopedAttendance
     }
 
-    return attendanceRows.filter((attendanceItem) => {
+    return scopedAttendance.filter((attendanceItem) => {
       const text = [
         attendanceItem.date,
         attendanceItem.group,
@@ -693,64 +654,53 @@ export default function Reports() {
 
       return text.includes(search)
     })
-  }, [attendanceRows, searchTerm])
+  }, [attendanceRows, searchTerm, groupFilter])
 
   // Open the browser print dialog (print styles live in the CSS file).
   const handleExportPdf = () => {
     window.print()
   }
 
-  // Export all report types into one CSV file ("Excel" because CSV opens in Excel).
+  // Export ONLY the active report, with the same columns and the same filtered
+  // rows shown on screen (so the date range, group filter and search all apply).
   const handleExportExcel = () => {
-    // Header row, then one block of rows per report type.
-    const rows = [
-      [
-        'סוג דוח',
-        'שם / קבוצה',
-        'תאריך',
-        'מיקום',
-        'סטטוס',
-        'נוכחים',
-        'נעדרים',
-        'הערות',
-      ],
+    let rows
 
-      // Event rows (within the selected date range).
-      ...dateFilteredEvents.map((event) => [
-        'דוח אירועים',
-        safeText(event.name),
-        safeText(event.date),
-        safeText(event.location),
-        safeText(computeEventStatus(event)),
-        '',
-        '',
-        `קבוצה: ${getEventGroup(event)}`,
-      ]),
-
-      // Group rows.
-      ...groupRows.map((group) => [
-        'דוח קבוצות',
-        group.name,
-        '',
-        '',
-        '',
-        group.present,
-        group.absent,
-        `מתנדבים: ${group.volunteers}, אירועים: ${group.events}, מפגשי נוכחות: ${group.attendanceMeetings}`,
-      ]),
-
-      // Attendance rows.
-      ...attendanceRows.map((attendanceItem) => [
-        'דוח נוכחות',
-        attendanceItem.group,
-        attendanceItem.date,
-        '',
-        '',
-        attendanceItem.present,
-        attendanceItem.absent,
-        `לא ידוע: ${attendanceItem.unknown}`,
-      ]),
-    ]
+    if (activeReport === REPORT_TYPES.GROUPS) {
+      rows = [
+        ['קבוצה', 'מתנדבים', 'אירועים', 'מפגשי נוכחות', 'נוכחים', 'חסרים'],
+        ...filteredGroups.map((group) => [
+          group.name,
+          group.volunteers,
+          group.events,
+          group.attendanceMeetings,
+          group.present,
+          group.absent,
+        ]),
+      ]
+    } else if (activeReport === REPORT_TYPES.ATTENDANCE) {
+      rows = [
+        ['תאריך', 'קבוצה', 'נוכחים', 'חסרים', 'לא ידוע'],
+        ...filteredAttendance.map((attendanceItem) => [
+          attendanceItem.date,
+          attendanceItem.group,
+          attendanceItem.present,
+          attendanceItem.absent,
+          attendanceItem.unknown,
+        ]),
+      ]
+    } else {
+      rows = [
+        ['שם אירוע', 'תאריך', 'מיקום', 'קבוצה', 'סטטוס'],
+        ...filteredEvents.map((event) => [
+          safeText(event.name),
+          safeText(event.date),
+          safeText(event.location),
+          getEventGroup(event),
+          safeText(computeEventStatus(event)),
+        ]),
+      ]
+    }
 
     downloadCsv(rows)
   }
@@ -808,7 +758,7 @@ export default function Reports() {
             <th>אירועים</th>
             <th>מפגשי נוכחות</th>
             <th>נוכחים</th>
-            <th>נעדרים</th>
+            <th>חסרים</th>
           </tr>
         </thead>
 
@@ -822,7 +772,7 @@ export default function Reports() {
                 <td data-label="אירועים">{group.events}</td>
                 <td data-label="מפגשי נוכחות">{group.attendanceMeetings}</td>
                 <td data-label="נוכחים">{group.present}</td>
-                <td data-label="נעדרים">{group.absent}</td>
+                <td data-label="חסרים">{group.absent}</td>
               </tr>
             ))
           ) : (
@@ -848,7 +798,7 @@ export default function Reports() {
             <th>תאריך</th>
             <th>קבוצה</th>
             <th>נוכחים</th>
-            <th>נעדרים</th>
+            <th>חסרים</th>
             <th>לא ידוע</th>
           </tr>
         </thead>
@@ -861,7 +811,7 @@ export default function Reports() {
                 <td data-label="תאריך">{attendanceItem.date}</td>
                 <td data-label="קבוצה">{attendanceItem.group}</td>
                 <td data-label="נוכחים">{attendanceItem.present}</td>
-                <td data-label="נעדרים">{attendanceItem.absent}</td>
+                <td data-label="חסרים">{attendanceItem.absent}</td>
                 <td data-label="לא ידוע">{attendanceItem.unknown}</td>
               </tr>
             ))
@@ -936,14 +886,18 @@ export default function Reports() {
           </button>
         </div>
 
-        {/* Export actions — directly below the report names. */}
+        {/* Step 3 — export actions: small buttons, aligned to the left. */}
         <div className="reports-actions">
-          <button type="button" onClick={handleExportPdf}>
-            🖨️ ייצוא PDF
+          <button type="button" onClick={handleExportPdf} title="נפתח חלון הדפסה — בחרו 'שמירה כ-PDF'">
+            📄 ייצוא PDF
           </button>
 
           <button type="button" onClick={handleExportExcel}>
             📊 ייצוא Excel
+          </button>
+
+          <button type="button" onClick={() => window.print()}>
+            🖨️ הדפסה
           </button>
         </div>
 
@@ -953,24 +907,43 @@ export default function Reports() {
 
           {/* From date. */}
           <div className="reports-filter-field">
-            <label htmlFor="reports-from">מתאריך</label>
-            <input
+            <BirthDatePicker
+              key={`from-${fromDate || 'empty'}`}
               id="reports-from"
-              type="date"
               value={fromDate}
-              onChange={(event) => setFromDate(event.target.value)}
+              onChange={setFromDate}
+              label="מתאריך"
+              pastYears={10}
+              futureYears={3}
             />
           </div>
 
           {/* To date. */}
           <div className="reports-filter-field">
-            <label htmlFor="reports-to">עד תאריך</label>
-            <input
+            <BirthDatePicker
+              key={`to-${toDate || 'empty'}`}
               id="reports-to"
-              type="date"
               value={toDate}
-              onChange={(event) => setToDate(event.target.value)}
+              onChange={setToDate}
+              label="עד תאריך"
+              pastYears={10}
+              futureYears={3}
             />
+          </div>
+
+          {/* Group filter — narrows the report to one group. */}
+          <div className="reports-filter-field">
+            <label htmlFor="reports-group">קבוצה</label>
+            <select
+              id="reports-group"
+              value={groupFilter}
+              onChange={(event) => setGroupFilter(event.target.value)}
+            >
+              <option value="">כל הקבוצות</option>
+              {groupRows.map((group) => (
+                <option key={group.name} value={group.name}>{group.name}</option>
+              ))}
+            </select>
           </div>
 
           {/* Clear button, shown only when a range is set. */}
@@ -988,29 +961,6 @@ export default function Reports() {
             placeholder="חיפוש בדוח הנוכחי"
             className="reports-search"
           />
-        </div>
-
-        {/* Headline summary cards. */}
-        <div className="reports-summary-grid">
-          <article className="reports-summary-card">
-            <span>{data.volunteers.length}</span>
-            <p>מתנדבים</p>
-          </article>
-
-          <article className="reports-summary-card">
-            <span>{groupRows.length}</span>
-            <p>קבוצות</p>
-          </article>
-
-          <article className="reports-summary-card">
-            <span>{dateFilteredEvents.length}</span>
-            <p>אירועים</p>
-          </article>
-
-          <article className="reports-summary-card">
-            <span>{attendanceRate}%</span>
-            <p>אחוז נוכחות</p>
-          </article>
         </div>
 
         {/* The active report table (the heading shows on the printed PDF). */}

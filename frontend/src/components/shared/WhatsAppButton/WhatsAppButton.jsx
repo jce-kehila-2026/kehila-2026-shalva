@@ -1,13 +1,25 @@
-// WhatsAppButton — a one-tap "send on WhatsApp" button. Opens a chat with a
-// pre-filled message. When `requirePhone` is set (the default) and there's no
-// valid phone, it renders a muted, disabled chip instead. Clicks are stopped
-// from bubbling, so it's safe to drop inside clickable rows/cards.
+// WhatsAppButton — a one-tap "send on WhatsApp" button. Clicking it opens a
+// small editor with the pre-filled message, so the sender can tweak the wording
+// (and drop in emoji) BEFORE the chat opens. When `requirePhone` is set (the
+// default) and there's no valid phone, it renders a muted, disabled chip
+// instead. Clicks are stopped from bubbling, so it's safe to drop inside
+// clickable rows / cards.
+
+// React hook for the editor's open/text state.
+import { useState } from 'react';
+
+// Render the editor modal at the document root (so table-row overflow can't clip it).
+import { createPortal } from 'react-dom';
 
 // Helpers that build the WhatsApp URL and validate the phone.
 import { buildWhatsAppUrl, hasValidPhone } from '../../../utils/whatsapp';
 
 // Styles for this widget.
 import './WhatsAppButton.css';
+
+
+// Quick emoji the sender can drop into the message.
+const WA_EMOJIS = ['🙂', '🎉', '❤️', '🙏', '👍', '✨'];
 
 
 // The inline WhatsApp logo SVG.
@@ -28,6 +40,10 @@ function WhatsAppButton({
   compact = false,
   requirePhone = true,
 }) {
+  // Whether the edit-before-send modal is open + its current text.
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState(message || '');
+
   // Whether we have a usable phone number.
   const valid = hasValidPhone(phone);
 
@@ -41,19 +57,85 @@ function WhatsAppButton({
     );
   }
 
-  // Otherwise: a link that opens WhatsApp (click doesn't bubble to the row).
+  // Open the editor, pre-filled with the latest message (and don't bubble the
+  // click to a surrounding clickable row).
+  const openEditor = (event) => {
+    event.stopPropagation();
+    event.preventDefault();
+    setText(message || '');
+    setOpen(true);
+  };
+
+  // Append an emoji to the end of the message.
+  const addEmoji = (emoji) => setText((current) => `${current} ${emoji}`);
+
   return (
-    <a
-      className={`wa-btn ${compact ? 'wa-btn--compact' : ''}`}
-      href={buildWhatsAppUrl(phone, message)}
-      target="_blank"
-      rel="noreferrer"
-      title={title || 'שליחה בוואטסאפ'}
-      onClick={(event) => event.stopPropagation()}
-    >
-      <WhatsAppGlyph />
-      {label && <span className="wa-btn-label">{label}</span>}
-    </a>
+    <>
+      <button
+        type="button"
+        className={`wa-btn ${compact ? 'wa-btn--compact' : ''}`}
+        onClick={openEditor}
+        title={title || 'שליחה בוואטסאפ'}
+      >
+        <WhatsAppGlyph />
+        {label && <span className="wa-btn-label">{label}</span>}
+      </button>
+
+      {/* Edit-before-send modal (rendered at the document root). */}
+      {open && createPortal(
+        <div className="wa-modal-overlay" onClick={() => setOpen(false)}>
+          <div
+            className="wa-modal"
+            dir="rtl"
+            role="dialog"
+            aria-modal="true"
+            aria-label="עריכת הודעת וואטסאפ"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="wa-modal-head">עריכת ההודעה לפני השליחה</div>
+
+            <textarea
+              className="wa-modal-text"
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+              rows="6"
+            />
+
+            {/* Quick emoji to drop into the message. */}
+            <div className="wa-modal-emojis">
+              {WA_EMOJIS.map((emoji) => (
+                <button
+                  type="button"
+                  key={emoji}
+                  className="wa-modal-emoji"
+                  onClick={() => addEmoji(emoji)}
+                  aria-label={`הוספת ${emoji} להודעה`}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+
+            <div className="wa-modal-actions">
+              <button type="button" className="wa-modal-cancel" onClick={() => setOpen(false)}>
+                ביטול
+              </button>
+              <a
+                className="wa-modal-send"
+                href={buildWhatsAppUrl(phone, text)}
+                target="_blank"
+                rel="noreferrer"
+                onClick={() => setOpen(false)}
+              >
+                <WhatsAppGlyph />
+                שליחה בוואטסאפ
+              </a>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }
 

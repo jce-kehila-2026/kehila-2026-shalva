@@ -46,6 +46,42 @@ service cloud.firestore {
       return hasRole('admin') || hasRole('guide');
     }
 
+    // Helper to check if the signed-in guide is assigned to the given group ID.
+    // Looks up both the guide's mapping document and the group's guideId field.
+    function isGuideOfGroup(groupId) {
+      return hasRole('guide')
+        && (
+             (exists(/databases/$(database)/documents/guides/$(request.auth.uid))
+              && get(/databases/$(database)/documents/guides/$(request.auth.uid)).data.get('groupId', '') == groupId)
+             || (exists(/databases/$(database)/documents/groups/$(groupId))
+                 && get(/databases/$(database)/documents/groups/$(groupId)).data.get('guideId', '') == request.auth.uid)
+           );
+    }
+
+    // A guide writing an attendance record for THEIR OWN group only:
+    //  - the record's groupId equals the guide's assigned group,
+    //  - the record only carries the known attendance fields,
+    //  - the volunteer it points at also belongs to the guide's group.
+    function guideAttendanceWrite(data) {
+      return isGuideOfGroup(data.get('groupId', ''))
+        && data.keys().hasOnly([
+             'groupId', 'group', 'groupName', 'date', 'dateKey',
+             'status', 'volunteerId', 'volunteerName'
+           ])
+        && exists(/databases/$(database)/documents/volunteers/$(data.volunteerId))
+        && (
+             get(/databases/$(database)/documents/volunteers/$(data.volunteerId)).data.get('groupId', '') == data.get('groupId', '')
+             || (
+                  get(/databases/$(database)/documents/volunteers/$(data.volunteerId)).data.get('groupName', '') != ''
+                  && get(/databases/$(database)/documents/volunteers/$(data.volunteerId)).data.get('groupName', '') == data.get('groupName', '')
+                )
+             || (
+                  get(/databases/$(database)/documents/volunteers/$(data.volunteerId)).data.get('group', '') != ''
+                  && get(/databases/$(database)/documents/volunteers/$(data.volunteerId)).data.get('group', '') == data.get('groupName', '')
+                )
+           );
+    }
+
 
     // Active community groups — shown on the public home page, so anyone may
     // read them; only an admin may change them.
@@ -59,30 +95,184 @@ service cloud.firestore {
     match /registrants/{id} {
       allow create: if request.resource.data.keys().hasOnly([
             'firstName', 'lastName', 'email', 'phone', 'status',
-            'age', 'birthDate', 'experience', 'address', 'school', 'createdAt'
+            'age', 'birthDate', 'experience', 'address', 'school',
+            'day', 'programId', 'programName', 'createdAt'
           ])
-        && request.resource.data.keys().hasAll(['firstName', 'lastName', 'email', 'phone', 'createdAt'])
+        && request.resource.data.keys().hasAll(['firstName', 'lastName', 'email', 'phone', 'age', 'status', 'createdAt'])
+        // Required text fields, with sane length caps (it's a public endpoint).
         && request.resource.data.firstName is string
+        && request.resource.data.firstName.size() > 0 && request.resource.data.firstName.size() <= 60
         && request.resource.data.lastName is string
+        && request.resource.data.lastName.size() > 0 && request.resource.data.lastName.size() <= 60
         && request.resource.data.email is string
+        && request.resource.data.email.size() <= 120
+        && request.resource.data.email.matches('.+@.+[.].+')
         && request.resource.data.phone is string
-        && request.resource.data.status is string
-        && request.resource.data.birthDate is string
+        && request.resource.data.phone.size() >= 6 && request.resource.data.phone.size() <= 25
+        // A new registration is always "pending"; no other status allowed.
+        && request.resource.data.status == 'ממתין לאישור'
+        // A plausible age + a short birth-date string.
         && request.resource.data.age is number
+        && request.resource.data.age >= 0 && request.resource.data.age <= 120
+        && request.resource.data.birthDate is string && request.resource.data.birthDate.size() <= 20
+        // Day, programId, and programName validations (if present).
+        && (!('day' in request.resource.data) || (request.resource.data.day is string && request.resource.data.day.size() <= 40))
+        && (!('programId' in request.resource.data) || (request.resource.data.programId is string && request.resource.data.programId.size() <= 80))
+        && (!('programName' in request.resource.data) || (request.resource.data.programName is string && request.resource.data.programName.size() <= 120))
         && request.resource.data.createdAt is timestamp;
       allow read, update, delete: if isAdmin();
     }
 
-    // Volunteers: active users may read; admin and guides may write.
-    match /volunteers/{id} {
-      allow read: if isActiveUser();
-      allow write: if isStaff();
+    // Public signed volunteer forms: anyone with the link may submit one signed
+    // form (create only); only an admin may read them. A strict field allowlist
+    // + size caps keep this safe as a public endpoint. NOTE: requires deploying
+    // these rules (firebase deploy --only firestore:rules) before submissions
+    // can be stored on the server.
+    match /signedForms/{id} {
+      allow create: if request.resource.data.keys().hasOnly([
+            'registrantId', 'fullName', 'firstName', 'lastName',
+            'idNumber', 'age', 'birthDateGreg', 'birthDateHeb',
+            'address', 'phone', 'email', 'school', 'shirtSize',
+            'groupName', 'activityDays', 'agreed', 'signature',
+            'pdfStoragePath', 'pdfFileName', 'createdAt'
+          ])
+        && request.resource.data.keys().hasAll([
+            'registrantId', 'fullName', 'firstName', 'lastName',
+            'idNumber', 'age', 'birthDateGreg', 'birthDateHeb',
+            'address', 'phone', 'email', 'school', 'shirtSize',
+            'groupName', 'activityDays', 'agreed', 'signature',
+            'pdfStoragePath', 'pdfFileName', 'createdAt'
+          ])
+        && request.resource.data.registrantId is string
+        && request.resource.data.registrantId.size() <= 120
+        && request.resource.data.fullName is string
+        && request.resource.data.fullName.size() > 0
+        && request.resource.data.fullName.size() <= 120
+        && request.resource.data.firstName is string
+        && request.resource.data.firstName.size() > 0
+        && request.resource.data.firstName.size() <= 60
+        && request.resource.data.lastName is string
+        && request.resource.data.lastName.size() > 0
+        && request.resource.data.lastName.size() <= 60
+        && request.resource.data.idNumber is string
+        && request.resource.data.idNumber.matches('[0-9]{9}')
+        && request.resource.data.age is number
+        && request.resource.data.age >= 0
+        && request.resource.data.age <= 120
+        && request.resource.data.birthDateGreg is string
+        && request.resource.data.birthDateGreg.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        // Hebrew date is optional in the UI; an empty string is valid.
+        && request.resource.data.birthDateHeb is string
+        && request.resource.data.birthDateHeb.size() <= 80
+        && request.resource.data.address is string
+        && request.resource.data.address.size() > 0
+        && request.resource.data.address.size() <= 180
+        && request.resource.data.phone is string
+        && request.resource.data.phone.size() >= 9
+        && request.resource.data.phone.size() <= 25
+        && request.resource.data.email is string
+        && request.resource.data.email.size() > 0
+        && request.resource.data.email.size() <= 120
+        && request.resource.data.email.matches('.+@.+[.].+')
+        && request.resource.data.school is string
+        && request.resource.data.school.size() > 0
+        && request.resource.data.school.size() <= 160
+        && request.resource.data.shirtSize in ['XS', 'S', 'M', 'L', 'XL', 'XXL']
+        && request.resource.data.groupName is string
+        && request.resource.data.groupName.size() > 0
+        && request.resource.data.groupName.size() <= 120
+        && request.resource.data.activityDays is list
+        && request.resource.data.activityDays.size() > 0
+        && request.resource.data.activityDays.size() <= 7
+        && request.resource.data.pdfFileName is string
+        && request.resource.data.pdfFileName.matches('shalva-signed-form-[A-Za-z0-9]+[.]pdf')
+        && request.resource.data.pdfStoragePath is string
+        && request.resource.data.pdfStoragePath.matches('signedForms/[A-Za-z0-9]+/shalva-signed-form-[A-Za-z0-9]+[.]pdf')
+        // The drawn signature (a PNG data-URL) is required, capped in size.
+        && request.resource.data.signature is string
+        && request.resource.data.signature.size() > 0
+        && request.resource.data.signature.size() <= 300000
+        // The volunteer must have ticked the agreement box.
+        && request.resource.data.agreed == true
+        && request.resource.data.createdAt is timestamp;
+      allow read, update, delete: if isAdmin();
     }
 
-    // Attendance: active users may read; admin and guides may write.
+    // Public uploaded police checks: anyone with the link may submit one (create only);
+    // only an admin may read / manage them.
+    match /policeForms/{id} {
+      allow create: if request.resource.data.keys().hasOnly([
+            'registrantId', 'fullName', 'idNumber',
+            'fileStoragePath', 'fileName', 'createdAt'
+          ])
+        && request.resource.data.keys().hasAll([
+            'registrantId', 'fullName', 'idNumber',
+            'fileStoragePath', 'fileName', 'createdAt'
+          ])
+        && request.resource.data.registrantId is string
+        && request.resource.data.registrantId.size() <= 120
+        && request.resource.data.fullName is string
+        && request.resource.data.fullName.size() > 0 && request.resource.data.fullName.size() <= 120
+        && request.resource.data.idNumber is string
+        && request.resource.data.idNumber.matches('[0-9]{9}')
+        && request.resource.data.fileStoragePath is string
+        && request.resource.data.fileStoragePath.matches('policeForms/[A-Za-z0-9]+/shalva-police-form-[A-Za-z0-9]+[.][A-Za-z0-9]+')
+        && request.resource.data.fileName is string
+        && request.resource.data.createdAt is timestamp;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Public uploaded medical checks: anyone with the link may submit one (create only);
+    // only an admin may read / manage them.
+    match /medicalForms/{id} {
+      allow create: if request.resource.data.keys().hasOnly([
+            'registrantId', 'fullName', 'idNumber',
+            'fileStoragePath', 'fileName', 'createdAt'
+          ])
+        && request.resource.data.keys().hasAll([
+            'registrantId', 'fullName', 'idNumber',
+            'fileStoragePath', 'fileName', 'createdAt'
+          ])
+        && request.resource.data.registrantId is string
+        && request.resource.data.registrantId.size() <= 120
+        && request.resource.data.fullName is string
+        && request.resource.data.fullName.size() > 0 && request.resource.data.fullName.size() <= 120
+        && request.resource.data.idNumber is string
+        && request.resource.data.idNumber.matches('[0-9]{9}')
+        && request.resource.data.fileStoragePath is string
+        && request.resource.data.fileStoragePath.matches('medicalForms/[A-Za-z0-9]+/shalva-medical-form-[A-Za-z0-9]+[.][A-Za-z0-9]+')
+        && request.resource.data.fileName is string
+        && request.resource.data.createdAt is timestamp;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Volunteers: active users may read (the guide screens read the whole list
+    // and filter client-side). Only an admin may write — guides never edit
+    // volunteers in the app, so this stays admin-only on the server too.
+    match /volunteers/{id} {
+      allow read: if isActiveUser();
+      allow write: if isAdmin();
+    }
+
+    // Attendance: active users may read. Admins manage everything; a guide may
+    // only write attendance for THEIR OWN group (matched against
+    // guides/{uid}.groupId), enforced here and not just hidden in the UI.
     match /attendance/{id} {
       allow read: if isActiveUser();
-      allow write: if isStaff();
+
+      // Create: admin, or a guide writing a record for their own group.
+      allow create: if isAdmin() || guideAttendanceWrite(request.resource.data);
+
+      // Update: same as create, but the EXISTING document must also belong to
+      // the guide's group — otherwise a guide could grab another group's record
+      // and rewrite its groupId to their own.
+      allow update: if isAdmin()
+        || (guideAttendanceWrite(request.resource.data)
+            && isGuideOfGroup(resource.data.get('groupId', '')));
+
+      allow delete: if isAdmin()
+        || (hasRole('guide')
+            && isGuideOfGroup(resource.data.get('groupId', '')));
     }
 
     // Events: active users may read; only an admin may write.
@@ -90,6 +280,14 @@ service cloud.firestore {
       allow read: if isActiveUser();
       allow write: if isAdmin();
     }
+
+    // Programs: anyone may read (shown on the public landing page); only an admin may write.
+    match /programs/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+
 
     // User profiles / roles: a user may always read their own document (the app
     // gate needs it); active users may read others.
