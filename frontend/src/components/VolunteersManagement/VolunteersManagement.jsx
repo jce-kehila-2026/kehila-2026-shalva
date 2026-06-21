@@ -32,6 +32,14 @@ import { greetingMessage } from '../../utils/whatsapp';
 // Downloads the ready-to-fill Excel template for bulk volunteer import.
 import { downloadVolunteersTemplate } from '../../utils/excelTemplates';
 
+// Validates + normalizes each imported volunteer row before any write, detects
+// the file type from its header, and commits valid rows in chunks.
+import {
+  preflightVolunteerImport,
+  detectImportFileType,
+  commitVolunteerChunks,
+} from '../../utils/volunteerImport';
+
 // The closed list of activity times (בוקר / צהריים / ערב).
 import { GROUP_TIMES } from '../../utils/groupOptions';
 
@@ -542,135 +550,145 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
       const firstSheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[firstSheetName];
       
+      // Identify the file from its HEADER row first — this also catches an
+      // EMPTY groups template (headers present, but no data rows).
+      const headerRow = XLSX.utils.sheet_to_json(worksheet, { header: 1 })[0] || [];
+      const fileType = detectImportFileType(headerRow);
+
+      if (fileType === 'duplicate-headers') {
+        alert('הקובץ מכיל כותרות כפולות או עמומות (ייתכן בגלל BOM או רווחים בשמות העמודות). תקנו את שורת הכותרות ונסו שוב.');
+        return;
+      }
+      if (fileType === 'ambiguous') {
+        alert('הקובץ מכיל גם כותרות של קבוצות וגם של מתנדבים יחד, ולכן לא ניתן לייבא אותו. הפרידו את הנתונים לקבצים נפרדים.');
+        return;
+      }
+      if (fileType === 'groups') {
+        alert('נראה שזהו קובץ קבוצות, ולא מתנדבים. כדי לייבא קבוצות עברו למסך "ניהול קבוצות" ← "ייבוא קבוצות".');
+        return;
+      }
+      if (fileType === 'unknown') {
+        alert('לא נמצאו עמודות מתנדבים בקובץ. ודא שקיימת עמודה בשם "שם מלא" או "שם פרטי".');
+        return;
+      }
+
       const jsonRows = XLSX.utils.sheet_to_json(worksheet);
 
-      // Collect the parsed rows first; written in chunks after parsing.
-      const volunteersToAdd = [];
+      // Honour the workbook's date system (1900 vs 1904) when decoding serials.
+      const date1904 = Boolean(workbook.Workbook?.WBProps?.date1904);
 
-      const parseExcelDate = (excelValue) => {
-        if (!excelValue) return '';
-        if (typeof excelValue === 'string') return excelValue.trim();
-        if (typeof excelValue === 'number') {
-          try {
-            const dateObj = XLSX.SSF.parse_date_code(excelValue);
-            const year = dateObj.y;
-            const month = String(dateObj.m).padStart(2, '0'); 
-            const day = String(dateObj.d).padStart(2, '0');
-            return `${year}-${month}-${day}`;
-          } catch {
-            // Unparseable date number: keep the raw value as text.
-            return String(excelValue);
-          }
-        }
-        return String(excelValue);
-      };
+      // Validate EVERY row up front (preflight). Empty rows are skipped silently.
+      const { valid, rejected } = preflightVolunteerImport(jsonRows, { date1904 });
 
-      jsonRows.forEach((row) => {
-        const firstName = String(row['שם פרטי *'] || row['שם פרטי'] || row['firstName'] || '').trim();
-        const lastName = String(row['שם משפחה *'] || row['שם משפחה'] || row['lastName'] || '').trim();
-        
-        let name = String(row['שם מלא'] || row['שם'] || row['name'] || '').trim();
-        if (!name && (firstName || lastName)) {
-          name = `${firstName} ${lastName}`.trim();
-        }
-
-        if (!name) return; 
-
-        const rawBirthDate = row['תאריך לידה'] || row['birthDate'] || '';
-        const birthDate = parseExcelDate(rawBirthDate);
-
-        // Restore the leading 0 if Excel stored the phone as a number.
-        let phone = String(row['טלפון'] || row['phone'] || '').trim();
-        if (/^5\d{8}$/.test(phone)) {
-          phone = `0${phone}`;
-        }
-        const idNumber = String(row['תעודת זהות'] || row['ת.ז'] || row['idNumber'] || '').trim();
-        const age = String(row['גיל (אוטומטי)'] || row['גיל'] || row['age'] || '').trim();
-        const notes = String(row['הערות'] || row['notes'] || '').trim();
-        const address = String(row['כתובת'] || row['address'] || '').trim();
-        const email = String(row['אימייל'] || row['דוא"ל'] || row['email'] || '').trim();
-        const experience = String(row['ניסיון קודם'] || row['ניסיון'] || row['experience'] || '').trim();
-        const school = String(row['בית ספר'] || row['school'] || '').trim();
-
+      // Assemble the Firestore payloads from the valid rows, keeping the existing
+      // group/program matching and document schema unchanged. The Excel row
+      // number is kept alongside each payload IN MEMORY only (for reporting) —
+      // it is never written to Firestore.
+      const itemsToWrite = valid.map(({ excelRow, fields }) => {
         // Group column: match the name against the live groups list so the
         // volunteer gets a real groupId (falls back to the locked group).
-        const groupNameRaw = String(row['קבוצה'] || row['group'] || '').trim();
         const matchedGroup = groups.find(
-          (group) => (group.groupName || group.name || '').trim() === groupNameRaw,
+          (group) => (group.groupName || group.name || '').trim() === fields.groupNameRaw,
         );
 
-        // Program column: match the name against the live programs list so the
-        // volunteer gets a real programId + programName.
-        const programNameRaw = String(row['תוכנית'] || row['program'] || '').trim();
+        // Program column: match the name against the live programs list.
         const matchedProgram = programs.find(
-          (program) => (program.name || '').trim() === programNameRaw,
+          (program) => (program.name || '').trim() === fields.programNameRaw,
         );
 
-        // Activity time column (בוקר / צהריים / ערב).
-        const activityTime = String(row['זמן פעילות'] || row['activityTime'] || '').trim();
-
-        // Day column (יום ראשון, יום שני, etc.).
-        const day = String(row['יום פעילות'] || row['יום'] || row['day'] || '').trim();
-
-        volunteersToAdd.push({
-          name,
-          firstName,
-          lastName,
-          idNumber,
-          phone,
-          birthDate,
-          age,
-          address,
-          email,
-          experience,
-          school,
-          notes,
-          activityTime,
-          day,
-          programId: matchedProgram?.id || '',
-          programName: matchedProgram?.name || programNameRaw || '',
-          groupId: matchedGroup?.id || passedGroup?.id || '',
-          groupName:
-            matchedGroup?.groupName || matchedGroup?.name ||
-            passedGroup?.groupName || groupNameRaw || '',
-          createdAt: new Date(),
-        });
+        return {
+          excelRow,
+          payload: {
+            name: fields.name,
+            firstName: fields.firstName,
+            lastName: fields.lastName,
+            idNumber: fields.idNumber,
+            phone: fields.phone,
+            birthDate: fields.birthDate,
+            age: fields.age,
+            address: fields.address,
+            email: fields.email,
+            experience: fields.experience,
+            school: fields.school,
+            notes: fields.notes,
+            activityTime: fields.activityTime,
+            day: fields.day,
+            programId: matchedProgram?.id || '',
+            programName: matchedProgram?.name || fields.programNameRaw || '',
+            groupId: matchedGroup?.id || passedGroup?.id || '',
+            groupName:
+              matchedGroup?.groupName || matchedGroup?.name ||
+              passedGroup?.groupName || fields.groupNameRaw || '',
+            createdAt: new Date(),
+          },
+        };
       });
 
-      const addedCount = volunteersToAdd.length;
+      // A volunteer file with no data rows and nothing rejected.
+      if (itemsToWrite.length === 0 && rejected.length === 0) {
+        alert('הקובץ אינו מכיל שורות נתונים לייבוא.');
+        return;
+      }
 
-      if (addedCount > 0) {
-        // Firestore allows at most 500 writes per batch, so commit in chunks.
-        const CHUNK_SIZE = 450;
-
-        for (let start = 0; start < volunteersToAdd.length; start += CHUNK_SIZE) {
-          const batch = writeBatch(db);
-
-          volunteersToAdd
-            .slice(start, start + CHUNK_SIZE)
-            .forEach((volunteerPayload) => {
-              const newDocRef = doc(collection(db, 'volunteers'));
-              batch.set(newDocRef, volunteerPayload);
+      // Commit the valid rows in bounded chunks to limit request size and
+      // support accurate partial-failure reporting. It stops at the first
+      // failing chunk and reports written / failed / not-attempted honestly.
+      const { written, failedInCurrentBatch, notAttempted, error: writeError } =
+        await commitVolunteerChunks(
+          itemsToWrite,
+          (payloads) => {
+            const batch = writeBatch(db);
+            payloads.forEach((volunteerPayload) => {
+              batch.set(doc(collection(db, 'volunteers')), volunteerPayload);
             });
-
-          await batch.commit();
-        }
-
-        alert(`בהצלחה! יובאו ${addedCount} מתנדבים מהקובץ.`);
-        await fetchData();
-      } else {
-        // No usable rows. A common mistake is importing the GROUPS template on
-        // this (volunteers) screen — detect that and point to the right place.
-        const looksLikeGroupsFile = jsonRows.some(
-          (row) => row['שם קבוצה *'] !== undefined || row['שם קבוצה'] !== undefined,
+            return batch.commit();
+          },
+          450,
         );
 
-        if (looksLikeGroupsFile) {
-          alert('נראה שזהו קובץ קבוצות, ולא מתנדבים. כדי לייבא קבוצות עברו למסך "ניהול קבוצות" ← "ייבוא קבוצות".');
-        } else {
-          alert('לא נמצאו נתונים תקינים בקובץ. ודא שקיימת עמודה בשם "שם מלא" או "שם פרטי".');
+      if (writeError) {
+        console.error('שגיאה בכתיבת מתנדבים:', writeError);
+      }
+
+      // Refresh whatever landed — a refresh failure is NOT an import failure.
+      let refreshFailed = false;
+      if (written > 0) {
+        try {
+          await fetchData();
+        } catch (refreshError) {
+          console.error('רענון המסך נכשל אחרי ייבוא:', refreshError);
+          refreshFailed = true;
         }
       }
+
+      // Honest, PII-free summary (sensitive values were already masked upstream).
+      const summaryLines = [`נכתבו ${written} מתנדבים.`];
+
+      if (rejected.length > 0) {
+        summaryLines.push(`נדחו ${rejected.length} שורות בבדיקת תקינות.`);
+      }
+      if (writeError) {
+        summaryLines.push(`כתיבת ${failedInCurrentBatch} שורות נכשלה, ו-${notAttempted} שורות לא נוסו.`);
+      }
+      if (written > 0) {
+        summaryLines.push('שימו לב: עדיין אין מניעת כפילויות — אל תייבאו מחדש את כל הקובץ ללא טיפול בשורות שכבר נכתבו.');
+      }
+      if (refreshFailed) {
+        summaryLines.push('הנתונים נשמרו, אך רענון המסך נכשל — רעננו את הדף ידנית.');
+      }
+
+      if (rejected.length > 0) {
+        summaryLines.push('');
+        summaryLines.push('שורות שנדחו:');
+        rejected.slice(0, 20).forEach(({ excelRow, reasons }) => {
+          summaryLines.push(`שורה ${excelRow}: ${reasons.join('; ')}`);
+        });
+        if (rejected.length > 20) {
+          summaryLines.push(`ועוד ${rejected.length - 20} שורות…`);
+        }
+      }
+
+      alert(summaryLines.join('\n'));
 
     } catch (error) {
       console.error('שגיאה בייבוא קובץ:', error);
