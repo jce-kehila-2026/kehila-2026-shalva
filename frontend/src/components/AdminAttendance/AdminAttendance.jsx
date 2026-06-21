@@ -244,7 +244,7 @@ function AdminAttendance({ registerBack }) {
         };
       })
       .sort((a, b) => a.groupName.localeCompare(b.groupName, 'he'));
-  }, [groups, volunteers, weekAttendance, weekDaysKeys]);
+  }, [groups, volunteers, weekAttendance, weekDays, weekDaysKeys]);
 
   // Find the selected group details from the latest computed groupRows.
   const activeSelectedGroup = useMemo(() => {
