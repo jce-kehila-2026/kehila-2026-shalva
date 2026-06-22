@@ -696,6 +696,12 @@ function AdminOverview({ onNavigate }) {
   const nextHolidayDay = sortedHolidayDays.find((day) => day >= fromDay);
   const nextHolidayName = nextHolidayDay ? cleanHolidayName(holidaysByDay[nextHolidayDay]) : '';
 
+  // Canonical YYYY-MM-DD for the upcoming-holiday day, composed arithmetically
+  // (no Date) from the displayed year / month. Used only for the banner label.
+  const nextHolidayDayKey = nextHolidayDay
+    ? `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(nextHolidayDay).padStart(2, '0')}`
+    : '';
+
   // Decide what the calendar's holiday banner shows. Priority: the clicked
   // day's holiday → today's holiday → the next holiday this month. When the
   // featured holiday IS today, it becomes a festive "חג שמח" greeting.
@@ -704,11 +710,11 @@ function AdminOverview({ onNavigate }) {
   if (selectedHolidayName) {
     holidayBanner = selectedIsToday
       ? { text: `חג שמח! ${selectedHolidayName}`, greeting: true }
-      : { text: `${selectedHolidayName} · ${selectedDay} ב${HEBREW_MONTHS[calMonth]}`, greeting: false };
+      : { text: `${selectedHolidayName} · ${formatDateOnlyForDisplay(selectedDayKey, { fallback: '' })}`, greeting: false };
   } else if (todayHolidayName) {
     holidayBanner = { text: `חג שמח! ${todayHolidayName}`, greeting: true };
   } else if (nextHolidayName) {
-    holidayBanner = { text: `החג הקרוב: ${nextHolidayName} · ${nextHolidayDay} ב${HEBREW_MONTHS[calMonth]}`, greeting: false };
+    holidayBanner = { text: `החג הקרוב: ${nextHolidayName} · ${formatDateOnlyForDisplay(nextHolidayDayKey, { fallback: '' })}`, greeting: false };
   }
 
   // Hebrew month(s) + year for the calendar header (e.g. "תמוז–אב תשפ״ו").
@@ -913,6 +919,10 @@ function AdminOverview({ onNavigate }) {
                   const holiday = holidaysByDay[day];
                   const weekday = new Date(calYear, calMonth, day).getDay();
 
+                  // Canonical YYYY-MM-DD for this cell, composed arithmetically
+                  // (no Date) — only for the accessible label's DD-MM-YYYY date.
+                  const dayKey = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
                   // Build the day button's classes (event / shabbat / holiday /
                   // today / selected).
                   const classes = [
@@ -932,7 +942,7 @@ function AdminOverview({ onNavigate }) {
                       onClick={() => selectDay(day, Boolean(dayEvents))}
                       aria-pressed={day === selectedDay}
                       title={holiday || undefined}
-                      aria-label={`${day} ב${HEBREW_MONTHS[calMonth]}${holiday ? ` — ${holiday}` : ''}${dayEvents ? ` — ${dayEvents.length} אירועים` : ''}`}
+                      aria-label={`${formatDateOnlyForDisplay(dayKey, { fallback: '' })}${holiday ? ` — ${holiday}` : ''}${dayEvents ? ` — ${dayEvents.length} אירועים` : ''}`}
                     >
                       <span className="ao-cal-num">{day}</span>
                       {/* The Hebrew date, in letters, under the Gregorian number. */}
