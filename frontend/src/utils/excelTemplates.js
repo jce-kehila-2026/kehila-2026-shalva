@@ -9,13 +9,10 @@
 // The closed list of activity times.
 import { GROUP_TIMES } from './groupOptions';
 
-// Allowed activity days for the VOLUNTEERS template (full Hebrew form,
-// Sunday–Friday; Saturday is not selectable). Aliased so it doesn't collide with
-// the short groups-template list below.
+// Allowed activity days (full Hebrew form, Sunday–Friday; Saturday is not
+// selectable) — the single shared source used by BOTH the volunteers and groups
+// templates (no duplicated local list).
 import { ACTIVITY_DAYS as ALLOWED_ACTIVITY_DAYS } from './activityDays';
-
-// Activity days offered in the groups template.
-const ACTIVITY_DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי'];
 
 // How many data rows get dropdowns / formulas pre-wired.
 const TEMPLATE_ROWS = 300;
@@ -190,9 +187,9 @@ export async function downloadGuidesTemplate(groups = []) {
 
 
 // ----- Groups template -----
-// Empty file for adding NEW groups; activity time / day and the responsible
-// guide are dropdowns (guides come from the live users list, hidden sheet).
-export async function downloadGroupsTemplate(guides = [], volunteers = []) {
+// Build the groups template workbook WITHOUT downloading it — separated so tests
+// can generate and inspect the real workbook with no DOM. exceljs stays lazy.
+export async function buildGroupsWorkbook(guides = [], volunteers = []) {
   const headers = [
     'שם קבוצה *', 'זמן פעילות', 'מדריך אחראי', 'מתנדבים משויכים (שמות, מופרדים בפסיק)',
     'מיקום / חדר', 'יום פעילות', 'הערות',
@@ -201,13 +198,25 @@ export async function downloadGroupsTemplate(guides = [], volunteers = []) {
   const { workbook, sheet, lists } = await createTemplate('קבוצות', headers);
   sheet.getColumn(4).width = 34;
 
+  // Activity time + responsible guide + activity day are dropdowns. The day list
+  // is the SHARED full-form ACTIVITY_DAYS (Sun–Fri, no Saturday) — not a local
+  // duplicate. Old files with the short form (ראשון) still import via the
+  // normalizer.
   addDropdown(sheet, 'B', `"${GROUP_TIMES.join(',')}"`);
   addDropdown(sheet, 'C', fillHiddenList(lists, 'A', guides.map(getName).filter(Boolean)));
-  addDropdown(sheet, 'F', `"${ACTIVITY_DAYS.join(',')}"`);
+  addDropdown(sheet, 'F', `"${ALLOWED_ACTIVITY_DAYS.join(',')}"`);
 
   // Volunteer names also live on the hidden sheet (handy reference for the
   // free-text assignment column).
   fillHiddenList(lists, 'B', volunteers.map(getName).filter(Boolean));
 
+  return workbook;
+}
+
+
+// Empty file for adding NEW groups; activity time / day and the responsible
+// guide are dropdowns (guides come from the live users list, hidden sheet).
+export async function downloadGroupsTemplate(guides = [], volunteers = []) {
+  const workbook = await buildGroupsWorkbook(guides, volunteers);
   await downloadWorkbook(workbook, 'תבנית-קבוצות.xlsx');
 }
