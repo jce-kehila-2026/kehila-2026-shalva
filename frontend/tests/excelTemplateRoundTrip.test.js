@@ -13,8 +13,11 @@ import {
 } from '../src/utils/volunteerImport.js';
 import {
   analyzeGroupImportHeaders,
+  detectGroupImportFileType,
   preflightGroupImport,
   resolveGroupImport,
+  buildGroupImportGuides,
+  buildGroupImportPlans,
 } from '../src/utils/groupImport.js';
 
 // Shared sources — the test compares the template's dropdowns against THESE,
@@ -429,6 +432,41 @@ describe('groups template → import round-trip', () => {
     expect(ready).toHaveLength(1);
     expect(ready[0].volunteerIds).toEqual([]);
   });
+
+  // Pure half of the Stage-6 pipeline (no Firestore): template → SheetJS →
+  // header analyzer → preflight → resolve → write PLANS. The emulator half
+  // (plans → real writer) lives in groupImport.emulator.test.js.
+  it('produces a correct write plan from a real template row (activityTime → time, no internal keys)', async () => {
+    const users = [{ id: 'gd1', role: 'guide', name: 'דנה כהן' }];
+    const activeGuides = buildGroupImportGuides(users, []); // no link → free guide
+
+    const { wb } = await buildAndReadGroups((sheet) => {
+      sheet.getCell('A2').value = 'קבוצה א';
+      sheet.getCell('B2').value = 'בוקר';
+      sheet.getCell('C2').value = 'דנה כהן';
+      sheet.getCell('D2').value = 'יוסי לוי';
+      sheet.getCell('F2').value = 'יום ראשון';
+    });
+
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    expect(analyzeGroupImportHeaders(XLSX.utils.sheet_to_json(ws, { header: 1 })[0] || []))
+      .toEqual({ ok: true });
+
+    const { valid, identities } = preflightGroupImport(XLSX.utils.sheet_to_json(ws));
+    const { ready } = resolveGroupImport(valid, {
+      existingGroups: [], guides: activeGuides, volunteers, allRowIdentities: identities,
+    });
+    const [plan] = buildGroupImportPlans(ready);
+
+    expect(plan.groupDoc).toEqual({
+      groupName: 'קבוצה א', time: 'בוקר', activityDay: 'יום ראשון', location: '', notes: '',
+      guideId: 'gd1', guideName: 'דנה כהן',
+    });
+    expect(plan.groupDoc).not.toHaveProperty('excelRow');
+    expect(plan.groupDoc).not.toHaveProperty('operationCount');
+    expect(plan.volunteerIds).toEqual(['v1']);
+    expect(plan.operationCount).toBe(3); // group + guide + 1 volunteer
+  });
 });
 
 
@@ -490,5 +528,18 @@ describe('group import header analysis (real worksheet)', () => {
       ['יוסי לוי', ''], // only the first alias column has a value
     ]);
     expect(analyzeGroupImportHeaders(header)).toEqual({ ok: false, code: 'AMBIGUOUS_HEADERS' });
+  });
+
+  it('detects a MIXED file (group + volunteer columns) as ambiguous from the raw header — before object parsing', () => {
+    const { ws, header } = headerRowOf([
+      ['שם קבוצה *', 'שם פרטי *', 'שם משפחה *'],
+      ['קבוצה א', 'יוסי', 'לוי'],
+    ]);
+    // The detector fires on the raw header row, so the import gate triggers
+    // before sheet_to_json / preflight / the writer are ever reached.
+    expect(detectGroupImportFileType(header)).toBe('ambiguous');
+    // Sanity: the worksheet does parse to rows — proving the block is a
+    // deliberate gate, not a parsing failure.
+    expect(XLSX.utils.sheet_to_json(ws).length).toBeGreaterThan(0);
   });
 });

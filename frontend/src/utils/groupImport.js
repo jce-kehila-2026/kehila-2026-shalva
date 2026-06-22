@@ -67,6 +67,18 @@ function normalizeMatchName(value) {
   return collapseSpaces(value).toLowerCase();
 }
 
+// GUIDE-ONLY "not assigned" sentinels. The only existing one is 'Unassigned'
+// (written by GuideManagement / GuideDashboard when a guide is freed), compared
+// case-insensitively. Volunteers never use this sentinel — a freed volunteer's
+// groupName is cleared to '' — so this helper must NOT be reused for them. We do
+// not invent new sentinels and never migrate / rewrite a record.
+const GUIDE_UNASSIGNED_SENTINELS = new Set(['', 'unassigned']);
+
+// True when a GUIDE back-reference groupName means "free" (empty or 'Unassigned').
+function isGuideUnassignedGroupName(name) {
+  return GUIDE_UNASSIGNED_SENTINELS.has(String(name ?? '').trim().toLowerCase());
+}
+
 // First non-empty value among the given keys (preserves the original type).
 function firstDefined(row, keys) {
   for (const key of keys) {
@@ -125,6 +137,41 @@ function volunteerDisplayName(volunteer) {
 
 
 // ---------------------------------------------------------------------------
+// Guide candidate list (pure) — users merged with their guides/{uid} link
+// ---------------------------------------------------------------------------
+
+// Build the guide candidates the resolver matches names against. Only ACTIVE
+// guides qualify (role 'guide', not disabled); their identity/name come from the
+// users record, while groupId/groupName are merged from the guides/{uid} link
+// (keyed by document id / uid). Rules:
+//   - A user's display name is NEVER replaced by a value from another record.
+//   - No link → groupId/groupName treated as empty (still blockable via
+//     existingGroups.guideId in resolve).
+//   - An orphan guides link with no active user is NOT a candidate.
+//   - Nothing is read-then-written: this only shapes in-memory data.
+export function buildGroupImportGuides(users = [], guideLinks = []) {
+  const linkById = new Map();
+  for (const link of guideLinks) {
+    if (link && link.id !== undefined && link.id !== null) {
+      linkById.set(String(link.id), link);
+    }
+  }
+
+  return (Array.isArray(users) ? users : [])
+    .filter((user) => user && user.role === 'guide' && !user.disabled)
+    .map((user) => {
+      const link = linkById.get(String(user.id));
+      return {
+        ...user,
+        // The assignment mapping is authoritative for groupId / groupName only.
+        groupId: link && link.groupId ? String(link.groupId).trim() : '',
+        groupName: link && link.groupName ? String(link.groupName) : '',
+      };
+    });
+}
+
+
+// ---------------------------------------------------------------------------
 // Header analysis (run on the raw header row BEFORE object parsing)
 // ---------------------------------------------------------------------------
 
@@ -157,6 +204,42 @@ export function analyzeGroupImportHeaders(headerRow = []) {
   }
 
   return { ok: true };
+}
+
+
+// Header families that identify each template. The group family is the group
+// name; the volunteer family is the person-name columns (current + legacy
+// aliases). A file carrying BOTH is a mixed/ambiguous file we must not guess at.
+const GROUP_NAME_HEADERS = ['שם קבוצה *', 'שם קבוצה'];
+const VOLUNTEER_NAME_HEADERS = [
+  'שם פרטי *', 'שם פרטי', 'firstName',
+  'שם משפחה *', 'שם משפחה', 'lastName',
+  'שם מלא', 'שם', 'name',
+];
+
+// Identify which template a header row belongs to, so the GROUPS screen can
+// reject a volunteers / mixed / unrecognized file before parsing. Pure: takes
+// the raw header array, returns 'groups' | 'volunteers' | 'ambiguous' |
+// 'unknown'. Both families are checked independently — 'groups' is NOT chosen
+// just because the group column happens to be tested first.
+export function detectGroupImportFileType(headerRow = []) {
+  const headers = new Set(
+    (Array.isArray(headerRow) ? headerRow : []).map(normalizeHeader).filter(Boolean),
+  );
+
+  const hasGroupFamily = GROUP_NAME_HEADERS.some((header) => headers.has(header));
+  const hasVolunteerFamily = VOLUNTEER_NAME_HEADERS.some((header) => headers.has(header));
+
+  if (hasGroupFamily && hasVolunteerFamily) {
+    return 'ambiguous';
+  }
+  if (hasGroupFamily) {
+    return 'groups';
+  }
+  if (hasVolunteerFamily) {
+    return 'volunteers';
+  }
+  return 'unknown';
 }
 
 
@@ -398,6 +481,7 @@ export function resolveGroupImport(validRows, {
 
     // ----- responsible guide -----
     let guideId = '';
+    let guideName = '';
     if (refs.guideNameRaw) {
       const matches = guides.filter(
         (g) => normalizeMatchName(guideDisplayName(g)) === guideNameKey,
@@ -414,15 +498,16 @@ export function resolveGroupImport(validRows, {
           reasons.push('רשומת המדריך חסרה מזהה או שם תקין');
         } else {
           guideId = id;
+          guideName = name; // canonical name from the matched active record
           // Fail-closed in BOTH directions, no reassignment: assigned via an
-          // existing group, OR the guide record itself already carries a
-          // groupId. A groupName WITHOUT a groupId is an inconsistent record —
-          // block it too, never assume the guide is free.
+          // existing group, OR the guide's own link carries a groupId. A real
+          // groupName WITHOUT a groupId is inconsistent — block it too. The
+          // 'Unassigned' sentinel (and empty) count as free.
           const guideGroupId = matched.groupId ? String(matched.groupId).trim() : '';
           const guideGroupName = matched.groupName ? String(matched.groupName).trim() : '';
           if (guideAlreadyAssigned.has(id) || guideGroupId) {
             reasons.push('המדריך כבר משויך לקבוצה אחרת — אין לשייך אותו דרך הקובץ');
-          } else if (guideGroupName) {
+          } else if (!isGuideUnassignedGroupName(guideGroupName)) {
             reasons.push('רשומת המדריך אינה עקבית (שם קבוצה ללא מזהה) — חסום עד לתיקון ידני');
           }
         }
@@ -448,16 +533,17 @@ export function resolveGroupImport(validRows, {
         reasons.push(`רשומת המתנדב חסרה מזהה: ${name}`);
         continue;
       }
-      // Fail-closed both ways (same rule as the guide): a non-empty groupId is
-      // already assigned; a groupName WITHOUT a groupId is inconsistent — block
-      // it, never assume the volunteer is free. No clearing / migration here.
+      // Fail-closed both ways: a non-empty groupId means already assigned. A
+      // volunteer is free ONLY when groupName is truly empty — volunteers never
+      // carry the guide 'Unassigned' sentinel, so ANY non-empty groupName here
+      // (including 'Unassigned') is an inconsistent record. No clearing/migration.
       const volunteerGroupId = matches[0].groupId ? String(matches[0].groupId).trim() : '';
       const volunteerGroupName = matches[0].groupName ? String(matches[0].groupName).trim() : '';
       if (volunteerGroupId) {
         reasons.push(`המתנדב כבר משויך לקבוצה: ${name}`);
         continue;
       }
-      if (volunteerGroupName) {
+      if (volunteerGroupName !== '') {
         reasons.push(`רשומת המתנדב אינה עקבית (שם קבוצה ללא מזהה): ${name}`);
         continue;
       }
@@ -469,6 +555,7 @@ export function resolveGroupImport(validRows, {
       fields,
       reasons,
       guideId,
+      guideName,
       volunteerIds,
       groupNameKey: normalizeMatchName(fields.groupName),
       guideNameKey,
@@ -516,10 +603,81 @@ export function resolveGroupImport(validRows, {
       excelRow: r.excelRow,
       fields: r.fields,
       guideId: r.guideId,
+      guideName: r.guideName,
       volunteerIds: r.volunteerIds,
       operationCount,
     });
   }
 
   return { ready, rejected };
+}
+
+
+// ---------------------------------------------------------------------------
+// Write planning + orchestration (pure; the real Firestore writer is injected)
+// ---------------------------------------------------------------------------
+
+// Map ONE resolved ready item to a write plan. `groupDoc` carries ONLY real
+// schema fields (existing contract: activityTime → `time`); excelRow and
+// operationCount stay on the plan in memory and are NEVER written to a document.
+export function buildGroupImportPlan(readyItem) {
+  return {
+    excelRow: readyItem.excelRow,
+    groupDoc: {
+      groupName: readyItem.fields.groupName,
+      time: readyItem.fields.activityTime,
+      activityDay: readyItem.fields.activityDay,
+      location: readyItem.fields.location,
+      notes: readyItem.fields.notes,
+      guideId: readyItem.guideId || '',
+      guideName: readyItem.guideName || '',
+    },
+    guideId: readyItem.guideId || '',
+    guideName: readyItem.guideName || '',
+    volunteerIds: readyItem.volunteerIds || [],
+    operationCount: readyItem.operationCount,
+  };
+}
+
+export function buildGroupImportPlans(ready = []) {
+  return (Array.isArray(ready) ? ready : []).map(buildGroupImportPlan);
+}
+
+// The number of writes one plan performs: the group + (optional guide link) +
+// one update per volunteer. The writer compares this to plan.operationCount and
+// refuses to commit on a mismatch (fail-closed before Firebase).
+export function groupPlanOperationCount(plan) {
+  return 1 + (plan.guideId ? 1 : 0) + plan.volunteerIds.length;
+}
+
+// Run group plans one batch at a time, IN ORDER, stopping at the first failure.
+// `commitOneGroup(plan)` performs a single group's atomic batch and resolves on
+// success / rejects on failure. A failed group is never counted as written, and
+// the groups after it are not attempted.
+export async function commitGroupPlans(plans, commitOneGroup) {
+  const list = Array.isArray(plans) ? plans : [];
+  let writtenGroups = 0;
+
+  for (let index = 0; index < list.length; index += 1) {
+    try {
+      await commitOneGroup(list[index]);
+      writtenGroups += 1;
+    } catch (error) {
+      return {
+        writtenGroups,
+        failedCurrentGroup: 1,
+        notAttemptedGroups: list.length - index - 1,
+        failedExcelRow: list[index].excelRow,
+        error,
+      };
+    }
+  }
+
+  return {
+    writtenGroups,
+    failedCurrentGroup: 0,
+    notAttemptedGroups: 0,
+    failedExcelRow: null,
+    error: null,
+  };
 }

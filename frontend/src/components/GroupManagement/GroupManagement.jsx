@@ -26,6 +26,22 @@ import { GROUP_TIMES } from '../../utils/groupOptions';
 // Downloads the empty groups template (dropdowns for time/guide/day).
 import { downloadGroupsTemplate } from '../../utils/excelTemplates';
 
+// The approved pure group-import engine: file/header analysis, preflight +
+// resolve, the active-guide candidate builder, write-plan builder + the
+// sequential orchestrator. Only `ready` rows ever reach the writer.
+import {
+  analyzeGroupImportHeaders,
+  detectGroupImportFileType,
+  buildGroupImportGuides,
+  preflightGroupImport,
+  resolveGroupImport,
+  buildGroupImportPlans,
+  commitGroupPlans,
+} from '../../utils/groupImport';
+
+// The real, atomic single-group Firestore writer (shared with the emulator test).
+import { commitOneGroup } from '../../utils/groupImportWriter';
+
 // Shared collapsible advanced-search bar (free text + per-field filters).
 import SearchFilters from '../shared/SearchFilters/SearchFilters';
 
@@ -87,6 +103,46 @@ const getGuideName = (guide) => {
 };
 
 
+// Compose the Hebrew import summary. Each outcome is reported separately:
+// written groups, rows rejected in validation/matching (by row number only),
+// the row whose WRITE failed, groups not attempted after it, and a refresh
+// failure on its own line. No raw rows or personal details are printed.
+const buildGroupImportReport = ({
+  written,
+  rejectedExcelRows = [],
+  blankSkipped = 0,
+  failedExcelRow = null,
+  notAttempted = 0,
+  refreshOk = true,
+}) => {
+  const lines = [`נכתבו ${written} קבוצות חדשות.`];
+
+  if (rejectedExcelRows.length > 0) {
+    lines.push(`${rejectedExcelRows.length} שורות נדחו בוולידציה או בהתאמה ולא נכתבו (שורות: ${rejectedExcelRows.join(', ')}).`);
+  }
+
+  if (blankSkipped > 0) {
+    lines.push(`${blankSkipped} שורות ריקות דולגו.`);
+  }
+
+  const hadWriteFailure = failedExcelRow !== null && failedExcelRow !== undefined;
+  if (hadWriteFailure) {
+    lines.push(`הכתיבה נעצרה בשורה ${failedExcelRow} — אותה קבוצה לא נכתבה.`);
+    lines.push(`${notAttempted} קבוצות שאחריה לא נוסו.`);
+  }
+
+  // A refresh failure is a DIFFERENT problem from an import failure.
+  if (!refreshOk) {
+    lines.push('רענון הנתונים לאחר הייבוא נכשל — אין לייבא שוב עד לרענון מוצלח של המסך.');
+  } else if (hadWriteFailure) {
+    lines.push('לאחר רענון מוצלח, תקנו את השורה שנכשלה וייבאו מחדש רק את הקבוצות שטרם נכתבו.');
+  }
+
+  lines.push('מניעת הכפילויות מבוססת על נתוני הרגע (snapshot) ואינה נעילה גלובלית.');
+  return lines.join('\n');
+};
+
+
 const GroupManagement = ({ registerBack }) => {
   // The group currently opened in the details view (null = list view).
   const [selectedGroupId, setSelectedGroupId] = useState(null);
@@ -99,6 +155,11 @@ const GroupManagement = ({ registerBack }) => {
   // Excel import: in-flight flag + the hidden file input.
   const [isImporting, setIsImporting] = useState(false);
   const importFileRef = useRef(null);
+
+  // Fail-closed readiness: import is allowed ONLY after all four core sources
+  // (groups, volunteers, users, guide links) have loaded successfully. Any load
+  // failure leaves this false and blocks a new import, without wiping old state.
+  const [importDataReady, setImportDataReady] = useState(false);
 
   // Dashboard back button: close the details view first, then leave.
   useEffect(() => {
@@ -162,25 +223,41 @@ const GroupManagement = ({ registerBack }) => {
   // True while a cover image is uploading to Storage.
   const [uploadingImage, setUploadingImage] = useState(false);
 
-  // Load groups, volunteers and guides together.
+  // Load the four core sources together and gate import readiness on all of
+  // them. Returns true only when every source loaded; false on any failure
+  // (old state is kept, import stays blocked). Used both on mount and as the
+  // post-import refresh.
   const fetchData = useCallback(async () => {
+    // Block import while (re)loading; only a full success re-enables it.
+    setImportDataReady(false);
     try {
-      // Read all three collections in parallel.
-      const [groupsSnap, volunteersSnap, usersSnap] = await Promise.all([
+      // Read all four collections in parallel. Names come from "users";
+      // groupId/groupName mappings come from the "guides" link documents.
+      const [groupsSnap, volunteersSnap, usersSnap, guideLinksSnap] = await Promise.all([
         getDocs(collection(db, 'groups')),
         getDocs(collection(db, 'volunteers')),
         getDocs(collection(db, 'users')),
+        getDocs(collection(db, 'guides')),
       ]);
+
+      const users = usersSnap.docs.map(toRecord);
+      const guideLinks = guideLinksSnap.docs.map(toRecord);
 
       setGroups(groupsSnap.docs.map(toRecord));
       setVolunteers(volunteersSnap.docs.map(toRecord));
 
-      // Guide names live in the "users" collection (role === "guide"); the
-      // "guides" collection only holds the group mapping, so it has no names.
-      // Removed (disabled) guides are left out so they can't be assigned.
-      setGuides(usersSnap.docs.map(toRecord).filter((user) => user.role === 'guide' && !user.disabled));
+      // Active guides only (role "guide", not disabled), each merged with its
+      // guides/{uid} group mapping — the single active-guide list used by both
+      // the template and the import.
+      setGuides(buildGroupImportGuides(users, guideLinks));
+
+      // All four succeeded → import is allowed.
+      setImportDataReady(true);
+      return true;
     } catch (error) {
       console.error('שגיאה בשליפת הנתונים:', error);
+      // Keep whatever was loaded before; readiness stays false → import blocked.
+      return false;
     }
   }, []);
 
@@ -509,13 +586,19 @@ const GroupManagement = ({ registerBack }) => {
   };
 
   // Open a group's details view.
-  // Bulk-import groups from the Excel template. Each row creates a NEW group
-  // (existing names are skipped); only valid activity times are kept, a
-  // matched guide is linked on both sides, and volunteers listed by name are
-  // assigned to the new group — all in one atomic batch.
+  // Import groups from the Excel template through the approved pure engine, then
+  // write each group as ONE atomic batch. No first-match, no silent skip/reassign:
+  // only fully-resolved rows are written, and every other row is reported.
   const handleGroupsFileUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
+
+    // Fail-closed: never import against partial / not-yet-loaded data.
+    if (!importDataReady) {
+      alert('הנתונים עדיין נטענים או שטעינתם נכשלה. רעננו את המסך ונסו שוב לפני הייבוא.');
+      if (importFileRef.current) importFileRef.current.value = null;
+      return;
+    }
 
     setIsImporting(true);
 
@@ -523,79 +606,77 @@ const GroupManagement = ({ registerBack }) => {
       // Parse the workbook (the Excel reader loads on demand).
       const XLSX = await import('xlsx');
       const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
-      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
 
-      // Never create a duplicate of an existing group name.
-      const existingNames = new Set(groups.map((g) => (g.groupName || g.name || '').trim()));
+      // 1) Inspect the RAW header row BEFORE object parsing.
+      const headerRow = XLSX.utils.sheet_to_json(worksheet, { header: 1 })[0] || [];
 
-      const batch = writeBatch(db);
-      let added = 0;
-      let skipped = 0;
-
-      rows.forEach((row) => {
-        const groupName = String(row['שם קבוצה *'] || row['שם קבוצה'] || '').trim();
-        if (!groupName) return;
-
-        if (existingNames.has(groupName)) {
-          skipped += 1;
-          return;
-        }
-        existingNames.add(groupName);
-
-        // Only the closed list of times is accepted (no "8"-style values).
-        const rawTime = String(row['זמן פעילות'] || '').trim();
-
-        // Match the responsible guide by display name.
-        const guideNameRaw = String(row['מדריך אחראי'] || '').trim();
-        const matchedGuide = guides.find((guide) => getGuideName(guide).trim() === guideNameRaw);
-
-        const newGroupRef = doc(collection(db, 'groups'));
-
-        batch.set(newGroupRef, {
-          groupName,
-          time: GROUP_TIMES.includes(rawTime) ? rawTime : '',
-          location: String(row['מיקום / חדר'] || '').trim(),
-          activityDay: String(row['יום פעילות'] || '').trim(),
-          notes: String(row['הערות'] || '').trim(),
-          guideId: matchedGuide?.id || '',
-          guideName: matchedGuide ? getGuideName(matchedGuide) : '',
-          createdAt: new Date(),
-        });
-
-        // Mirror the assignment on the guide's side (the attendance screen
-        // finds the guide's group through guides/{uid}.groupId).
-        if (matchedGuide) {
-          batch.set(
-            doc(db, 'guides', matchedGuide.id),
-            { groupId: newGroupRef.id, groupName },
-            { merge: true },
-          );
-        }
-
-        // Assign listed volunteers (comma-separated names) to the new group.
-        String(row['מתנדבים משויכים (שמות, מופרדים בפסיק)'] || row['מתנדבים משויכים'] || '')
-          .split(',')
-          .map((name) => name.trim())
-          .filter(Boolean)
-          .forEach((volunteerName) => {
-            const match = volunteers.find((volunteer) => (
-              (volunteer.name || `${volunteer.firstName || ''} ${volunteer.lastName || ''}`.trim()) === volunteerName
-            ));
-
-            if (match) {
-              batch.update(doc(db, 'volunteers', match.id), { groupId: newGroupRef.id, groupName });
-            }
-          });
-
-        added += 1;
-      });
-
-      if (added > 0) {
-        await batch.commit();
-        await fetchData();
+      // Reject a volunteers / mixed / unrecognized file up front — before object
+      // parsing, preflight or any Firebase access.
+      const fileType = detectGroupImportFileType(headerRow);
+      if (fileType === 'volunteers') {
+        alert('הקובץ שנבחר הוא תבנית מתנדבים. במסך הקבוצות יש להעלות את תבנית הקבוצות בלבד.');
+        return;
+      }
+      if (fileType === 'ambiguous') {
+        alert('הקובץ מכיל גם כותרות של קבוצות וגם של מתנדבים. השתמשו בתבנית הקבוצות בלבד, ללא עמודות של מתנדבים.');
+        return;
+      }
+      if (fileType !== 'groups') {
+        alert('הקובץ אינו מזוהה כתבנית קבוצות. הורידו את תבנית הקבוצות, מלאו אותה ונסו שוב.');
+        return;
       }
 
-      alert(`יובאו ${added} קבוצות חדשות${skipped ? `, דולגו ${skipped} שכבר קיימות` : ''}.`);
+      // Duplicate / ambiguous headers stop the import before any parsing/write.
+      const headerCheck = analyzeGroupImportHeaders(headerRow);
+      if (!headerCheck.ok) {
+        const message = headerCheck.code === 'AMBIGUOUS_HEADERS'
+          ? 'נמצאו שתי כותרות שונות לאותו שדה (למשל "שם קבוצה *" ו"שם קבוצה"). השאירו עמודה אחת בלבד מכל סוג.'
+          : 'נמצאו כותרות כפולות בקובץ. ודאו שכל כותרת מופיעה פעם אחת בלבד.';
+        alert(message);
+        return;
+      }
+
+      // 2) Only now read the data rows in object mode and run the pure pipeline.
+      const jsonRows = XLSX.utils.sheet_to_json(worksheet);
+      const {
+        valid, rejected: preflightRejected, blankSkipped, identities,
+      } = preflightGroupImport(jsonRows);
+      const { ready, rejected: resolveRejected } = resolveGroupImport(valid, {
+        existingGroups: groups,
+        guides,
+        volunteers,
+        allRowIdentities: identities,
+      });
+
+      // Unite preflight + resolve rejections by Excel row (numbers only).
+      const rejectedExcelRows = [...new Set(
+        [...preflightRejected, ...resolveRejected].map((r) => r.excelRow),
+      )].sort((a, b) => a - b);
+
+      // Nothing to write — report and stop (no batch, no refresh needed).
+      if (ready.length === 0) {
+        alert(buildGroupImportReport({ written: 0, rejectedExcelRows, blankSkipped }));
+        return;
+      }
+
+      // 3) Build plans (ready only) and commit one atomic batch per group,
+      //    stopping at the first failure.
+      const plans = buildGroupImportPlans(ready);
+      const result = await commitGroupPlans(plans, (plan) => commitOneGroup(db, plan));
+
+      // 4) Refresh; a refresh failure is reported separately and keeps import
+      //    blocked (readiness stays false until a clean reload).
+      const refreshOk = await fetchData();
+
+      alert(buildGroupImportReport({
+        written: result.writtenGroups,
+        rejectedExcelRows,
+        blankSkipped,
+        failedExcelRow: result.failedExcelRow,
+        notAttempted: result.notAttemptedGroups,
+        refreshOk,
+      }));
     } catch (error) {
       console.error('שגיאה בייבוא קבוצות:', error);
       alert('אירעה שגיאה בייבוא הקובץ. ודאו שזהו קובץ התבנית.');
@@ -732,21 +813,25 @@ const GroupManagement = ({ registerBack }) => {
             <button
               className="mgmt-secondary-btn"
               onClick={() => importFileRef.current?.click()}
-              disabled={isImporting}
+              disabled={isImporting || !importDataReady}
+              title={!importDataReady ? 'הנתונים נטענים — הייבוא ייפתח לאחר טעינה מלאה' : undefined}
             >
               {isImporting ? '⏳ מייבא...' : '📥 ייבוא קבוצות'}
             </button>
             <button
               className="mgmt-secondary-btn"
               onClick={async () => {
-                // Pull guides + volunteers fresh at click time.
-                const [usersSnap, volunteersSnap] = await Promise.all([
+                // Pull users + guide links + volunteers fresh at click time, and
+                // build the SAME active-guide list the import uses.
+                const [usersSnap, guideLinksSnap, volunteersSnap] = await Promise.all([
                   getDocs(collection(db, 'users')),
+                  getDocs(collection(db, 'guides')),
                   getDocs(collection(db, 'volunteers')),
                 ]);
-                const freshGuides = usersSnap.docs
-                  .map(toRecord)
-                  .filter((user) => user.role === 'guide' && !user.disabled);
+                const freshGuides = buildGroupImportGuides(
+                  usersSnap.docs.map(toRecord),
+                  guideLinksSnap.docs.map(toRecord),
+                );
                 downloadGroupsTemplate(freshGuides, volunteersSnap.docs.map(toRecord));
               }}
             >

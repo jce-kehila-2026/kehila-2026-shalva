@@ -3,10 +3,19 @@ import { describe, it, expect } from 'vitest';
 
 import {
   analyzeGroupImportHeaders,
+  detectGroupImportFileType,
+  buildGroupImportGuides,
   prepareGroupImportRow,
   preflightGroupImport,
   resolveGroupImport,
+  buildGroupImportPlans,
+  groupPlanOperationCount,
+  commitGroupPlans,
 } from '../src/utils/groupImport.js';
+
+// The real writer — imported only to prove its operationCount guard fires
+// BEFORE any Firestore write (it throws before touching the injected db).
+import { commitOneGroup } from '../src/utils/groupImportWriter.js';
 
 
 // A raw group row keyed by the template's Hebrew headers.
@@ -324,6 +333,13 @@ describe('resolveGroupImport — volunteer matching', () => {
     expect(rejected[0].reasons.join(' ')).toMatch(/אינה עקבית/);
   });
 
+  it("rejects a volunteer whose groupName is 'Unassigned' with no groupId (NOT a volunteer sentinel)", () => {
+    const odd = [{ id: 'v1', name: 'יוסי לוי', groupId: '', groupName: 'Unassigned' }];
+    const { ready, rejected } = resolveGroupImport([vRow(2, { volunteerNames: ['יוסי לוי'] })], { volunteers: odd });
+    expect(ready).toHaveLength(0);
+    expect(rejected[0].reasons.join(' ')).toMatch(/אינה עקבית/);
+  });
+
   it('accepts a genuinely free volunteer (groupId AND groupName empty) with the right plan', () => {
     const free = [{ id: 'v1', name: 'יוסי לוי', groupId: '', groupName: '' }];
     const { ready, rejected } = resolveGroupImport([vRow(2, { volunteerNames: ['יוסי לוי'] })], { volunteers: free });
@@ -441,5 +457,203 @@ describe('preflight + resolve — typed volunteers cell', () => {
     ]);
     expect(valid).toHaveLength(1);
     expect(resolveGroupImport(valid, {}).ready).toHaveLength(1);
+  });
+});
+
+
+// ===========================================================================
+// Stage 6 — sources contract, file detection, plans, orchestrator
+// ===========================================================================
+
+describe('buildGroupImportGuides', () => {
+  const active = (id, name, extra = {}) => ({ id, role: 'guide', name, ...extra });
+
+  it('includes only ACTIVE guides (role guide, not disabled)', () => {
+    const users = [
+      active('u1', 'דנה'),
+      active('u2', 'רון', { disabled: true }),
+      { id: 'u3', role: 'viewer', name: 'נועה' },
+    ];
+    expect(buildGroupImportGuides(users, []).map((g) => g.id)).toEqual(['u1']);
+  });
+
+  it('merges groupId/groupName from the guides/{uid} link by id, keeping the user name', () => {
+    const [guide] = buildGroupImportGuides(
+      [active('u1', 'דנה')],
+      [{ id: 'u1', groupId: 'gX', groupName: 'תותים' }],
+    );
+    expect(guide.groupId).toBe('gX');
+    expect(guide.groupName).toBe('תותים');
+    expect(guide.name).toBe('דנה'); // user's own name never replaced
+  });
+
+  it('treats a missing link as an empty mapping', () => {
+    const [guide] = buildGroupImportGuides([active('u1', 'דנה')], []);
+    expect(guide.groupId).toBe('');
+    expect(guide.groupName).toBe('');
+  });
+
+  it('does NOT turn an orphan guides link (no active user) into a candidate', () => {
+    expect(buildGroupImportGuides([], [{ id: 'ghost', groupId: 'gX', groupName: 'תותים' }]))
+      .toHaveLength(0);
+  });
+});
+
+
+describe('resolveGroupImport — guide source contract (built candidate list)', () => {
+  const active = (id, name, extra = {}) => ({ id, role: 'guide', name, ...extra });
+  const oneRow = (guideNameRaw) => [vRow(2, { guideNameRaw })];
+
+  it('active guide + free link → accepted, ready carries canonical guideId + guideName', () => {
+    const guides = buildGroupImportGuides([active('u1', 'דנה כהן')], [{ id: 'u1', groupId: '', groupName: 'Unassigned' }]);
+    const { ready, rejected } = resolveGroupImport(oneRow('דנה כהן'), { guides });
+    expect(rejected).toHaveLength(0);
+    expect(ready[0].guideId).toBe('u1');
+    expect(ready[0].guideName).toBe('דנה כהן');
+  });
+
+  it('active guide, no link, no existing group → accepted', () => {
+    const guides = buildGroupImportGuides([active('u1', 'דנה כהן')], []);
+    const { ready } = resolveGroupImport(oneRow('דנה כהן'), { guides, existingGroups: [] });
+    expect(ready[0].guideId).toBe('u1');
+  });
+
+  it('active guide whose link has a groupId → rejected (already assigned)', () => {
+    const guides = buildGroupImportGuides([active('u1', 'דנה כהן')], [{ id: 'u1', groupId: 'gX', groupName: 'תותים' }]);
+    const { ready, rejected } = resolveGroupImport(oneRow('דנה כהן'), { guides });
+    expect(ready).toHaveLength(0);
+    expect(rejected[0].reasons.join(' ')).toMatch(/כבר משויך/);
+  });
+
+  it('existingGroups.guideId points at the uid → rejected, even if the link says Unassigned', () => {
+    const guides = buildGroupImportGuides([active('u1', 'דנה כהן')], [{ id: 'u1', groupId: '', groupName: 'Unassigned' }]);
+    const { ready, rejected } = resolveGroupImport(oneRow('דנה כהן'), {
+      guides, existingGroups: [{ id: 'g0', groupName: 'אחרת', guideId: 'u1' }],
+    });
+    expect(ready).toHaveLength(0);
+    expect(rejected[0].reasons.join(' ')).toMatch(/כבר משויך/);
+  });
+
+  it("link groupName 'Unassigned' (any case) with empty groupId → accepted", () => {
+    const guides = buildGroupImportGuides([active('u1', 'דנה כהן')], [{ id: 'u1', groupId: '', groupName: 'unassigned' }]);
+    expect(resolveGroupImport(oneRow('דנה כהן'), { guides }).ready[0].guideId).toBe('u1');
+  });
+
+  it('real groupName without a groupId → rejected as inconsistent', () => {
+    const guides = buildGroupImportGuides([active('u1', 'דנה כהן')], [{ id: 'u1', groupId: '', groupName: 'תותים' }]);
+    const { ready, rejected } = resolveGroupImport(oneRow('דנה כהן'), { guides });
+    expect(ready).toHaveLength(0);
+    expect(rejected[0].reasons.join(' ')).toMatch(/אינה עקבית/);
+  });
+
+  it('two ACTIVE guides with the same name → ambiguous', () => {
+    const guides = buildGroupImportGuides([active('u1', 'דנה כהן'), active('u2', 'דנה כהן')], []);
+    expect(resolveGroupImport(oneRow('דנה כהן'), { guides }).rejected[0].reasons.join(' ')).toMatch(/עמום/);
+  });
+
+  it('active guide + disabled namesake → the active one is accepted', () => {
+    const guides = buildGroupImportGuides([active('u1', 'דנה כהן'), active('u2', 'דנה כהן', { disabled: true })], []);
+    expect(resolveGroupImport(oneRow('דנה כהן'), { guides }).ready[0].guideId).toBe('u1');
+  });
+
+  it('active guide + non-guide namesake → the active one is accepted', () => {
+    const guides = buildGroupImportGuides([active('u1', 'דנה כהן'), { id: 'u2', role: 'viewer', name: 'דנה כהן' }], []);
+    expect(resolveGroupImport(oneRow('דנה כהן'), { guides }).ready[0].guideId).toBe('u1');
+  });
+
+  it('only a disabled namesake exists → no candidate (not found)', () => {
+    const guides = buildGroupImportGuides([active('u1', 'דנה כהן', { disabled: true })], []);
+    const { ready, rejected } = resolveGroupImport(oneRow('דנה כהן'), { guides });
+    expect(ready).toHaveLength(0);
+    expect(rejected[0].reasons.join(' ')).toMatch(/לא נמצא/);
+  });
+});
+
+
+describe('detectGroupImportFileType', () => {
+  it('detects a group-only header (either alias)', () => {
+    expect(detectGroupImportFileType(['שם קבוצה *', 'מדריך אחראי'])).toBe('groups');
+    expect(detectGroupImportFileType(['שם קבוצה'])).toBe('groups');
+  });
+
+  it('detects a volunteer-only header (incl. legacy aliases)', () => {
+    expect(detectGroupImportFileType(['שם פרטי *', 'שם משפחה *'])).toBe('volunteers');
+    expect(detectGroupImportFileType(['firstName', 'lastName'])).toBe('volunteers');
+    expect(detectGroupImportFileType(['שם מלא'])).toBe('volunteers');
+    expect(detectGroupImportFileType(['name'])).toBe('volunteers');
+  });
+
+  it('flags a mixed file (both families present) as ambiguous — not groups', () => {
+    expect(detectGroupImportFileType(['שם קבוצה *', 'שם פרטי *'])).toBe('ambiguous');
+    expect(detectGroupImportFileType(['שם פרטי *', 'שם קבוצה *'])).toBe('ambiguous'); // order independent
+  });
+
+  it('returns unknown for an unrecognized / empty header', () => {
+    expect(detectGroupImportFileType(['משהו אחר'])).toBe('unknown');
+    expect(detectGroupImportFileType([])).toBe('unknown');
+  });
+});
+
+
+describe('buildGroupImportPlans + operationCount', () => {
+  const readyItem = {
+    excelRow: 2,
+    fields: { groupName: 'תותים', activityTime: 'בוקר', activityDay: 'יום ראשון', location: 'חדר 1', notes: 'הערה' },
+    guideId: 'gd1', guideName: 'דנה כהן', volunteerIds: ['v1', 'v2'], operationCount: 4,
+  };
+
+  it('maps activityTime → time and keeps ONLY schema fields in groupDoc (no excelRow/operationCount)', () => {
+    const [plan] = buildGroupImportPlans([readyItem]);
+    expect(plan.groupDoc).toEqual({
+      groupName: 'תותים', time: 'בוקר', activityDay: 'יום ראשון', location: 'חדר 1', notes: 'הערה',
+      guideId: 'gd1', guideName: 'דנה כהן',
+    });
+    expect(plan.groupDoc).not.toHaveProperty('excelRow');
+    expect(plan.groupDoc).not.toHaveProperty('operationCount');
+    expect(plan.groupDoc).not.toHaveProperty('activityTime');
+    expect(plan.excelRow).toBe(2); // kept on the plan, in memory only
+  });
+
+  it('computes operationCount = group + guide + volunteers and matches the plan', () => {
+    const [plan] = buildGroupImportPlans([readyItem]);
+    expect(groupPlanOperationCount(plan)).toBe(4);
+    expect(groupPlanOperationCount(plan)).toBe(plan.operationCount);
+  });
+
+  it('the writer rejects a plan whose operationCount disagrees, BEFORE any commit', async () => {
+    const [plan] = buildGroupImportPlans([readyItem]);
+    const tampered = { ...plan, operationCount: 99 };
+    // db is null on purpose: the guard must throw before writeBatch is reached.
+    await expect(commitOneGroup(null, tampered)).rejects.toThrow(/operationCount/);
+  });
+});
+
+
+describe('commitGroupPlans — sequential, stop at first failure', () => {
+  it('writes up to the failing group, does not attempt the rest, counts correctly', async () => {
+    const plans = [{ excelRow: 2 }, { excelRow: 3 }, { excelRow: 4 }];
+    const attempted = [];
+    const commitOne = async (plan) => {
+      attempted.push(plan.excelRow);
+      if (plan.excelRow === 3) {
+        throw new Error('boom');
+      }
+    };
+
+    const result = await commitGroupPlans(plans, commitOne);
+
+    expect(attempted).toEqual([2, 3]); // row 4 never attempted
+    expect(result.writtenGroups).toBe(1);
+    expect(result.failedCurrentGroup).toBe(1);
+    expect(result.notAttemptedGroups).toBe(1);
+    expect(result.failedExcelRow).toBe(3);
+    expect(result.error).toBeInstanceOf(Error);
+  });
+
+  it('reports all written when every group succeeds', async () => {
+    const result = await commitGroupPlans([{ excelRow: 2 }, { excelRow: 3 }], async () => {});
+    expect(result).toMatchObject({
+      writtenGroups: 2, failedCurrentGroup: 0, notAttemptedGroups: 0, failedExcelRow: null, error: null,
+    });
   });
 });
