@@ -13,6 +13,9 @@ import {
   isLegacySaturdayActivityDay,
 } from './activityDays.js';
 
+// The closed list of activity-time slots (בוקר / צהריים / ערב) — single source.
+import { GROUP_TIMES } from './groupOptions.js';
+
 
 // ---------------------------------------------------------------------------
 // Activity day
@@ -54,6 +57,34 @@ export function normalizeImportedActivityDay(value) {
 
   // Anything else is not a known weekday.
   return { ok: false, code: 'UNKNOWN_DAY' };
+}
+
+
+// ---------------------------------------------------------------------------
+// Activity time
+// ---------------------------------------------------------------------------
+
+// Normalize an imported activity-time cell against the canonical GROUP_TIMES.
+// Empty is accepted as empty (optional field); a value that matches a GROUP_TIMES
+// entry (after trimming surrounding whitespace) returns that canonical value; an
+// unrecognized value is rejected (never stored raw).
+export function normalizeImportedActivityTime(value) {
+  if (value === null || value === undefined) {
+    return { ok: true, value: '' };
+  }
+
+  const trimmed = String(value).trim();
+
+  if (trimmed === '') {
+    return { ok: true, value: '' };
+  }
+
+  const match = GROUP_TIMES.find((time) => time === trimmed);
+  if (match) {
+    return { ok: true, value: match };
+  }
+
+  return { ok: false, code: 'UNKNOWN_TIME' };
 }
 
 

@@ -176,6 +176,37 @@ describe('prepareVolunteerImportRow — activity day', () => {
 });
 
 
+describe('prepareVolunteerImportRow — activity time', () => {
+  it('accepts a canonical GROUP_TIMES value', () => {
+    expect(prepareVolunteerImportRow(row({ 'זמן פעילות': 'בוקר' })).fields.activityTime).toBe('בוקר');
+  });
+
+  it('normalizes surrounding whitespace', () => {
+    expect(prepareVolunteerImportRow(row({ 'זמן פעילות': '  בוקר  ' })).fields.activityTime).toBe('בוקר');
+  });
+
+  it('accepts an empty activity time', () => {
+    expect(prepareVolunteerImportRow(row({ 'זמן פעילות': '' })).fields.activityTime).toBe('');
+  });
+
+  it('rejects an unknown activity time', () => {
+    const result = prepareVolunteerImportRow(row({ 'זמן פעילות': 'morning' }));
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(' ')).toMatch(/זמן פעילות/);
+  });
+});
+
+
+describe('prepareVolunteerImportRow — age is a compatibility placeholder', () => {
+  it('never reads an imported age; keeps fields.age = "" and birthDate intact', () => {
+    const result = prepareVolunteerImportRow(row({ 'גיל (אוטומטי)': '99', 'תאריך לידה': '2000-01-02' }));
+    expect(result.ok).toBe(true);
+    expect(result.fields.age).toBe('');            // the file's 99 is ignored
+    expect(result.fields.birthDate).toBe('2000-01-02');
+  });
+});
+
+
 describe('prepareVolunteerImportRow — ID number', () => {
   it('keeps a string ID verbatim, preserving leading zeros', () => {
     expect(prepareVolunteerImportRow(row({ 'תעודת זהות': '012345678' })).fields.idNumber).toBe('012345678');
@@ -760,6 +791,7 @@ describe('resolveVolunteerImport', () => {
 
     expect(payload.idNumber).toBe('012345678');
     expect(payload.phone).toBe('0501234567');
+    expect(payload.age).toBe('');               // compatibility placeholder, kept as ''
     expect(payload).not.toHaveProperty('idKey');
     expect(payload).not.toHaveProperty('phoneKey');
     expect(payload).not.toHaveProperty('nameBirthKey');

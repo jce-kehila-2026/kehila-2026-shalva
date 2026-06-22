@@ -6,6 +6,7 @@
 
 import {
   normalizeImportedActivityDay,
+  normalizeImportedActivityTime,
   normalizeImportedMobilePhone,
   parseImportedDate,
   maskPhoneForError,
@@ -183,15 +184,21 @@ export function prepareVolunteerImportRow(rawRow, { date1904 = false } = {}) {
   const rawBirthDate = firstDefined(row, ['תאריך לידה', 'birthDate']);
   const rawId = firstDefined(row, ['תעודת זהות', 'ת.ז', 'idNumber']);
   const rawDay = firstDefined(row, ['יום פעילות', 'יום', 'day']);
+  const rawActivityTime = firstDefined(row, ['זמן פעילות', 'activityTime']);
+
+  // Age is a COMPATIBILITY PLACEHOLDER: never read from the file, never typed,
+  // never computed here — birth date is the source of truth. It is kept as '' so
+  // the document schema stays the same for current consumers (VolunteerDetails,
+  // the age-range filter, search) until a separate refactor makes them all
+  // compute age from birthDate. No migration of existing records.
+  const age = '';
 
   // Free-text passthrough fields.
-  const age = asText(row['גיל (אוטומטי)'] || row['גיל'] || row['age']);
   const notes = asText(row['הערות'] || row['notes']);
   const address = asText(row['כתובת'] || row['address']);
   const email = asText(row['אימייל'] || row['דוא"ל'] || row['email']);
   const experience = asText(row['ניסיון קודם'] || row['ניסיון'] || row['experience']);
   const school = asText(row['בית ספר'] || row['school']);
-  const activityTime = asText(row['זמן פעילות'] || row['activityTime']);
   const groupNameRaw = asText(row['קבוצה'] || row['group']);
   const programNameRaw = asText(row['תוכנית'] || row['program']);
 
@@ -227,6 +234,15 @@ export function prepareVolunteerImportRow(rawRow, { date1904 = false } = {}) {
     day = dayResult.value;
   } else {
     errors.push(dayReason(dayResult.code));
+  }
+
+  // Activity time — optional; if present must be a canonical GROUP_TIMES value.
+  const timeResult = normalizeImportedActivityTime(rawActivityTime);
+  let activityTime = '';
+  if (timeResult.ok) {
+    activityTime = timeResult.value;
+  } else {
+    errors.push('זמן פעילות לא מזוהה — יש לבחור ערך מהרשימה (בוקר / צהריים / ערב)');
   }
 
   // ID — string kept verbatim; numeric cell or any non-string type rejected

@@ -66,17 +66,20 @@ async function createTemplate(sheetName, headers) {
 // Enforce real DATES on a column: Excel rejects free text with a Hebrew
 // error, and the cell is date-formatted. (A popup calendar can't be embedded
 // in a plain .xlsx — that needs VBA — so strict validation is the maximum.)
-function addDateColumn(sheet, columnLetter) {
+function addDateColumn(sheet, columnLetter, {
+  numFmt = 'dd/mm/yyyy',
+  error = 'יש להזין תאריך אמיתי בפורמט יום/חודש/שנה (למשל 15/06/1999) — לא טקסט חופשי.',
+} = {}) {
   for (let row = 2; row <= TEMPLATE_ROWS; row += 1) {
     const cell = sheet.getCell(`${columnLetter}${row}`);
-    cell.numFmt = 'dd/mm/yyyy';
+    cell.numFmt = numFmt;
     cell.dataValidation = {
       type: 'date',
       operator: 'between',
       allowBlank: true,
       showErrorMessage: true,
       errorTitle: 'תאריך לא תקין',
-      error: 'יש להזין תאריך אמיתי בפורמט יום/חודש/שנה (למשל 15/06/1999) — לא טקסט חופשי.',
+      error,
       formulae: [new Date(1900, 0, 1), new Date()],
     };
   }
@@ -113,35 +116,52 @@ function fillHiddenList(lists, columnLetter, values) {
 
 
 // ----- Volunteers template -----
-// Empty file for adding NEW volunteers; group and program are dropdowns,
-// the birth date is a real date cell, and age fills itself from the date.
-export async function downloadVolunteersTemplate(groups = [], programs = []) {
+// Build the volunteers template workbook WITHOUT downloading it — separated from
+// the download so tests can generate and inspect the real workbook with no DOM.
+// exceljs stays lazy-loaded (inside createTemplate); nothing is imported eagerly.
+export async function buildVolunteersWorkbook(groups = [], programs = []) {
   const headers = [
     'שם פרטי *', 'שם משפחה *', 'תעודת זהות', 'טלפון', 'אימייל',
-    'תאריך לידה', 'גיל (אוטומטי)', 'קבוצה', 'תוכנית', 'יום פעילות', 'כתובת', 'בית ספר', 'ניסיון קודם', 'הערות',
+    'תאריך לידה', 'גיל (אוטומטי)', 'קבוצה', 'תוכנית', 'יום פעילות', 'זמן פעילות',
+    'כתובת', 'בית ספר', 'ניסיון קודם', 'הערות',
   ];
 
   const { workbook, sheet, lists } = await createTemplate('מתנדבים', headers);
 
-  // Dropdowns: group names (hidden list) + program names (hidden list) + the volunteer days.
+  // Dropdowns: group names + program names (hidden lists), the volunteer days,
+  // and the activity time (the shared GROUP_TIMES — not duplicated here).
   const groupNames = groups.map(getName).filter(Boolean);
   const programNames = programs.map(getName).filter(Boolean);
   addDropdown(sheet, 'H', fillHiddenList(lists, 'A', groupNames));
   addDropdown(sheet, 'I', fillHiddenList(lists, 'B', programNames));
   addDropdown(sheet, 'J', `"${ALLOWED_ACTIVITY_DAYS.join(',')}"`);
+  addDropdown(sheet, 'K', `"${GROUP_TIMES.join(',')}"`);
 
   // ID + phone columns stay TEXT so Excel keeps the leading 0.
   addTextColumn(sheet, 'C');
   addTextColumn(sheet, 'D');
 
-  // Birth date column: dates only (validated); age column: automatic formula.
-  addDateColumn(sheet, 'F');
+  // Birth date column: real dates only, displayed dd-mm-yyyy with a dash example
+  // in the validation error (never slashes); age column: an automatic,
+  // display-only formula (the import never reads it).
+  addDateColumn(sheet, 'F', {
+    numFmt: 'dd-mm-yyyy',
+    error: 'יש להזין תאריך אמיתי בפורמט יום-חודש-שנה (למשל 15-06-1999) — לא טקסט חופשי.',
+  });
   for (let row = 2; row <= TEMPLATE_ROWS; row += 1) {
     sheet.getCell(`G${row}`).value = {
       formula: `IF(F${row}="","",DATEDIF(F${row},TODAY(),"Y"))`,
     };
   }
 
+  return workbook;
+}
+
+
+// Empty file for adding NEW volunteers; group/program/day/time are dropdowns and
+// the birth date is a real date cell.
+export async function downloadVolunteersTemplate(groups = [], programs = []) {
+  const workbook = await buildVolunteersWorkbook(groups, programs);
   await downloadWorkbook(workbook, 'תבנית-מתנדבים.xlsx');
 }
 

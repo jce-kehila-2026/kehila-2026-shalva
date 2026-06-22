@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest';
 
 import {
   normalizeImportedActivityDay,
+  normalizeImportedActivityTime,
   normalizeImportedMobilePhone,
   maskPhoneForError,
   parseImportedDate,
@@ -12,6 +13,8 @@ import {
   ACTIVITY_DAYS,
   ACTIVITY_DAY_SHORT_LABELS,
 } from '../src/utils/activityDays.js';
+
+import { GROUP_TIMES } from '../src/utils/groupOptions.js';
 
 
 describe('normalizeImportedActivityDay', () => {
@@ -45,6 +48,31 @@ describe('normalizeImportedActivityDay', () => {
   it('rejects an unrecognized value (never stored raw)', () => {
     expect(normalizeImportedActivityDay('Sunday')).toEqual({ ok: false, code: 'UNKNOWN_DAY' });
     expect(normalizeImportedActivityDay('יומיום')).toEqual({ ok: false, code: 'UNKNOWN_DAY' });
+  });
+});
+
+
+describe('normalizeImportedActivityTime', () => {
+  it('accepts every canonical GROUP_TIMES value', () => {
+    for (const time of GROUP_TIMES) {
+      expect(normalizeImportedActivityTime(time)).toEqual({ ok: true, value: time });
+    }
+  });
+
+  it('trims surrounding whitespace to the canonical value', () => {
+    expect(normalizeImportedActivityTime(`  ${GROUP_TIMES[0]}  `)).toEqual({ ok: true, value: GROUP_TIMES[0] });
+  });
+
+  it('accepts empty as empty (optional field)', () => {
+    expect(normalizeImportedActivityTime('')).toEqual({ ok: true, value: '' });
+    expect(normalizeImportedActivityTime('   ')).toEqual({ ok: true, value: '' });
+    expect(normalizeImportedActivityTime(null)).toEqual({ ok: true, value: '' });
+    expect(normalizeImportedActivityTime(undefined)).toEqual({ ok: true, value: '' });
+  });
+
+  it('rejects an unrecognized value', () => {
+    expect(normalizeImportedActivityTime('morning')).toEqual({ ok: false, code: 'UNKNOWN_TIME' });
+    expect(normalizeImportedActivityTime('בוקר מוקדם')).toEqual({ ok: false, code: 'UNKNOWN_TIME' });
   });
 });
 
