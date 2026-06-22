@@ -9,6 +9,7 @@ import {
   prepareVolunteerImportRow,
   preflightVolunteerImport,
   detectImportFileType,
+  resolveVolunteerImport,
   commitVolunteerChunks,
 } from '../src/utils/volunteerImport.js';
 
@@ -419,5 +420,348 @@ describe('detectImportFileType — duplicate headers (real worksheet)', () => {
       ['אבי', '', '0501234567'],
     ]);
     expect(detectImportFileType(header)).toBe('duplicate-headers');
+  });
+});
+
+
+describe('resolveVolunteerImport', () => {
+  // A preflight-validated row: { excelRow, fields }. Fields default to a named
+  // volunteer with everything else empty; override per test.
+  function vRow(excelRow, overrides = {}) {
+    return {
+      excelRow,
+      fields: {
+        name: 'אבי כהן', firstName: 'אבי', lastName: 'כהן',
+        idNumber: '', phone: '', birthDate: '', age: '',
+        address: '', email: '', experience: '', school: '', notes: '',
+        activityTime: '', day: '', groupNameRaw: '', programNameRaw: '',
+        ...overrides,
+      },
+    };
+  }
+
+  // ----- duplicate ID -----
+  it('rejects BOTH rows that share an ID in the file (no first-wins)', () => {
+    const rows = [vRow(2, { idNumber: '012345678' }), vRow(3, { idNumber: '012345678' })];
+    const { readyToWrite, rejected } = resolveVolunteerImport(rows, {});
+
+    expect(readyToWrite).toHaveLength(0);
+    expect(rejected.map((r) => r.excelRow)).toEqual([2, 3]);
+    // Never echo the raw ID.
+    expect(rejected[0].reasons.join(' ')).not.toContain('012345678');
+  });
+
+  it('rejects a row whose ID already exists in Firestore', () => {
+    const rows = [vRow(2, { idNumber: '012345678' })];
+    const existingVolunteers = [{ idNumber: '012345678', name: 'אבי כהן', phone: '' }];
+    const { readyToWrite, rejected } = resolveVolunteerImport(rows, { existingVolunteers });
+
+    expect(readyToWrite).toHaveLength(0);
+    expect(rejected[0].excelRow).toBe(2);
+    expect(rejected[0].reasons.join(' ')).not.toContain('012345678');
+  });
+
+  it('flags a conflict when the same ID has a different name/phone in Firestore', () => {
+    const rows = [vRow(2, { idNumber: '012345678', phone: '0501234567' })];
+    const existingVolunteers = [{ idNumber: '012345678', name: 'מישהו אחר', phone: '0509999999' }];
+    const { rejected } = resolveVolunteerImport(rows, { existingVolunteers });
+
+    expect(rejected[0].reasons.join(' ')).toMatch(/התנגשות/);
+  });
+
+  // ----- same name, different identity -----
+  it('allows two rows with the same name but different IDs (no other dup signal)', () => {
+    const rows = [vRow(2, { idNumber: '011111111' }), vRow(3, { idNumber: '022222222' })];
+    const { readyToWrite, rejected } = resolveVolunteerImport(rows, {});
+
+    expect(readyToWrite).toHaveLength(2);
+    expect(rejected).toHaveLength(0);
+  });
+
+  it('allows two rows that share ONLY a name (no id/phone/birthDate)', () => {
+    const rows = [vRow(2), vRow(3)];
+    const { readyToWrite, rejected } = resolveVolunteerImport(rows, {});
+
+    expect(readyToWrite).toHaveLength(2);
+    expect(rejected).toHaveLength(0);
+  });
+
+  // ----- phone -----
+  it('rejects every row sharing a phone across formats (suspicion)', () => {
+    const rows = [
+      vRow(2, { phone: '050-123-4567' }),
+      vRow(3, { phone: '0501234567' }),
+      vRow(4, { phone: '+972501234567' }),
+    ];
+    const { readyToWrite, rejected } = resolveVolunteerImport(rows, {});
+
+    expect(readyToWrite).toHaveLength(0);
+    expect(rejected.map((r) => r.excelRow)).toEqual([2, 3, 4]);
+    expect(rejected[0].reasons.join(' ')).not.toContain('0501234567');
+  });
+
+  it('flags a conflict when the same phone has different IDs', () => {
+    const rows = [
+      vRow(2, { phone: '0501234567', idNumber: '011111111' }),
+      vRow(3, { phone: '0501234567', idNumber: '022222222' }),
+    ];
+    const { rejected } = resolveVolunteerImport(rows, {});
+
+    expect(rejected).toHaveLength(2);
+    expect(rejected[0].reasons.join(' ')).toMatch(/התנגשות/);
+  });
+
+  // ----- name + birthDate -----
+  it('treats same name + birthDate as a duplicate suspicion', () => {
+    const rows = [
+      vRow(2, { birthDate: '2000-01-01', idNumber: '011111111' }),
+      vRow(3, { birthDate: '2000-01-01', idNumber: '022222222' }),
+    ];
+    const { readyToWrite, rejected } = resolveVolunteerImport(rows, {});
+
+    expect(readyToWrite).toHaveLength(0);
+    expect(rejected).toHaveLength(2);
+    expect(rejected[0].reasons.join(' ')).toMatch(/חשד לכפילות/);
+  });
+
+  // ----- group matching -----
+  const groups = [{ id: 'g1', groupName: 'תותים' }];
+
+  it('rejects an unknown group', () => {
+    const { readyToWrite, rejected } = resolveVolunteerImport([vRow(2, { groupNameRaw: 'לא קיימת' })], { groups });
+    expect(readyToWrite).toHaveLength(0);
+    expect(rejected[0].reasons.join(' ')).toMatch(/קבוצה לא נמצאה/);
+  });
+
+  it('rejects an ambiguous group (more than one match)', () => {
+    const dupGroups = [{ id: 'g1', groupName: 'תותים' }, { id: 'g2', groupName: 'תותים' }];
+    const { rejected } = resolveVolunteerImport([vRow(2, { groupNameRaw: 'תותים' })], { groups: dupGroups });
+    expect(rejected[0].reasons.join(' ')).toMatch(/עמום/);
+  });
+
+  it('matches a group case/whitespace-insensitively and uses its canonical id + name', () => {
+    const enGroups = [{ id: 'g7', groupName: 'Blue Team' }];
+    const { readyToWrite } = resolveVolunteerImport([vRow(2, { groupNameRaw: '  blue   team ' })], { groups: enGroups });
+    expect(readyToWrite).toHaveLength(1);
+    expect(readyToWrite[0].payload.groupId).toBe('g7');
+    expect(readyToWrite[0].payload.groupName).toBe('Blue Team');
+    // No raw name kept, no excelRow / createdAt leak into the payload.
+    expect(readyToWrite[0].payload).not.toHaveProperty('excelRow');
+    expect(readyToWrite[0].payload).not.toHaveProperty('createdAt');
+  });
+
+  // ----- program matching -----
+  const programs = [{ id: 'p1', name: 'תוכנית א' }];
+
+  it('rejects an unknown program', () => {
+    const { rejected } = resolveVolunteerImport([vRow(2, { programNameRaw: 'אין כזו' })], { programs });
+    expect(rejected[0].reasons.join(' ')).toMatch(/תוכנית לא נמצאה/);
+  });
+
+  it('rejects an ambiguous program', () => {
+    const dupPrograms = [{ id: 'p1', name: 'תוכנית א' }, { id: 'p2', name: 'תוכנית א' }];
+    const { rejected } = resolveVolunteerImport([vRow(2, { programNameRaw: 'תוכנית א' })], { programs: dupPrograms });
+    expect(rejected[0].reasons.join(' ')).toMatch(/עמום/);
+  });
+
+  it('matches a program case/whitespace-insensitively and uses its canonical id + name', () => {
+    const { readyToWrite } = resolveVolunteerImport([vRow(2, { programNameRaw: '  תוכנית   א ' })], { programs });
+    expect(readyToWrite).toHaveLength(1);
+    expect(readyToWrite[0].payload.programId).toBe('p1');
+    expect(readyToWrite[0].payload.programName).toBe('תוכנית א');
+  });
+
+  // ----- passedGroup (locked group) -----
+  const passedGroup = { id: 'gP', groupName: 'קבוצה נעולה' };
+
+  it('uses the locked group when the row group is empty', () => {
+    const { readyToWrite } = resolveVolunteerImport([vRow(2, { groupNameRaw: '' })], { passedGroup });
+    expect(readyToWrite[0].payload.groupId).toBe('gP');
+    expect(readyToWrite[0].payload.groupName).toBe('קבוצה נעולה');
+  });
+
+  it('accepts a row group that matches the locked group', () => {
+    const { readyToWrite } = resolveVolunteerImport([vRow(2, { groupNameRaw: 'קבוצה נעולה' })], { passedGroup });
+    expect(readyToWrite[0].payload.groupId).toBe('gP');
+  });
+
+  it('rejects a different group as a conflict — even if it exists elsewhere', () => {
+    const otherGroups = [{ id: 'g2', groupName: 'קבוצה אחרת' }];
+    const { readyToWrite, rejected } = resolveVolunteerImport(
+      [vRow(2, { groupNameRaw: 'קבוצה אחרת' })],
+      { passedGroup, groups: otherGroups },
+    );
+    expect(readyToWrite).toHaveLength(0);
+    expect(rejected[0].reasons.join(' ')).toMatch(/הנעולה/);
+  });
+
+  // ----- no mutation of existing records -----
+  it('never mutates the existing volunteers it reads', () => {
+    const existingVolunteers = [{ idNumber: '012345678', name: 'אבי כהן', phone: '0501234567' }];
+    const snapshot = JSON.parse(JSON.stringify(existingVolunteers));
+
+    resolveVolunteerImport([vRow(2, { idNumber: '012345678' })], { existingVolunteers });
+
+    expect(existingVolunteers).toEqual(snapshot);
+  });
+
+  // ----- cross-row dedupe vs preflight-REJECTED rows (allRowIdentities) -----
+  it('rejects a valid row that shares an ID with a preflight-rejected (Saturday) row', () => {
+    const jsonRows = [
+      { 'שם פרטי *': 'אבי', 'שם משפחה *': 'כהן', 'תעודת זהות': '012345678' },
+      { 'שם פרטי *': 'דנה', 'שם משפחה *': 'לוי', 'תעודת זהות': '012345678', 'יום פעילות': 'שבת' },
+    ];
+    const { valid, rejected: preflightRejected, identities } = preflightVolunteerImport(jsonRows);
+
+    // The Saturday row's own error is preserved by preflight.
+    expect(preflightRejected.map((r) => r.excelRow)).toEqual([3]);
+
+    const { readyToWrite, rejected } = resolveVolunteerImport(valid, { allRowIdentities: identities });
+    expect(readyToWrite).toHaveLength(0);
+    expect(rejected.map((r) => r.excelRow)).toEqual([2]); // the valid row, now a duplicate
+    expect(rejected[0].reasons.join(' ')).not.toContain('012345678');
+  });
+
+  it('rejects a valid row that shares a phone with a row rejected for another reason', () => {
+    const jsonRows = [
+      { 'שם פרטי *': 'אבי', 'שם משפחה *': 'כהן', 'טלפון': '0501234567' },
+      // numeric ID → preflight-rejected, but its (valid) phone still indexes.
+      { 'שם פרטי *': 'דנה', 'שם משפחה *': 'לוי', 'טלפון': '0501234567', 'תעודת זהות': 12345678 },
+    ];
+    const { valid, identities } = preflightVolunteerImport(jsonRows);
+    const { readyToWrite, rejected } = resolveVolunteerImport(valid, { allRowIdentities: identities });
+
+    expect(readyToWrite).toHaveLength(0);
+    expect(rejected[0].reasons.join(' ')).not.toContain('0501234567');
+  });
+
+  it('does not write a row whose name+birthDate matches a row rejected for another reason', () => {
+    const jsonRows = [
+      { 'שם פרטי *': 'אבי', 'שם משפחה *': 'כהן', 'תאריך לידה': '2000-01-01' },
+      { 'שם פרטי *': 'אבי', 'שם משפחה *': 'כהן', 'תאריך לידה': '2000-01-01', 'יום פעילות': 'שבת' },
+    ];
+    const { valid, identities } = preflightVolunteerImport(jsonRows);
+    const { readyToWrite } = resolveVolunteerImport(valid, { allRowIdentities: identities });
+
+    expect(readyToWrite).toHaveLength(0);
+  });
+
+  // ----- existing-volunteer (Firestore snapshot) checks -----
+  it('matches an existing +972 phone against a locally-formatted import phone', () => {
+    const existingVolunteers = [{ phone: '+972501234567', name: 'מישהו' }];
+    const { readyToWrite, rejected } = resolveVolunteerImport([vRow(2, { phone: '0501234567' })], { existingVolunteers });
+    expect(readyToWrite).toHaveLength(0);
+    expect(rejected[0].reasons.join(' ')).toMatch(/חשד לכפילות/);
+  });
+
+  it('flags a conflict for an existing phone with a different ID', () => {
+    const existingVolunteers = [{ phone: '0501234567', idNumber: '011111111' }];
+    const { rejected } = resolveVolunteerImport([vRow(2, { phone: '0501234567', idNumber: '022222222' })], { existingVolunteers });
+    expect(rejected[0].reasons.join(' ')).toMatch(/התנגשות/);
+  });
+
+  it('treats an existing phone with no comparable import ID as a suspicion (not a conflict, not a merge)', () => {
+    const existingVolunteers = [{ phone: '0501234567', idNumber: '011111111' }];
+    const { readyToWrite, rejected } = resolveVolunteerImport([vRow(2, { phone: '0501234567' })], { existingVolunteers });
+    expect(readyToWrite).toHaveLength(0);
+    expect(rejected[0].reasons.join(' ')).toMatch(/חשד לכפילות/);
+  });
+
+  it('rejects when name + birthDate already exist in Firestore', () => {
+    const existingVolunteers = [{ name: 'אבי כהן', birthDate: '2000-01-01' }];
+    const { readyToWrite, rejected } = resolveVolunteerImport([vRow(2, { birthDate: '2000-01-01' })], { existingVolunteers });
+    expect(readyToWrite).toHaveLength(0);
+    expect(rejected[0].reasons.join(' ')).toMatch(/חשד לכפילות/);
+  });
+
+  it('allows a row that shares ONLY a name with an existing record', () => {
+    const existingVolunteers = [{ name: 'אבי כהן', phone: '', idNumber: '' }];
+    const { readyToWrite, rejected } = resolveVolunteerImport([vRow(2)], { existingVolunteers });
+    expect(readyToWrite).toHaveLength(1);
+    expect(rejected).toHaveLength(0);
+  });
+
+  it('does not false-match against a legacy, non-normalizable existing phone', () => {
+    const existingVolunteers = [{ phone: '12345', name: 'X' }];
+    const { readyToWrite } = resolveVolunteerImport([vRow(2, { phone: '0501234567' })], { existingVolunteers });
+    expect(readyToWrite).toHaveLength(1);
+  });
+
+  // ----- group / program record integrity -----
+  it('rejects a matched group that has no id', () => {
+    const { readyToWrite, rejected } = resolveVolunteerImport([vRow(2, { groupNameRaw: 'תותים' })], { groups: [{ groupName: 'תותים' }] });
+    expect(readyToWrite).toHaveLength(0);
+    expect(rejected[0].reasons.join(' ')).toMatch(/חסרה מזהה/);
+  });
+
+  it('rejects a matched program that has no id', () => {
+    const { readyToWrite, rejected } = resolveVolunteerImport([vRow(2, { programNameRaw: 'תוכנית א' })], { programs: [{ name: 'תוכנית א' }] });
+    expect(readyToWrite).toHaveLength(0);
+    expect(rejected[0].reasons.join(' ')).toMatch(/חסרה מזהה/);
+  });
+
+  it('rejects when the locked group (passedGroup) has no id', () => {
+    const { readyToWrite, rejected } = resolveVolunteerImport([vRow(2, { groupNameRaw: '' })], { passedGroup: { groupName: 'נעולה' } });
+    expect(readyToWrite).toHaveLength(0);
+    expect(rejected[0].reasons.join(' ')).toMatch(/חסרה מזהה/);
+  });
+
+  // ----- existing birthDate normalization for the name+birthDate key -----
+  it('rejects an import whose name+birthDate equals an existing strict YYYY-MM-DD record', () => {
+    const existingVolunteers = [{ name: 'אבי כהן', birthDate: '2000-01-02' }];
+    const { readyToWrite } = resolveVolunteerImport([vRow(2, { birthDate: '2000-01-02' })], { existingVolunteers });
+    expect(readyToWrite).toHaveLength(0);
+  });
+
+  it('normalizes an existing DD-MM-YYYY birthDate before matching the import', () => {
+    const existingVolunteers = [{ name: 'אבי כהן', birthDate: '02-01-2000' }];
+    const { readyToWrite, rejected } = resolveVolunteerImport([vRow(2, { birthDate: '2000-01-02' })], { existingVolunteers });
+    expect(readyToWrite).toHaveLength(0);
+    expect(rejected[0].reasons.join(' ')).toMatch(/חשד לכפילות/);
+  });
+
+  it('does not false-match an existing invalid birthDate, and never shifts the written value', () => {
+    const existingVolunteers = [{ name: 'אבי כהן', birthDate: 'not-a-date' }];
+    const { readyToWrite } = resolveVolunteerImport([vRow(2, { birthDate: '2000-01-02' })], { existingVolunteers });
+    expect(readyToWrite).toHaveLength(1);
+    expect(readyToWrite[0].payload.birthDate).toBe('2000-01-02');
+  });
+
+  it('never normalizes a NON-STRING existing birthDate (Date / serial / parts / Timestamp-like)', () => {
+    const nonStringBirthDates = [
+      new Date(Date.UTC(2000, 0, 2)),                 // Date
+      36528,                                          // Excel-like serial number
+      { y: 2000, m: 1, d: 2 },                        // decoded parts object
+      { seconds: 946771200, nanoseconds: 0, toDate() { return new Date(Date.UTC(2000, 0, 2)); } }, // Timestamp-like
+    ];
+
+    for (const birthDate of nonStringBirthDates) {
+      const existingVolunteers = [{ name: 'אבי כהן', birthDate }];
+      const { readyToWrite } = resolveVolunteerImport([vRow(2, { birthDate: '2000-01-02' })], { existingVolunteers });
+      expect(readyToWrite).toHaveLength(1); // no false name+birthDate match
+      expect(readyToWrite[0].payload.birthDate).toBe('2000-01-02'); // import value unchanged
+    }
+  });
+
+  it('still matches a string existing birthDate in YYYY-MM-DD and DD-MM-YYYY', () => {
+    for (const existingBirth of ['2000-01-02', '02-01-2000']) {
+      const existingVolunteers = [{ name: 'אבי כהן', birthDate: existingBirth }];
+      const { readyToWrite } = resolveVolunteerImport([vRow(2, { birthDate: '2000-01-02' })], { existingVolunteers });
+      expect(readyToWrite).toHaveLength(0);
+    }
+  });
+
+  it('writes the canonical idNumber/phone but no identity-key metadata in the payload', () => {
+    const { readyToWrite } = resolveVolunteerImport(
+      [vRow(2, { idNumber: '012345678', phone: '0501234567' })],
+      {},
+    );
+    const payload = readyToWrite[0].payload;
+
+    expect(payload.idNumber).toBe('012345678');
+    expect(payload.phone).toBe('0501234567');
+    expect(payload).not.toHaveProperty('idKey');
+    expect(payload).not.toHaveProperty('phoneKey');
+    expect(payload).not.toHaveProperty('nameBirthKey');
   });
 });

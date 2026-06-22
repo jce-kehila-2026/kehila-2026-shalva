@@ -241,12 +241,30 @@ export function prepareVolunteerImportRow(rawRow, { date1904 = false } = {}) {
     errors.push('תעודת זהות בפורמט לא תקין — יש להזין אותה כטקסט');
   }
 
+  // Identity metadata for duplicate detection — computed even when the row is
+  // rejected, so a valid row that collides with a rejected one is still caught.
+  // idKey/phoneKey hold the full id/phone but only IN MEMORY during
+  // preflight/resolution: they are not shown in messages, not logged, and not
+  // added to the document as metadata. (The canonical idNumber/phone fields are
+  // still written as part of the volunteer schema, unchanged.) Each key is null
+  // unless its value is valid.
+  const identity = {
+    idKey: idResult.ok && idResult.value ? idResult.value : null,
+    phoneKey: phoneKeyOf(rawPhone),
+    nameNorm: normalizeMatchName(name),
+    birthDate: dateResult.ok ? dateResult.value : '',
+  };
+  identity.nameBirthKey = identity.nameNorm && identity.birthDate
+    ? `${identity.nameNorm}|${identity.birthDate}`
+    : null;
+
   if (errors.length > 0) {
-    return { ok: false, errors };
+    return { ok: false, errors, identity };
   }
 
   return {
     ok: true,
+    identity,
     fields: {
       name,
       firstName,
@@ -276,6 +294,9 @@ export function prepareVolunteerImportRow(rawRow, { date1904 = false } = {}) {
 export function preflightVolunteerImport(jsonRows, { date1904 = false } = {}) {
   const valid = [];
   const rejected = [];
+  // Identity of EVERY non-blank row (valid AND rejected), so the resolver can
+  // detect a duplicate even when its twin was rejected for an unrelated reason.
+  const identities = [];
   let blankSkipped = 0;
 
   jsonRows.forEach((rawRow, index) => {
@@ -293,6 +314,8 @@ export function preflightVolunteerImport(jsonRows, { date1904 = false } = {}) {
       return;
     }
 
+    identities.push({ excelRow, ...result.identity });
+
     if (result.ok) {
       valid.push({ excelRow, fields: result.fields });
     } else {
@@ -300,7 +323,7 @@ export function preflightVolunteerImport(jsonRows, { date1904 = false } = {}) {
     }
   });
 
-  return { valid, rejected, blankSkipped };
+  return { valid, rejected, blankSkipped, identities };
 }
 
 
@@ -385,4 +408,333 @@ export async function commitVolunteerChunks(items, commitChunk, chunkSize = 450)
   }
 
   return { written, failedInCurrentBatch, notAttempted, failedRows, error };
+}
+
+
+// ---------------------------------------------------------------------------
+// Duplicate detection + group/program matching (pure)
+// ---------------------------------------------------------------------------
+
+// Name used for case/whitespace-insensitive matching (English case folded;
+// Hebrew is unaffected). Collapses runs of whitespace to a single space.
+function normalizeMatchName(value) {
+  return String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+// A volunteer's display name from either field shape.
+function existingName(volunteer) {
+  return (
+    volunteer.name ||
+    [volunteer.firstName, volunteer.lastName].filter(Boolean).join(' ').trim()
+  );
+}
+
+// Canonical phone key for comparison: the local 05XXXXXXXX form, or null when
+// the value can't be normalized (so non-normalizable numbers never match and
+// are never altered).
+function phoneKeyOf(value) {
+  const result = normalizeImportedMobilePhone(value, { required: false });
+  return result.ok && result.value ? result.value : null;
+}
+
+// Normalized birth-date key for an EXISTING volunteer record, used only for
+// duplicate matching. By contract only STRINGS are normalized: a non-string
+// (number / Date / { y, m, d } / Firestore Timestamp-like / any object) returns
+// null and never matches — nothing is guessed. For strings it reuses
+// parseImportedDate (no separate parser, no new Date('YYYY-MM-DD')), accepting
+// strict YYYY-MM-DD and normalizing strict DD-MM-YYYY → YYYY-MM-DD; empty or
+// invalid → null. The stored record is never modified.
+function existingBirthDateKey(value) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (trimmed === '') {
+    return null;
+  }
+
+  const result = parseImportedDate(trimmed);
+  return result.ok && result.value ? result.value : null;
+}
+
+// Push a value onto a Map<key, array>.
+function pushTo(map, key, value) {
+  if (!map.has(key)) {
+    map.set(key, []);
+  }
+  map.get(key).push(value);
+}
+
+// Resolve a group name against the live groups list / the locked group.
+// Returns { ok: true, groupId, groupName } or { ok: false, reason }.
+function resolveGroup(rawName, groups, passedGroup) {
+  const name = asText(rawName);
+
+  if (passedGroup) {
+    const lockedId = passedGroup.id ? String(passedGroup.id).trim() : '';
+    const lockedName = (passedGroup.groupName || passedGroup.name || '').trim();
+
+    // Empty cell uses the locked group; a name that matches it is also fine.
+    if (name === '' || normalizeMatchName(name) === normalizeMatchName(lockedName)) {
+      // Integrity: the locked group must carry a real id AND name.
+      if (!lockedId || !lockedName) {
+        return { ok: false, reason: 'הקבוצה הנעולה חסרה מזהה או שם תקין' };
+      }
+      return { ok: true, groupId: lockedId, groupName: lockedName };
+    }
+
+    // Any other name is a conflict (the file may not silently move a volunteer).
+    return { ok: false, reason: 'שם הקבוצה אינו תואם לקבוצה הנעולה — לא ניתן לשנות קבוצה דרך הקובץ' };
+  }
+
+  // No locked group: empty is allowed.
+  if (name === '') {
+    return { ok: true, groupId: '', groupName: '' };
+  }
+
+  const matches = groups.filter(
+    (group) => normalizeMatchName(group.groupName || group.name || '') === normalizeMatchName(name),
+  );
+
+  if (matches.length === 0) {
+    return { ok: false, reason: 'קבוצה לא נמצאה' };
+  }
+  if (matches.length > 1) {
+    return { ok: false, reason: 'שם קבוצה עמום — נמצאו כמה קבוצות תואמות' };
+  }
+
+  // Integrity: a matched group must carry a real id AND canonical name — never
+  // store a name with an empty id.
+  const group = matches[0];
+  const groupId = group.id ? String(group.id).trim() : '';
+  const groupName = (group.groupName || group.name || '').trim();
+  if (!groupId || !groupName) {
+    return { ok: false, reason: 'רשומת הקבוצה חסרה מזהה או שם תקין' };
+  }
+  return { ok: true, groupId, groupName };
+}
+
+// Resolve a program name against the live programs list.
+// Returns { ok: true, programId, programName } or { ok: false, reason }.
+function resolveProgram(rawName, programs) {
+  const name = asText(rawName);
+
+  // Empty is allowed.
+  if (name === '') {
+    return { ok: true, programId: '', programName: '' };
+  }
+
+  const matches = programs.filter(
+    (program) => normalizeMatchName(program.name || '') === normalizeMatchName(name),
+  );
+
+  if (matches.length === 0) {
+    return { ok: false, reason: 'תוכנית לא נמצאה' };
+  }
+  if (matches.length > 1) {
+    return { ok: false, reason: 'שם תוכנית עמום — נמצאו כמה תוכניות תואמות' };
+  }
+
+  // Integrity: a matched program must carry a real id AND canonical name.
+  const program = matches[0];
+  const programId = program.id ? String(program.id).trim() : '';
+  const programName = (program.name || '').trim();
+  if (!programId || !programName) {
+    return { ok: false, reason: 'רשומת התוכנית חסרה מזהה או שם תקין' };
+  }
+  return { ok: true, programId, programName };
+}
+
+// Identity keys for one prepared row (recomputed from its validated fields,
+// matching preflight). idKey/phoneKey hold full values in memory only — not
+// shown in messages, not logged, and not added to the document as metadata.
+// (The canonical idNumber/phone are still written as usual.)
+function computeRowIdentity(fields) {
+  const idResult = prepareIdNumber(fields.idNumber);
+  const idKey = idResult.ok && idResult.value ? idResult.value : null;
+  const phoneKey = phoneKeyOf(fields.phone);
+  const nameNorm = normalizeMatchName(fields.name);
+  const birthDate = fields.birthDate || '';
+  const nameBirthKey = nameNorm && birthDate ? `${nameNorm}|${birthDate}` : null;
+  return { idKey, phoneKey, nameNorm, birthDate, nameBirthKey };
+}
+
+// Apply duplicate/conflict rules + group/program matching to preflight-validated
+// rows. PURE: no Firebase, no alert, no React. Existing volunteers are read-only
+// (never updated). `allRowIdentities` (from preflight) lets duplicate detection
+// see EVERY non-blank row — including ones preflight rejected — so a valid row
+// that shares an identity with a rejected row is still rejected. Returns:
+//   { readyToWrite: [{ excelRow, payload }],  rejected: [{ excelRow, reasons }] }
+// The idKey/phoneKey used for matching live in memory only — not in a reason,
+// a log, or added to a document as metadata. (The canonical idNumber/phone are
+// still written as part of the volunteer schema.)
+export function resolveVolunteerImport(validRows, {
+  existingVolunteers = [],
+  groups = [],
+  programs = [],
+  passedGroup = null,
+  allRowIdentities = null,
+} = {}) {
+  const rows = Array.isArray(validRows) ? validRows : [];
+
+  // --- index the existing records (read-only) ---
+  const existingById = new Map();          // idKey -> existing volunteer
+  const existingPhoneIds = new Map();      // phoneKey -> Set(idKey | '')
+  const existingNameBirth = new Set();     // "name|birthDate"
+
+  for (const volunteer of existingVolunteers) {
+    const idKey = asText(volunteer.idNumber) || null;
+    if (idKey && !existingById.has(idKey)) {
+      existingById.set(idKey, volunteer);
+    }
+
+    const phoneKey = phoneKeyOf(volunteer.phone);
+    if (phoneKey) {
+      if (!existingPhoneIds.has(phoneKey)) {
+        existingPhoneIds.set(phoneKey, new Set());
+      }
+      existingPhoneIds.get(phoneKey).add(idKey || '');
+    }
+
+    const nameNorm = normalizeMatchName(existingName(volunteer));
+    const birthKey = existingBirthDateKey(volunteer.birthDate);
+    if (nameNorm && birthKey) {
+      existingNameBirth.add(`${nameNorm}|${birthKey}`);
+    }
+  }
+
+  // Identity of each VALID row (used for its own checks).
+  const validMeta = rows.map(({ fields }) => computeRowIdentity(fields));
+
+  // Within-file duplicate index: built from ALL non-blank rows when the caller
+  // provides them (so a valid row colliding with a preflight-REJECTED row is
+  // caught), otherwise from the valid rows alone.
+  const indexSource = Array.isArray(allRowIdentities) && allRowIdentities.length > 0
+    ? allRowIdentities
+    : rows.map((row, index) => ({ excelRow: row.excelRow, ...validMeta[index] }));
+
+  const idCounts = new Map();              // idKey -> count
+  const phoneIdLists = new Map();          // phoneKey -> [idKey | null]
+  const nameBirthCounts = new Map();       // nameBirthKey -> count
+
+  for (const entry of indexSource) {
+    if (entry.idKey) {
+      idCounts.set(entry.idKey, (idCounts.get(entry.idKey) || 0) + 1);
+    }
+    if (entry.phoneKey) {
+      pushTo(phoneIdLists, entry.phoneKey, entry.idKey || null);
+    }
+    if (entry.nameBirthKey) {
+      nameBirthCounts.set(entry.nameBirthKey, (nameBirthCounts.get(entry.nameBirthKey) || 0) + 1);
+    }
+  }
+
+  const readyToWrite = [];
+  const rejected = [];
+
+  rows.forEach(({ excelRow, fields }, index) => {
+    const m = validMeta[index];
+    const reasons = [];
+
+    // ----- ID identity -----
+    if (m.idKey) {
+      // Duplicate across all non-blank rows (every sharing row is rejected).
+      if ((idCounts.get(m.idKey) || 0) > 1) {
+        reasons.push('תעודת זהות כפולה בקובץ — כל השורות עם תעודת זהות זו נדחו');
+      }
+      // Against Firestore.
+      const existing = existingById.get(m.idKey);
+      if (existing) {
+        const sameName = normalizeMatchName(existingName(existing)) === m.nameNorm;
+        const samePhone = phoneKeyOf(existing.phone) === m.phoneKey;
+        if (!sameName || !samePhone) {
+          reasons.push('התנגשות: תעודת זהות זהה עם שם או טלפון שונה במערכת');
+        } else {
+          reasons.push('תעודת זהות כבר קיימת במערכת');
+        }
+      }
+    }
+
+    // ----- Phone identity (suspicion only — never an auto-merge) -----
+    if (m.phoneKey) {
+      const ids = phoneIdLists.get(m.phoneKey) || [];
+      if (ids.length > 1) {
+        // Distinct non-empty IDs sharing one phone is a conflict; otherwise a
+        // plain duplicate-suspicion.
+        const distinctIds = new Set(ids.filter(Boolean));
+        if (distinctIds.size > 1) {
+          reasons.push('התנגשות: אותו טלפון עם תעודות זהות שונות בקובץ');
+        } else {
+          reasons.push('טלפון כפול בקובץ — חשד לכפילות; נדרשת בדיקה ידנית');
+        }
+      }
+
+      const existingIds = existingPhoneIds.get(m.phoneKey);
+      if (existingIds) {
+        const differentId = m.idKey
+          ? [...existingIds].some((id) => id && id !== m.idKey)
+          : false;
+        if (differentId) {
+          reasons.push('התנגשות: אותו טלפון עם תעודת זהות שונה במערכת');
+        } else {
+          reasons.push('טלפון זהה לרשומה קיימת — חשד לכפילות; נדרשת בדיקה ידנית');
+        }
+      }
+    }
+
+    // ----- name + birthDate (suspicion only) -----
+    if (m.nameBirthKey) {
+      if ((nameBirthCounts.get(m.nameBirthKey) || 0) > 1) {
+        reasons.push('שם ותאריך לידה זהים בין שורות בקובץ — חשד לכפילות; נדרשת בדיקה ידנית');
+      }
+      if (existingNameBirth.has(m.nameBirthKey)) {
+        reasons.push('שם ותאריך לידה זהים לרשומה קיימת — חשד לכפילות; נדרשת בדיקה ידנית');
+      }
+    }
+
+    // ----- group / program matching -----
+    const groupResult = resolveGroup(fields.groupNameRaw, groups, passedGroup);
+    if (!groupResult.ok) {
+      reasons.push(groupResult.reason);
+    }
+
+    const programResult = resolveProgram(fields.programNameRaw, programs);
+    if (!programResult.ok) {
+      reasons.push(programResult.reason);
+    }
+
+    if (reasons.length > 0) {
+      rejected.push({ excelRow, reasons });
+      return;
+    }
+
+    // Build the document payload (same schema; createdAt is added at the write
+    // boundary by the caller, never here).
+    readyToWrite.push({
+      excelRow,
+      payload: {
+        name: fields.name,
+        firstName: fields.firstName,
+        lastName: fields.lastName,
+        idNumber: fields.idNumber,
+        phone: fields.phone,
+        birthDate: fields.birthDate,
+        age: fields.age,
+        address: fields.address,
+        email: fields.email,
+        experience: fields.experience,
+        school: fields.school,
+        notes: fields.notes,
+        activityTime: fields.activityTime,
+        day: fields.day,
+        programId: programResult.programId,
+        programName: programResult.programName,
+        groupId: groupResult.groupId,
+        groupName: groupResult.groupName,
+      },
+    });
+  });
+
+  return { readyToWrite, rejected };
 }

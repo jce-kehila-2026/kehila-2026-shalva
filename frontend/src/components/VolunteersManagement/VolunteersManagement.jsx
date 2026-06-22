@@ -37,6 +37,7 @@ import { downloadVolunteersTemplate } from '../../utils/excelTemplates';
 import {
   preflightVolunteerImport,
   detectImportFileType,
+  resolveVolunteerImport,
   commitVolunteerChunks,
 } from '../../utils/volunteerImport';
 
@@ -125,6 +126,10 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
   const [saving, setSaving] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
 
+  // True once the core data (volunteers + groups + programs) has loaded, so the
+  // import can run its duplicate checks against a COMPLETE snapshot.
+  const [dataReady, setDataReady] = useState(false);
+
   const fileInputRef = useRef(null);
 
   // --- UPDATED: formData now includes all fields ---
@@ -171,19 +176,42 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
     });
   }, [registerBack, viewingVolunteer, isModalOpen]);
 
+  // Loads the screen's data. Returns true only when the CORE data the import
+  // depends on (volunteers + groups + programs) all loaded successfully — that
+  // is the single source of truth for `dataReady`. Secondary collections stay
+  // best-effort and never affect readiness. On failure the old state is kept
+  // (not cleared); only further imports are blocked.
   const fetchData = useCallback(async () => {
+    // Block imports until the core snapshot finishes reloading.
+    setDataReady(false);
+
+    let coreLoaded = false;
+
     try {
+      // Core data — NO per-read catch: if any of the three fails, the whole
+      // load fails and readiness stays false (fail closed).
       const [volunteersSnap, groupsSnap, programsSnap] = await Promise.all([
         getDocs(collection(db, 'volunteers')),
         getDocs(collection(db, 'groups')),
-        getDocs(collection(db, 'programs')).catch(() => null),
+        getDocs(collection(db, 'programs')),
       ]);
 
       setVolunteers(volunteersSnap.docs.map(toRecord));
       setGroups(groupsSnap.docs.map(toRecord));
-      if (programsSnap) setPrograms(programsSnap.docs.map(toRecord));
+      setPrograms(programsSnap.docs.map(toRecord));
 
-      // Signed digital forms, police forms, and medical forms (best-effort)
+      // All three core snapshots loaded — the import may run.
+      setDataReady(true);
+      coreLoaded = true;
+    } catch (error) {
+      // Keep whatever data is already in state; just block further imports.
+      console.error('שגיאה בשליפת נתוני הליבה:', error);
+      setDataReady(false);
+    }
+
+    // Secondary data (signed / police / medical forms) — best-effort only, and
+    // never blocks import readiness.
+    try {
       const [signedSnap, policeSnap, medicalSnap] = await Promise.all([
         getDocs(collection(db, 'signedForms')).catch(() => null),
         getDocs(collection(db, 'policeForms')).catch(() => null),
@@ -193,8 +221,10 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
       if (policeSnap) setPoliceForms(policeSnap.docs.map(toRecord));
       if (medicalSnap) setMedicalForms(medicalSnap.docs.map(toRecord));
     } catch (error) {
-      console.error('שגיאה בשליפת נתונים:', error);
+      console.error('שגיאה בשליפת נתונים משניים:', error);
     }
+
+    return coreLoaded;
   }, []);
 
   // Digital signed forms indexed by the volunteer they belong to (a volunteer
@@ -537,6 +567,15 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
     const file = event.target.files[0];
     if (!file) return;
 
+    // Fail closed: never run duplicate checks against a half-loaded snapshot.
+    if (!dataReady) {
+      alert('הנתונים עדיין נטענים — המתינו לסיום טעינת המתנדבים והקבוצות ונסו שוב.');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = null;
+      }
+      return;
+    }
+
     setIsImporting(true);
 
     try {
@@ -578,51 +617,32 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
       const date1904 = Boolean(workbook.Workbook?.WBProps?.date1904);
 
       // Validate EVERY row up front (preflight). Empty rows are skipped silently.
-      const { valid, rejected } = preflightVolunteerImport(jsonRows, { date1904 });
+      // `identities` covers every non-blank row (valid AND rejected) so the
+      // resolver can catch a valid row that duplicates a rejected one.
+      const { valid, rejected: preflightRejected, identities } = preflightVolunteerImport(jsonRows, { date1904 });
 
-      // Assemble the Firestore payloads from the valid rows, keeping the existing
-      // group/program matching and document schema unchanged. The Excel row
-      // number is kept alongside each payload IN MEMORY only (for reporting) —
-      // it is never written to Firestore.
-      const itemsToWrite = valid.map(({ excelRow, fields }) => {
-        // Group column: match the name against the live groups list so the
-        // volunteer gets a real groupId (falls back to the locked group).
-        const matchedGroup = groups.find(
-          (group) => (group.groupName || group.name || '').trim() === fields.groupNameRaw,
-        );
-
-        // Program column: match the name against the live programs list.
-        const matchedProgram = programs.find(
-          (program) => (program.name || '').trim() === fields.programNameRaw,
-        );
-
-        return {
-          excelRow,
-          payload: {
-            name: fields.name,
-            firstName: fields.firstName,
-            lastName: fields.lastName,
-            idNumber: fields.idNumber,
-            phone: fields.phone,
-            birthDate: fields.birthDate,
-            age: fields.age,
-            address: fields.address,
-            email: fields.email,
-            experience: fields.experience,
-            school: fields.school,
-            notes: fields.notes,
-            activityTime: fields.activityTime,
-            day: fields.day,
-            programId: matchedProgram?.id || '',
-            programName: matchedProgram?.name || fields.programNameRaw || '',
-            groupId: matchedGroup?.id || passedGroup?.id || '',
-            groupName:
-              matchedGroup?.groupName || matchedGroup?.name ||
-              passedGroup?.groupName || fields.groupNameRaw || '',
-            createdAt: new Date(),
-          },
-        };
+      // Resolve duplicates + group/program matching (pure; reads the live
+      // volunteers/groups/programs but never updates them). Only readyToWrite
+      // becomes new Firestore documents.
+      const { readyToWrite, rejected: resolveRejected } = resolveVolunteerImport(valid, {
+        existingVolunteers: volunteers,
+        groups,
+        programs,
+        passedGroup,
+        allRowIdentities: identities,
       });
+
+      // Combined rejection report (validation + duplicate/matching), by Excel row.
+      const rejected = [...preflightRejected, ...resolveRejected]
+        .sort((a, b) => a.excelRow - b.excelRow);
+
+      // Add createdAt at the write boundary (keeps the resolver pure and the doc
+      // schema unchanged). The Excel row number stays in memory only — it is
+      // never written to Firestore.
+      const itemsToWrite = readyToWrite.map(({ excelRow, payload }) => ({
+        excelRow,
+        payload: { ...payload, createdAt: new Date() },
+      }));
 
       // A volunteer file with no data rows and nothing rejected.
       if (itemsToWrite.length === 0 && rejected.length === 0) {
@@ -650,15 +670,14 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
         console.error('שגיאה בכתיבת מתנדבים:', writeError);
       }
 
-      // Refresh whatever landed — a refresh failure is NOT an import failure.
+      // Refresh whatever landed. fetchData sets dataReady=false at its start and
+      // back to true ONLY on a successful core reload — so a failed refresh
+      // leaves imports blocked (not just warned). A refresh failure is NOT an
+      // import failure; the written rows are already saved.
       let refreshFailed = false;
       if (written > 0) {
-        try {
-          await fetchData();
-        } catch (refreshError) {
-          console.error('רענון המסך נכשל אחרי ייבוא:', refreshError);
-          refreshFailed = true;
-        }
+        const refreshed = await fetchData();
+        refreshFailed = !refreshed;
       }
 
       // Honest, PII-free summary (sensitive values were already masked upstream).
@@ -671,10 +690,10 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
         summaryLines.push(`כתיבת ${failedInCurrentBatch} שורות נכשלה, ו-${notAttempted} שורות לא נוסו.`);
       }
       if (written > 0) {
-        summaryLines.push('שימו לב: עדיין אין מניעת כפילויות — אל תייבאו מחדש את כל הקובץ ללא טיפול בשורות שכבר נכתבו.');
+        summaryLines.push('מניעת הכפילויות מבוססת על תמונת מצב מקומית ואינה מוגנת מפני ייבוא מקביל. רעננו את המסך לפני ייבוא חוזר כדי לא ליצור כפילויות.');
       }
       if (refreshFailed) {
-        summaryLines.push('הנתונים נשמרו, אך רענון המסך נכשל — רעננו את הדף ידנית.');
+        summaryLines.push('הנתונים נשמרו, אך רענון המסך נכשל — אל תייבאו שוב לפני רענון ידני, כיוון שתמונת המצב המקומית עלולה להיות לא מעודכנת.');
       }
 
       if (rejected.length > 0) {
