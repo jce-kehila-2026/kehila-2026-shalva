@@ -41,6 +41,9 @@ import {
   commitVolunteerChunks,
 } from '../../utils/volunteerImport';
 
+// The real, atomic chunk writer (shared with the emulator integration test).
+import { commitVolunteerChunk } from '../../utils/volunteerImportWriter';
+
 // The closed list of activity times (בוקר / צהריים / ערב).
 import { GROUP_TIMES } from '../../utils/groupOptions';
 
@@ -656,13 +659,7 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
       const { written, failedInCurrentBatch, notAttempted, error: writeError } =
         await commitVolunteerChunks(
           itemsToWrite,
-          (payloads) => {
-            const batch = writeBatch(db);
-            payloads.forEach((volunteerPayload) => {
-              batch.set(doc(collection(db, 'volunteers')), volunteerPayload);
-            });
-            return batch.commit();
-          },
+          (payloads) => commitVolunteerChunk(db, payloads),
           450,
         );
 
