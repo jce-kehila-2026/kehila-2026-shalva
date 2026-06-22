@@ -17,6 +17,9 @@ import { db } from '../../firebase';
 // Shared event-date helper (local "YYYY-MM-DD" parsing).
 import { parseEventDate } from '../../utils/eventStatus';
 
+// Shared date formatter: render date-only event dates as DD-MM-YYYY.
+import { formatDateOnlyForDisplay } from '../../utils/dateDisplay';
+
 // Shared birth-date parsing (kept in one place across screens).
 import { parseBirthDate } from '../../utils/people';
 
@@ -105,18 +108,6 @@ function birthdaySoon(person, today, days) {
   const diff = Math.round((startOfDay(next) - startOfDay(today)) / DAY_MS);
 
   return diff >= 0 && diff <= days;
-}
-
-
-// Format an event date as a readable Hebrew date.
-function formatHebrewDate(value) {
-  const date = parseEventDate(value);
-
-  if (!date) {
-    return value || 'ללא תאריך';
-  }
-
-  return date.toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 
@@ -380,7 +371,7 @@ function ActivityCommandCenter({ groupFilter = null, onBack, leadingCard = null,
   const buildEventMessage = (event) => {
     let message = eventReminderMessage({
       eventName: event.name,
-      date: formatHebrewDate(event.date),
+      date: formatDateOnlyForDisplay(event.date, { fallback: 'ללא תאריך' }),
       time: event.time,
       location: event.location,
     });
@@ -440,7 +431,7 @@ function ActivityCommandCenter({ groupFilter = null, onBack, leadingCard = null,
           <span className="acc-event-info">
             <span className="acc-event-name">{event.name || 'אירוע ללא שם'}</span>
             <span className="acc-event-meta">
-              {formatHebrewDate(event.date)}{event.time ? ` · ${event.time}` : ''}
+              {formatDateOnlyForDisplay(event.date, { fallback: 'ללא תאריך' })}{event.time ? ` · ${event.time}` : ''}
             </span>
             <span className="acc-event-sub">
               {event.assignedGroup}{event.guideName ? ` · מדריך: ${event.guideName}` : ''}

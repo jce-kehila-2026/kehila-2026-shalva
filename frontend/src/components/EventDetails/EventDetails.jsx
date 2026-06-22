@@ -5,6 +5,9 @@ import './EventDetails.css'
 // (derived from the event's date) instead of a separate stored value.
 import { computeEventStatus } from '../../utils/eventStatus'
 
+// Shared date formatter: render date-only event dates as DD-MM-YYYY.
+import { formatDateOnlyForDisplay } from '../../utils/dateDisplay'
+
 // Default text for missing event fields.
 const FALLBACK = 'לא צוין'
 
@@ -55,7 +58,7 @@ export default function EventDetails({ event = null, onBack }) {
 
   // Prepare safe values for display, with fallback text for missing fields.
   const name = event?.name || FALLBACK
-  const date = event?.date || FALLBACK
+  const date = formatDateOnlyForDisplay(event?.date, { fallback: FALLBACK })
   const location = event?.location || FALLBACK
   const description = event?.description || FALLBACK
 

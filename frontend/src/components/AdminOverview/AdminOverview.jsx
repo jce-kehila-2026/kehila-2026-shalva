@@ -19,6 +19,9 @@ import './AdminOverview.css';
 // Shared event date + status helpers.
 import { computeEventStatus, parseEventDate } from '../../utils/eventStatus';
 
+// Shared date formatter: render the selected calendar day as DD-MM-YYYY.
+import { formatDateOnlyForDisplay } from '../../utils/dateDisplay';
+
 // Shared people helpers (display name, birth-date parsing, age).
 import { getDisplayName, parseBirthDate, computeAge } from '../../utils/people';
 
@@ -676,6 +679,13 @@ function AdminOverview({ onNavigate }) {
     : '';
   const selectedIsToday = isCurrentMonth && selectedDay === todayObj.getDate();
 
+  // Canonical YYYY-MM-DD for the clicked day, composed arithmetically (no Date)
+  // from the calendar's year / month / day. calMonth is 0-based, so add 1; both
+  // the month and day are zero-padded. Used only for the heading's DD-MM-YYYY.
+  const selectedDayKey = selectedDay
+    ? `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`
+    : '';
+
   // Today's holiday (only meaningful while viewing the current month).
   const todayHolidayName = isCurrentMonth && holidaysByDay[todayObj.getDate()]
     ? cleanHolidayName(holidaysByDay[todayObj.getDate()])
@@ -939,7 +949,7 @@ function AdminOverview({ onNavigate }) {
             {/* Compact list of the selected day's events (name + status badge). */}
             <div className="ao-cal-events">
               <h4 className="ao-cal-events-title">
-                {selectedDay ? `אירועים — ${selectedDay} ב${HEBREW_MONTHS[calMonth]}` : 'בחרו יום בלוח'}
+                {selectedDay ? `אירועים — ${formatDateOnlyForDisplay(selectedDayKey, { fallback: '' })}` : 'בחרו יום בלוח'}
               </h4>
 
               {selectedDay && (
@@ -982,14 +992,14 @@ function AdminOverview({ onNavigate }) {
             className="ao-day-popup"
             role="dialog"
             aria-modal="true"
-            aria-label={`אירועים — ${selectedDay} ב${HEBREW_MONTHS[calMonth]}`}
+            aria-label={`אירועים — ${formatDateOnlyForDisplay(selectedDayKey, { fallback: '' })}`}
             dir="rtl"
             onClick={(event) => event.stopPropagation()}
           >
             {/* Header: the date + a close button. */}
             <div className="ao-day-popup-head">
               <h4 className="ao-day-popup-title">
-                אירועים — {selectedDay} ב{HEBREW_MONTHS[calMonth]}
+                אירועים — {formatDateOnlyForDisplay(selectedDayKey, { fallback: '' })}
               </h4>
               <button
                 type="button"

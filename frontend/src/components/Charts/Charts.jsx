@@ -23,6 +23,9 @@ import './Charts.css';
 // Shared event date + status helpers.
 import { computeEventStatus, parseEventDate } from '../../utils/eventStatus';
 
+// Shared date formatter: render date-only event dates as DD-MM-YYYY.
+import { formatDateOnlyForDisplay } from '../../utils/dateDisplay';
+
 // Shared attendance normalization (so charts match the reports screen).
 import { normalizeAttendanceStatus, getRecordStatus } from '../../utils/attendance';
 
@@ -130,18 +133,6 @@ function toDate(value) {
   }
 
   return null;
-}
-
-
-// A readable Hebrew date for the month drill-down list.
-function formatHebrewDate(value) {
-  const date = toDate(value);
-
-  if (!date) {
-    return '';
-  }
-
-  return date.toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 
@@ -1057,7 +1048,7 @@ function Charts() {
                     <li key={event.id || `${event.name}-${index}`} className="chart-drill-item">
                       <span className="chart-drill-name">{event.name || 'אירוע ללא שם'}</span>
                       <span className="chart-drill-meta">
-                        {formatHebrewDate(event.date)}
+                        {formatDateOnlyForDisplay(event.date, { fallback: '' })}
                         {event.assignedGroup ? ` · ${event.assignedGroup}` : ''}
                       </span>
                     </li>

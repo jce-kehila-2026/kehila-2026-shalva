@@ -34,6 +34,9 @@ import './EventManagement.css'
 // Shared event status helper (so all screens show the same status).
 import { computeEventStatus } from '../../utils/eventStatus'
 
+// Shared date formatter: render date-only event dates as DD-MM-YYYY.
+import { formatDateOnlyForDisplay } from '../../utils/dateDisplay'
+
 // Shared collapsible advanced-search bar (free text + per-field filters).
 import SearchFilters from '../shared/SearchFilters/SearchFilters'
 
@@ -664,7 +667,7 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
                   )}
                   <div className="event-card-row">
                     <dt>תאריך</dt>
-                    <dd>{eventItem.date || '—'}</dd>
+                    <dd>{formatDateOnlyForDisplay(eventItem.date, { fallback: '—' })}</dd>
                   </div>
                   <div className="event-card-row">
                     <dt>מיקום</dt>
