@@ -41,10 +41,10 @@ function getStartOfWeek(date) {
 }
 
 
-// Generate the 7 days of the week starting from a given Sunday.
+// Generate the attendance days of the week (Sunday-Friday).
 function getWeekDays(sunday) {
   const days = [];
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < 6; i++) {
     const d = new Date(sunday);
     d.setDate(sunday.getDate() + i);
     days.push(d);
@@ -68,10 +68,10 @@ function getDayKey(date) {
 // 'YYYY-MM-DD' keys via getDayKey (no new Date('YYYY-MM-DD')) and only the
 // DISPLAY is formatted — the dateKeys driving grouping/filtering are untouched.
 function getWeekRangeLabel(sunday) {
-  const saturday = new Date(sunday);
-  saturday.setDate(sunday.getDate() + 6);
+  const friday = new Date(sunday);
+  friday.setDate(sunday.getDate() + 5);
 
-  return `${formatDateOnlyForDisplay(getDayKey(sunday))} – ${formatDateOnlyForDisplay(getDayKey(saturday))}`;
+  return `${formatDateOnlyForDisplay(getDayKey(sunday))} – ${formatDateOnlyForDisplay(getDayKey(friday))}`;
 }
 
 

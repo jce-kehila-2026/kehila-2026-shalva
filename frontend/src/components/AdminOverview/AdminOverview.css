@@ -179,6 +179,7 @@
 .ao-status-planned { background: #e0e7ff; color: #3730a3; border-color: #c7d2fe; }
 .ao-status-finished { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
 .ao-status-cancelled { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
+.ao-status-neutral { background: var(--surface-2); color: var(--text-muted); border-color: var(--border); }
 
 
 /* Fade-in used by the reveal panels (birthdays) and the modal. */
@@ -257,6 +258,31 @@
   background: var(--info-bg);
 }
 
+.ao-cal-day.has-event.ao-cal-day-status-planned {
+  background: #f5f3ff;
+  border-color: #ddd6fe;
+}
+
+.ao-cal-day.has-event.ao-cal-day-status-active {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.ao-cal-day.has-event.ao-cal-day-status-finished {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.ao-cal-day.has-event.ao-cal-day-status-cancelled {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.ao-cal-day.has-event.ao-cal-day-status-neutral {
+  background: var(--surface-2);
+  border-color: var(--border);
+}
+
 /* The round number inside each day cell. */
 .ao-cal-num {
   width: clamp(34px, 6vw, 42px);
@@ -302,6 +328,26 @@
   height: 6px;
   border-radius: 50%;
   background: var(--brand-600);
+}
+
+.ao-cal-day-status-planned .ao-cal-mark {
+  background: #7c3aed;
+}
+
+.ao-cal-day-status-active .ao-cal-mark {
+  background: #16a34a;
+}
+
+.ao-cal-day-status-finished .ao-cal-mark {
+  background: #94a3b8;
+}
+
+.ao-cal-day-status-cancelled .ao-cal-mark {
+  background: #dc2626;
+}
+
+.ao-cal-day-status-neutral .ao-cal-mark {
+  background: var(--text-muted);
 }
 
 /* A small Star-of-David mark in the corner of a day that is a Jewish holiday. */
@@ -363,8 +409,14 @@
   gap: 6px;
 }
 
-/* One event row in the list. */
+/* One event row wrapper; the inner button owns the interactive styling. */
 .ao-cal-event-row {
+  margin: 0;
+}
+
+/* Clickable event row, styled locally so global button styles do not leak in. */
+.ao-cal-event-button {
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -372,17 +424,286 @@
   padding: 8px 10px;
   background: var(--surface-2);
   border: 1px solid var(--border);
+  border-inline-start: 4px solid var(--border-strong);
   border-radius: var(--radius-sm);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  text-align: right;
+  box-shadow: none;
+  transform: none;
+  transition: border-color 0.16s ease, background 0.16s ease;
 }
 
-/* Event name (truncates if long). */
+.ao-cal-event-button:hover {
+  box-shadow: none;
+  transform: none;
+}
+
+.ao-cal-event-button:focus-visible {
+  outline: 3px solid var(--brand-500);
+  outline-offset: 2px;
+  border-color: var(--brand-500);
+}
+
+.ao-event-status-planned {
+  background: #f5f3ff;
+  border-color: #ddd6fe;
+  border-inline-start-color: #7c3aed;
+}
+
+.ao-event-status-active {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  border-inline-start-color: #16a34a;
+}
+
+.ao-event-status-finished {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  border-inline-start-color: #94a3b8;
+}
+
+.ao-event-status-cancelled {
+  background: #fef2f2;
+  border-color: #fecaca;
+  border-inline-start-color: #dc2626;
+}
+
+.ao-event-status-neutral {
+  background: var(--surface-2);
+  border-color: var(--border);
+  border-inline-start-color: var(--border-strong);
+}
+
+/* Event name (wraps instead of clipping long Hebrew names). */
 .ao-cal-event-name {
+  min-width: 0;
+  flex: 1 1 auto;
   font-size: 13.5px;
   font-weight: 600;
   color: var(--text);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.ao-cal-event-button .ao-status-badge {
+  flex: 0 0 auto;
+}
+
+
+/* ---------- Event details modal ---------- */
+
+.ao-event-details-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(12px, 3vw, 24px);
+  background: rgba(15, 23, 42, 0.48);
+}
+
+.ao-event-details-modal {
+  width: min(920px, 100%);
+  max-height: calc(100dvh - 32px);
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  direction: rtl;
+  text-align: right;
+  animation: ao-fade 0.22s ease-out;
+}
+
+.ao-event-details-modal:focus {
+  outline: 3px solid var(--brand-500);
+  outline-offset: -3px;
+}
+
+.ao-event-details-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px clamp(18px, 3vw, 26px);
+  border-bottom: 1px solid var(--border);
+}
+
+.ao-event-details-title-wrap {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ao-event-details-title {
+  margin: 0;
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.ao-event-details-close {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.ao-event-details-close:hover {
+  background: var(--brand-50);
+  color: var(--brand-700);
+  box-shadow: none;
+  transform: none;
+}
+
+.ao-event-details-close:focus-visible {
+  outline: 3px solid var(--brand-500);
+  outline-offset: 2px;
+  border-color: var(--brand-500);
+}
+
+.ao-event-details-body {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(240px, 0.9fr) minmax(0, 1.1fr);
+  gap: clamp(18px, 3vw, 28px);
+  overflow-y: auto;
+  padding: clamp(18px, 3vw, 26px);
+}
+
+.ao-event-details-media {
+  min-width: 0;
+  align-self: start;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.ao-event-details-image {
+  width: 100%;
+  max-height: 330px;
+  display: block;
+  object-fit: contain;
+  background: #fff;
+}
+
+.ao-event-image-fallback {
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: var(--text-muted);
+  font-weight: 700;
+  text-align: center;
+  background:
+    linear-gradient(135deg, rgba(158, 33, 136, 0.06), rgba(59, 130, 246, 0.07)),
+    var(--surface-2);
+}
+
+.ao-event-details-content {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ao-event-details-list {
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.ao-event-details-row {
+  display: grid;
+  grid-template-columns: minmax(70px, max-content) minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.ao-event-details-row dt {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.ao-event-details-row dd {
+  margin: 0;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.ao-event-details-description {
+  margin: 0;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 680px) {
+  .ao-event-details-overlay {
+    align-items: stretch;
+    padding: 10px;
+  }
+
+  .ao-event-details-modal {
+    max-height: calc(100dvh - 20px);
+  }
+
+  .ao-event-details-head {
+    padding: 14px 16px;
+  }
+
+  .ao-event-details-title {
+    font-size: 20px;
+  }
+
+  .ao-event-details-body {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 16px;
+  }
+
+  .ao-event-details-image {
+    max-height: 240px;
+  }
+
+  .ao-event-image-fallback {
+    min-height: 170px;
+  }
+
+  .ao-event-details-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
 }
 
 
@@ -1080,6 +1401,11 @@
     gap: 10px;
   }
 
+  .ao-cal-card {
+    border-radius: var(--radius-lg);
+    box-shadow: 0 12px 28px rgba(158, 33, 136, 0.1);
+  }
+
   /* Smaller gap between the top birthdays bar and the stat squares. */
   .ao-bday-bar {
     margin-bottom: 8px;
@@ -1145,6 +1471,12 @@
 
   .ao-cal-month {
     font-size: 20px;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  .ao-cal-hebrew-month {
+    font-size: 12.5px;
   }
 
   /* Keep the arrows/plus identical to desktop (which looks good) so their
@@ -1154,31 +1486,56 @@
   }
 
   .ao-cal-body {
-    padding: 12px;
+    padding: 10px;
   }
 
   .ao-cal-grid {
-    gap: 5px;
+    gap: 4px;
   }
 
   .ao-cal-weekday {
     font-size: 11px;
-    padding: 8px 0;
+    padding: 7px 0;
+    border-radius: var(--radius-sm);
   }
 
   .ao-cal-empty,
   .ao-cal-day {
-    min-height: 46px;
+    min-height: 44px;
   }
 
   .ao-cal-day {
     gap: 3px;
+    border-radius: var(--radius-sm);
   }
 
   .ao-cal-num {
-    width: 32px;
-    height: 32px;
+    width: 31px;
+    height: 31px;
     font-size: 14px;
+  }
+
+  .ao-cal-events {
+    padding: 12px;
+  }
+
+  .ao-cal-events-title {
+    margin-bottom: 10px;
+    font-size: 14px;
+  }
+
+  .ao-cal-event-list {
+    gap: 8px;
+  }
+
+  .ao-cal-event-button {
+    align-items: flex-start;
+    padding: 10px 11px;
+    gap: 10px;
+  }
+
+  .ao-cal-event-button .ao-status-badge {
+    margin-top: 1px;
   }
 }
 
@@ -1215,6 +1572,7 @@
   .ao-bday-bar-confetti i,
   .ao-bday-bar--celebrate .ao-bday-bar-cake,
   .ao-bday-balloon,
+  .ao-event-details-modal,
   .ao-modal-content {
     animation: none;
   }

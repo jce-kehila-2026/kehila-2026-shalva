@@ -4,7 +4,7 @@
 // (חמ״ל); a today's-birthdays block spans the full width at the bottom.
 
 // React hooks for state, effects, derived values and mutable refs.
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 // Firestore helpers for reading collections and adding an event.
 // serverTimestamp lets the server stamp createdAt/updatedAt (not the browser clock).
@@ -187,8 +187,191 @@ function statusClass(status) {
     case 'בוטל':
       return 'ao-status-cancelled';
     default:
-      return '';
+      return 'ao-status-neutral';
   }
+}
+
+
+// Event status -> CSS class for the clickable event row itself.
+function eventStatusClass(status) {
+  switch (status) {
+    case 'פעיל':
+      return 'ao-event-status-active';
+    case 'מתוכנן':
+      return 'ao-event-status-planned';
+    case 'הסתיים':
+      return 'ao-event-status-finished';
+    case 'בוטל':
+      return 'ao-event-status-cancelled';
+    default:
+      return 'ao-event-status-neutral';
+  }
+}
+
+
+// Calendar-day tint uses the already-computed event status. If a day has more
+// than one event, the most time-sensitive status wins visually.
+function calendarDayStatusClass(status) {
+  switch (status) {
+    case 'פעיל':
+      return 'ao-cal-day-status-active';
+    case 'מתוכנן':
+      return 'ao-cal-day-status-planned';
+    case 'הסתיים':
+      return 'ao-cal-day-status-finished';
+    case 'בוטל':
+      return 'ao-cal-day-status-cancelled';
+    default:
+      return 'ao-cal-day-status-neutral';
+  }
+}
+
+
+function getCalendarDayStatus(events = []) {
+  const statuses = events.map((event) => event.status);
+  const priority = ['פעיל', 'מתוכנן', 'בוטל', 'הסתיים'];
+  return priority.find((status) => statuses.includes(status)) || statuses.find(Boolean) || '';
+}
+
+
+// Keep imageUrls as an array and use only non-empty string URLs for display.
+function normalizeImageUrls(imageUrls) {
+  if (!Array.isArray(imageUrls)) {
+    return [];
+  }
+
+  return imageUrls
+    .filter((url) => typeof url === 'string')
+    .map((url) => url.trim())
+    .filter(Boolean);
+}
+
+
+// The first usable URL is the modal's main image.
+function getPrimaryEventImage(event) {
+  return normalizeImageUrls(event?.imageUrls)[0] || '';
+}
+
+
+// Only preserve an explicit time field if one already exists on the event doc.
+function getEventTime(event) {
+  return typeof event?.time === 'string' ? event.time.trim() : '';
+}
+
+
+function getFocusableElements(container) {
+  if (!container) {
+    return [];
+  }
+
+  const selectors = [
+    'button:not([disabled])',
+    '[href]',
+    'input:not([disabled])',
+    'select:not([disabled])',
+    'textarea:not([disabled])',
+    '[tabindex]:not([tabindex="-1"])',
+  ].join(',');
+
+  return Array.from(container.querySelectorAll(selectors))
+    .filter((element) => !element.hasAttribute('hidden') && element.getClientRects().length > 0);
+}
+
+
+function EventDetailsModal({
+  eventItem,
+  imageError,
+  onClose,
+  onImageError,
+  dialogRef,
+  closeButtonRef,
+}) {
+  if (!eventItem) {
+    return null;
+  }
+
+  const imageUrl = getPrimaryEventImage(eventItem);
+  const dateLabel = formatDateOnlyForDisplay(eventItem.date, { fallback: '' });
+  const descriptionId = eventItem.description ? 'ao-event-details-description' : undefined;
+  const assignedGroup = eventItem.assignedGroup && eventItem.assignedGroup !== 'ללא שיוך'
+    ? eventItem.assignedGroup
+    : '';
+  const details = [
+    { label: 'תאריך', value: dateLabel },
+    { label: 'שעה', value: eventItem.time },
+    { label: 'מיקום', value: eventItem.location },
+    { label: 'קבוצה', value: assignedGroup },
+  ].filter((item) => item.value);
+
+  return (
+    <div className="ao-event-details-overlay" onClick={onClose}>
+      <div
+        className="ao-event-details-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ao-event-details-title"
+        aria-describedby={descriptionId}
+        dir="rtl"
+        ref={dialogRef}
+        tabIndex="-1"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="ao-event-details-head">
+          <div className="ao-event-details-title-wrap">
+            <h3 id="ao-event-details-title" className="ao-event-details-title">{eventItem.name}</h3>
+            {eventItem.status && (
+              <span className={`ao-status-badge ${statusClass(eventItem.status)}`}>{eventItem.status}</span>
+            )}
+          </div>
+          <button
+            type="button"
+            className="ao-event-details-close"
+            onClick={onClose}
+            aria-label="סגירת פרטי האירוע"
+            ref={closeButtonRef}
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="ao-event-details-body">
+          <div className="ao-event-details-media">
+            {imageUrl && !imageError ? (
+              <img
+                className="ao-event-details-image"
+                src={imageUrl}
+                alt={`תמונה של ${eventItem.name}`}
+                onError={onImageError}
+              />
+            ) : (
+              <div className="ao-event-image-fallback" role="img" aria-label="אין תמונה לאירוע">
+                אין תמונה לאירוע
+              </div>
+            )}
+          </div>
+
+          <div className="ao-event-details-content">
+            {details.length > 0 && (
+              <dl className="ao-event-details-list">
+                {details.map((detail) => (
+                  <div className="ao-event-details-row" key={detail.label}>
+                    <dt>{detail.label}</dt>
+                    <dd>{detail.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+
+            {eventItem.description && (
+              <p id="ao-event-details-description" className="ao-event-details-description">
+                {eventItem.description}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 
@@ -212,6 +395,14 @@ function AdminOverview({ onNavigate }) {
   // instead; this flag controls it. On phones the inline list already shows the
   // events, and the popup is hidden by CSS there.
   const [dayPopupOpen, setDayPopupOpen] = useState(false);
+
+  // Event details modal: the clicked event, its image state and focus anchors.
+  const [eventDetails, setEventDetails] = useState(null);
+  const [eventDetailsImageError, setEventDetailsImageError] = useState(false);
+  const eventDetailsDialogRef = useRef(null);
+  const eventDetailsCloseRef = useRef(null);
+  const eventDetailsTriggerRef = useRef(null);
+  const selectedDayButtonRef = useRef(null);
 
   // Birthday greeting editor: the person being greeted (null when closed) and
   // the editable message text. Lets the admin tweak the wording + add emojis
@@ -304,13 +495,19 @@ function AdminOverview({ onNavigate }) {
         .filter((person) => person.role === 'guide' && !person.disabled)
         .map((person) => ({ id: person.id, name: getDisplayName(person), raw: person }));
 
-      // Shape the events (status derived from the date).
+      // Shape the events (status derived from the date), keeping only existing
+      // document fields needed by this screen's display layer.
       const events = (eventsRaw || []).map((event) => ({
         id: event.id,
         name: event.name || event.title || 'אירוע ללא שם',
         date: event.date || '',
         status: computeEventStatus(event),
         location: event.location || '',
+        description: event.description || '',
+        assignedGroup: event.assignedGroup || '',
+        contact: event.contact || null,
+        imageUrls: normalizeImageUrls(event.imageUrls),
+        time: getEventTime(event),
       }));
 
       // Count registrants still awaiting approval (missing status counts as pending).
@@ -402,12 +599,106 @@ function AdminOverview({ onNavigate }) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [isAddEventOpen, savingEvent]);
 
+  const closeEventDetails = useCallback(() => {
+    const trigger = eventDetailsTriggerRef.current;
+
+    setEventDetails(null);
+    setEventDetailsImageError(false);
+
+    window.setTimeout(() => {
+      if (trigger && trigger.isConnected) {
+        trigger.focus();
+        return;
+      }
+
+      if (selectedDayButtonRef.current) {
+        selectedDayButtonRef.current.focus();
+      }
+    }, 0);
+  }, []);
+
+  // Event details modal: lock background scroll, close on Escape and trap focus.
+  useEffect(() => {
+    if (!eventDetails) {
+      return undefined;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const focusTimer = window.setTimeout(() => {
+      if (eventDetailsCloseRef.current) {
+        eventDetailsCloseRef.current.focus();
+      } else if (eventDetailsDialogRef.current) {
+        eventDetailsDialogRef.current.focus();
+      }
+    }, 0);
+
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeEventDetails();
+        return;
+      }
+
+      if (event.key !== 'Tab') {
+        return;
+      }
+
+      const focusableElements = getFocusableElements(eventDetailsDialogRef.current);
+
+      if (focusableElements.length === 0) {
+        event.preventDefault();
+        eventDetailsDialogRef.current?.focus();
+        return;
+      }
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+
+      if (document.activeElement === eventDetailsDialogRef.current) {
+        event.preventDefault();
+        (event.shiftKey ? lastElement : firstElement).focus();
+      } else if (event.shiftKey && document.activeElement === firstElement) {
+        event.preventDefault();
+        lastElement.focus();
+      } else if (!event.shiftKey && document.activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
+      } else if (!eventDetailsDialogRef.current?.contains(document.activeElement)) {
+        event.preventDefault();
+        firstElement.focus();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+
+    return () => {
+      window.clearTimeout(focusTimer);
+      window.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [eventDetails, closeEventDetails]);
+
+  const otherModalOpen = Boolean(birthdayEditor) || isAddEventOpen;
+
   // Select a calendar day. `hasEvents` (passed by the day button, which already
   // knows it) opens the day-events popup — that's what surfaces the events on
   // the desktop home, where the inline list is hidden. Empty days just select.
   const selectDay = (day, hasEvents) => {
     setSelectedDay(day);
     setDayPopupOpen(Boolean(hasEvents));
+  };
+
+  const openEventDetails = (eventItem, triggerElement) => {
+    if (otherModalOpen) {
+      return;
+    }
+
+    eventDetailsTriggerRef.current = triggerElement || document.activeElement;
+    setDayPopupOpen(false);
+    setEventDetails(eventItem);
+    setEventDetailsImageError(false);
   };
 
   // Close the add-event modal and clear any error (used by the cancel button).
@@ -517,6 +808,11 @@ function AdminOverview({ onNavigate }) {
                 date: payload.date,
                 status: computeEventStatus(payload),
                 location: payload.location,
+                description: payload.description,
+                assignedGroup: payload.assignedGroup,
+                contact: payload.contact,
+                imageUrls: [],
+                time: '',
               },
             ],
           }
@@ -685,6 +981,23 @@ function AdminOverview({ onNavigate }) {
   const selectedDayKey = selectedDay
     ? `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`
     : '';
+
+  const renderEventTrigger = (eventItem) => (
+    <li className="ao-cal-event-row" key={eventItem.id}>
+      <button
+        type="button"
+        className={`ao-cal-event-button ${eventStatusClass(eventItem.status)}`}
+        onClick={(event) => openEventDetails(eventItem, event.currentTarget)}
+        disabled={otherModalOpen}
+        aria-label={`פתיחת פרטי האירוע ${eventItem.name}, סטטוס ${eventItem.status || 'לא ידוע'}`}
+      >
+        <span className="ao-cal-event-name">{eventItem.name}</span>
+        {eventItem.status && (
+          <span className={`ao-status-badge ${statusClass(eventItem.status)}`}>{eventItem.status}</span>
+        )}
+      </button>
+    </li>
+  );
 
   // Today's holiday (only meaningful while viewing the current month).
   const todayHolidayName = isCurrentMonth && holidaysByDay[todayObj.getDate()]
@@ -918,6 +1231,7 @@ function AdminOverview({ onNavigate }) {
                   const dayEvents = eventsByDay[day];
                   const holiday = holidaysByDay[day];
                   const weekday = new Date(calYear, calMonth, day).getDay();
+                  const dayEventStatus = dayEvents ? getCalendarDayStatus(dayEvents) : '';
 
                   // Canonical YYYY-MM-DD for this cell, composed arithmetically
                   // (no Date) — only for the accessible label's DD-MM-YYYY date.
@@ -928,6 +1242,7 @@ function AdminOverview({ onNavigate }) {
                   const classes = [
                     'ao-cal-day',
                     dayEvents ? 'has-event' : '',
+                    dayEvents ? calendarDayStatusClass(dayEventStatus) : '',
                     weekday === 6 ? 'is-shabbat' : '',
                     holiday ? 'is-holiday' : '',
                     isCurrentMonth && day === todayObj.getDate() ? 'is-today' : '',
@@ -939,6 +1254,7 @@ function AdminOverview({ onNavigate }) {
                       type="button"
                       className={classes}
                       key={day}
+                      ref={day === selectedDay ? selectedDayButtonRef : null}
                       onClick={() => selectDay(day, Boolean(dayEvents))}
                       aria-pressed={day === selectedDay}
                       title={holiday || undefined}
@@ -965,14 +1281,7 @@ function AdminOverview({ onNavigate }) {
               {selectedDay && (
                 selectedEvents.length > 0 ? (
                   <ul className="ao-cal-event-list">
-                    {selectedEvents.map((event) => (
-                      <li className="ao-cal-event-row" key={event.id}>
-                        <span className="ao-cal-event-name">{event.name}</span>
-                        {event.status && (
-                          <span className={`ao-status-badge ${statusClass(event.status)}`}>{event.status}</span>
-                        )}
-                      </li>
-                    ))}
+                    {selectedEvents.map(renderEventTrigger)}
                   </ul>
                 ) : (
                   <div className="ao-empty-inline">אין אירועים בתאריך הזה</div>
@@ -1023,18 +1332,20 @@ function AdminOverview({ onNavigate }) {
 
             {/* The day's events (name + status badge), reusing the list styles. */}
             <ul className="ao-cal-event-list">
-              {selectedEvents.map((event) => (
-                <li className="ao-cal-event-row" key={event.id}>
-                  <span className="ao-cal-event-name">{event.name}</span>
-                  {event.status && (
-                    <span className={`ao-status-badge ${statusClass(event.status)}`}>{event.status}</span>
-                  )}
-                </li>
-              ))}
+              {selectedEvents.map(renderEventTrigger)}
             </ul>
           </div>
         </div>
       )}
+
+      <EventDetailsModal
+        eventItem={eventDetails}
+        imageError={eventDetailsImageError}
+        onClose={closeEventDetails}
+        onImageError={() => setEventDetailsImageError(true)}
+        dialogRef={eventDetailsDialogRef}
+        closeButtonRef={eventDetailsCloseRef}
+      />
 
       {/* Modal: edit a birthday greeting, then send it on WhatsApp. */}
       {birthdayEditor && (
