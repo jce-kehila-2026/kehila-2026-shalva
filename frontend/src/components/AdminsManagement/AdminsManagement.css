@@ -1,0 +1,163 @@
+/* AdminsManagement (owner-only) — small, list-based screen reusing the shared
+   mgmt-* card/section styling, with a few local rules for the owner card and
+   the admin rows. */
+
+/* The owner's summary card. */
+.adm-owner-card {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.adm-owner-name {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.adm-owner-email {
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+/* "Add admin" row: a user dropdown + the promote button. */
+.adm-add-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.adm-select {
+  flex: 1 1 280px;
+  min-width: 0;
+  padding: 10px 12px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+.adm-select:focus {
+  border-color: var(--brand-500);
+  box-shadow: 0 0 0 3px var(--brand-50);
+}
+
+/* The list of admins. */
+.adm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.adm-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.adm-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.adm-row-name {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.adm-row-email {
+  font-size: 12.5px;
+  color: var(--text-soft);
+}
+
+.adm-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* New-admin form: a two-column grid of labelled fields + a submit button. */
+.adm-create-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.adm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+/* A field that spans both columns (e.g. the email). */
+.adm-field--wide {
+  grid-column: 1 / -1;
+}
+
+.adm-field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.adm-input {
+  padding: 10px 12px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+.adm-input:focus {
+  border-color: var(--brand-500);
+  box-shadow: 0 0 0 3px var(--brand-50);
+}
+
+.adm-create-actions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* On phones each admin row stacks, and its buttons go full width. */
+@media (max-width: 600px) {
+  .adm-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .adm-row-actions {
+    width: 100%;
+  }
+
+  .adm-row-actions button {
+    flex: 1 1 auto;
+  }
+
+  /* The new-admin form collapses to a single column. */
+  .adm-create-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .adm-create-actions button {
+    width: 100%;
+  }
+}

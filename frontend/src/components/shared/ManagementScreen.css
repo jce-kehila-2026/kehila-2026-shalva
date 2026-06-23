@@ -518,6 +518,13 @@
     margin-inline-start: 0;
   }
 
+  /* The guides toolbar has a FOURTH button ("מדריכים שהוסרו"), which in the
+     3-column grid left a lone button stranded on a second row. Two even columns
+     lay the four buttons out as a tidy 2×2 block instead. */
+  .mgmt-header .mgmt-toolbar.guide-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .mgmt-header .mgmt-toolbar .mgmt-primary-btn,
   .mgmt-header .mgmt-toolbar .mgmt-secondary-btn {
     width: 100%;

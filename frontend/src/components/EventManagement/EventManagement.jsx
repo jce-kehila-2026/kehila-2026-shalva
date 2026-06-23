@@ -198,6 +198,9 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
   // Holds the event whose pictures we are viewing in the modal (null when none).
   const [viewingPicturesEvent, setViewingPicturesEvent] = useState(null)
 
+  // Holds the event whose FULL details we are viewing in the modal (null = none).
+  const [viewingDetailsEvent, setViewingDetailsEvent] = useState(null)
+
   // Search text used to filter the event table.
   const [searchTerm, setSearchTerm] = useState('')
 
@@ -696,11 +699,11 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
                     </>
                   ) : (
                     <>
-                      {eventItem.imageUrls && eventItem.imageUrls.length > 0 && (
-                        <button type="button" onClick={() => setViewingPicturesEvent(eventItem)}>
-                          תמונות
-                        </button>
-                      )}
+                      {/* One organized window with everything (details + images),
+                          replacing the old images-only button. */}
+                      <button type="button" onClick={() => setViewingDetailsEvent(eventItem)}>
+                        פרטים
+                      </button>
 
                       <button type="button" onClick={() => handleEdit(eventItem)}>
                         עריכה
@@ -1072,6 +1075,83 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
             
             <div className="modal-actions" style={{ justifyContent: 'center' }}>
               <button type="button" className="btn btn-outline" onClick={() => setViewingPicturesEvent(null)}>
+                סגור
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Full event details modal — an organized, read-only view of everything
+          on one event: status, image gallery, key fields, contact, description. */}
+      {viewingDetailsEvent && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => setViewingDetailsEvent(null)}>
+          <div className="modal-content event-details-modal" onClick={(e) => e.stopPropagation()}>
+
+            {/* Header: event name + derived status badge + close button. */}
+            <div className="event-details-head">
+              <div className="event-details-title-wrap">
+                <h3 className="event-details-title">{viewingDetailsEvent.name}</h3>
+                <span className={`event-management-status ${statusClass(computeEventStatus(viewingDetailsEvent))}`}>
+                  {computeEventStatus(viewingDetailsEvent)}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="event-details-close"
+                aria-label="סגירת פרטי האירוע"
+                onClick={() => setViewingDetailsEvent(null)}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Image gallery — only shown when the event actually has images.
+                Each thumbnail opens the full image in a new tab. */}
+            {viewingDetailsEvent.imageUrls && viewingDetailsEvent.imageUrls.length > 0 && (
+              <div className="event-details-gallery">
+                {viewingDetailsEvent.imageUrls.map((url, idx) => (
+                  <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="event-details-thumb">
+                    <img src={url} alt={`תמונה ${idx + 1}`} />
+                  </a>
+                ))}
+              </div>
+            )}
+
+            {/* The fields, as label/value pairs. Missing values show a dash. */}
+            <dl className="event-details-grid">
+              <div className="event-details-row">
+                <dt>תאריך</dt>
+                <dd>{formatDateOnlyForDisplay(viewingDetailsEvent.date, { fallback: '—' })}</dd>
+              </div>
+              <div className="event-details-row">
+                <dt>מיקום</dt>
+                <dd>{viewingDetailsEvent.location || '—'}</dd>
+              </div>
+              <div className="event-details-row">
+                <dt>קבוצה משויכת</dt>
+                <dd>{viewingDetailsEvent.assignedGroup || '—'}</dd>
+              </div>
+              <div className="event-details-row">
+                <dt>איש קשר</dt>
+                <dd>{viewingDetailsEvent.contact?.name || '—'}</dd>
+              </div>
+              <div className="event-details-row">
+                <dt>טלפון</dt>
+                <dd dir="ltr">{viewingDetailsEvent.contact?.phone || '—'}</dd>
+              </div>
+              <div className="event-details-row">
+                <dt>אימייל</dt>
+                <dd dir="ltr">{viewingDetailsEvent.contact?.email || '—'}</dd>
+              </div>
+              <div className="event-details-row event-details-row--full">
+                <dt>תיאור</dt>
+                <dd>{viewingDetailsEvent.description || '—'}</dd>
+              </div>
+            </dl>
+
+            <div className="modal-actions" style={{ justifyContent: 'center' }}>
+              <button type="button" className="btn btn-outline" onClick={() => setViewingDetailsEvent(null)}>
                 סגור
               </button>
             </div>

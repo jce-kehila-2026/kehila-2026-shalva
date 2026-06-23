@@ -53,6 +53,9 @@ import { GROUP_TIMES } from '../../utils/groupOptions';
 // Shared age calculation (the form derives age from the birth date).
 import { computeAge } from '../../utils/people';
 
+// Phone + Israeli-ID validators — people forms must hold valid contact details.
+import { isValidIsraeliPhone, isValidIsraeliId } from '../../utils/validators';
+
 // Shared management-screen styles + this screen's own styles.
 import '../shared/ManagementScreen.css';
 import './VolunteersManagement.css';
@@ -464,6 +467,25 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
     
     if (!name) {
       alert('יש להזין שם למתנדב');
+      return;
+    }
+
+    // Phone is required when ADDING a new volunteer, and must be a valid Israeli
+    // number whenever one is entered (so we never save a malformed phone).
+    const phone = formData.phone.trim();
+    if (!editingVolunteer && !phone) {
+      alert('יש להזין מספר טלפון.');
+      return;
+    }
+    if (phone && !isValidIsraeliPhone(phone)) {
+      alert('מספר הטלפון אינו תקין. הזינו מספר ישראלי תקין (לדוגמה: 052-1234567).');
+      return;
+    }
+
+    // An Israeli ID, when provided, must pass the official check-digit test.
+    const idNumber = formData.idNumber.trim();
+    if (idNumber && !isValidIsraeliId(idNumber)) {
+      alert('תעודת הזהות אינה תקינה. ודאו שהוזנו הספרות הנכונות.');
       return;
     }
 

@@ -320,7 +320,10 @@ function AdminAttendance({ registerBack }) {
               </button>
               <div className="adm-att-week-label">
                 <span>השבוע</span>
-                <strong>{getWeekRangeLabel(currentWeekStart)}</strong>
+                {/* Force this range to read left-to-right: start date (21) on the
+                    left, end date (26) on the right. Inside the RTL screen the two
+                    date tokens would otherwise swap places and read backwards. */}
+                <strong dir="ltr">{getWeekRangeLabel(currentWeekStart)}</strong>
               </div>
               <button type="button" className="week-nav-today-btn" onClick={goToCurrentWeek}>
                 הנוכחי
@@ -454,31 +457,78 @@ function AdminAttendance({ registerBack }) {
       ) : visibleGroups.length === 0 ? (
         <div className="adm-att-empty">אין קבוצות להצגה.</div>
       ) : (
-        <div className="adm-att-grid">
-          {visibleGroups.map((group) => (
-            <button
-              key={group.id}
-              type="button"
-              className={`adm-att-group-card ${group.totalAbsent > 0 ? 'has-absence' : ''}`}
-              onClick={() => setSelectedGroup(group)}
-            >
-              <div className="adm-att-group-info">
-                <div className="adm-att-group-main">
-                  <span className="adm-att-group-name">{group.groupName}</span>
-                  <span className="adm-att-volunteers-count">{group.total} מתנדבים</span>
-                </div>
-                <span className="adm-att-group-guide">מדריך/ה: {group.guideName}</span>
-              </div>
+        <>
+          {/* Desktop layout: one compact table row per group, so most groups
+              fit on a single screen. Clicking a row opens that group's weekly
+              attendance table (same action the cards had). */}
+          <div className="adm-att-table-wrap">
+            <table className="adm-att-table">
+              <thead>
+                <tr>
+                  <th>קבוצה</th>
+                  <th>מדריך/ה</th>
+                  <th>מתנדבים</th>
+                  <th>נוכחים</th>
+                  <th>חסרים</th>
+                  <th>לא סומנו</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleGroups.map((group) => (
+                  <tr
+                    key={group.id}
+                    className={`adm-att-row ${group.totalAbsent > 0 ? 'has-absence' : ''}`}
+                    onClick={() => setSelectedGroup(group)}
+                    onKeyDown={(event) => {
+                      // The row acts as a button: Enter or Space opens the group.
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setSelectedGroup(group);
+                      }
+                    }}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`פתח נוכחות שבועית עבור ${group.groupName}`}
+                  >
+                    <td className="adm-att-cell-name">{group.groupName}</td>
+                    <td className="adm-att-cell-guide">{group.guideName}</td>
+                    <td className="adm-att-cell-num">{group.total}</td>
+                    <td className="adm-att-cell-num is-present">{group.totalPresent}</td>
+                    <td className="adm-att-cell-num is-absent">{group.totalAbsent}</td>
+                    <td className="adm-att-cell-num is-unmarked">{group.totalUnmarked}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-              {/* This week's attendance breakdown for the group. */}
-              <div className="adm-att-group-stats">
-                <span className="adm-att-stat-chip is-present">{group.totalPresent} נוכחים</span>
-                <span className="adm-att-stat-chip is-absent">{group.totalAbsent} חסרים</span>
-                <span className="adm-att-stat-chip is-unmarked">{group.totalUnmarked} לא סומנו</span>
-              </div>
-            </button>
-          ))}
-        </div>
+          {/* Mobile layout: the existing cards (one per row) — left unchanged. */}
+          <div className="adm-att-grid">
+            {visibleGroups.map((group) => (
+              <button
+                key={group.id}
+                type="button"
+                className={`adm-att-group-card ${group.totalAbsent > 0 ? 'has-absence' : ''}`}
+                onClick={() => setSelectedGroup(group)}
+              >
+                <div className="adm-att-group-info">
+                  <div className="adm-att-group-main">
+                    <span className="adm-att-group-name">{group.groupName}</span>
+                    <span className="adm-att-volunteers-count">{group.total} מתנדבים</span>
+                  </div>
+                  <span className="adm-att-group-guide">מדריך/ה: {group.guideName}</span>
+                </div>
+
+                {/* This week's attendance breakdown for the group. */}
+                <div className="adm-att-group-stats">
+                  <span className="adm-att-stat-chip is-present">{group.totalPresent} נוכחים</span>
+                  <span className="adm-att-stat-chip is-absent">{group.totalAbsent} חסרים</span>
+                  <span className="adm-att-stat-chip is-unmarked">{group.totalUnmarked} לא סומנו</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </>
       )}
     </section>
   );

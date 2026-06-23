@@ -20,6 +20,9 @@ import { db, storage } from '../../firebase';
 // Allowed activity-day short labels (ראשון–שישי; Saturday is not selectable).
 import { ACTIVITY_DAY_SHORT_LABELS } from '../../utils/activityDays';
 
+// Phone + Israeli-ID validators (the signing form must capture valid details).
+import { isValidIsraeliPhone, isValidIsraeliId } from '../../utils/validators';
+
 // Shared day / month / year date selector.
 import BirthDatePicker from '../shared/BirthDatePicker/BirthDatePicker';
 
@@ -82,9 +85,9 @@ function validateSignatureForm({ form, activityDays, agreed, signature }) {
     return `יש למלא את שדות החובה: ${missing.join(', ')}. תאריך עברי אינו חובה.`;
   }
 
-  const idDigits = String(form.idNumber).replace(/\D/g, '');
-  if (idDigits.length !== 9) {
-    return 'יש להזין מספר תעודת זהות תקין בן 9 ספרות.';
+  // Full check-digit validation, not just "9 digits".
+  if (!isValidIsraeliId(form.idNumber)) {
+    return 'יש להזין מספר תעודת זהות תקין (9 ספרות עם ספרת ביקורת נכונה).';
   }
 
   const age = Number(form.age);
@@ -92,9 +95,8 @@ function validateSignatureForm({ form, activityDays, agreed, signature }) {
     return 'יש להזין גיל תקין בין 0 ל-120.';
   }
 
-  const phoneDigits = String(form.phone).replace(/\D/g, '');
-  if (phoneDigits.length < 9 || phoneDigits.length > 10) {
-    return 'יש להזין מספר פלאפון תקין.';
+  if (!isValidIsraeliPhone(form.phone)) {
+    return 'יש להזין מספר פלאפון ישראלי תקין (לדוגמה: 050-0000000).';
   }
 
   const email = String(form.email).trim();

@@ -3,8 +3,10 @@ import { collection, doc, getDocs, setDoc, deleteDoc } from 'firebase/firestore'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { db, storage } from '../../firebase';
 import CoverImageField from '../GroupManagement/CoverImageField';
+import SearchFilters from '../shared/SearchFilters/SearchFilters';
 import '../shared/ManagementScreen.css';
 import '../GroupManagement/GroupManagement.css';
+import './ProgramManagement.css';
 
 const toRecord = (documentSnapshot) => ({
   id: documentSnapshot.id,
@@ -38,12 +40,8 @@ const ProgramManagement = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortDir, setSortDir] = useState('asc');
 
-  // Expandable row state on mobile
-  const [expandedId, setExpandedId] = useState(null);
-
-  const toggleExpand = (id) => {
-    setExpandedId((prev) => (prev === id ? null : id));
-  };
+  // The program shown in the full-details view (null = none open).
+  const [viewingProgram, setViewingProgram] = useState(null);
 
   // Add modal state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -228,106 +226,81 @@ const ProgramManagement = () => {
         </header>
 
         <section className="mgmt-section">
-          <div className="mgmt-list-header">
-            <h2>רשימת תוכניות</h2>
-            <input
-              type="text"
-              className="mgmt-search"
-              placeholder="🔍 חיפוש תוכנית לפי שם או תיאור..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+          {/* Search — the SAME shared bar (and size) used by the volunteers
+              screen and the rest. No advanced filters here, just free text. */}
+          <div className="mgmt-filters-row">
+            <SearchFilters
+              searchValue={searchQuery}
+              onSearchChange={setSearchQuery}
+              searchPlaceholder="🔍 חיפוש תוכנית לפי שם או תיאור..."
             />
           </div>
 
-          <div className="mgmt-table-wrap">
-            <table className="mgmt-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '80px' }}>תמונה</th>
-                  <th>
-                    <button type="button" className="mgmt-sort is-active" onClick={toggleSort}>
-                      שם התוכנית
-                      <span className="mgmt-sort-arrow" aria-hidden="true">
-                        {sortDir === 'asc' ? '▲' : '▼'}
-                      </span>
-                    </button>
-                  </th>
-                  <th>תיאור</th>
-                  <th style={{ width: '150px' }}>פעולות</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr>
-                    <td colSpan="4" className="mgmt-loading">
-                      טוען תוכניות...
-                    </td>
-                  </tr>
-                ) : filteredPrograms.length === 0 ? (
-                  <tr>
-                    <td colSpan="4" className="mgmt-empty">
-                      לא נמצאו תוכניות
-                    </td>
-                  </tr>
-                ) : (
-                  filteredPrograms.map((program) => (
-                    <tr key={program.id} className={expandedId === program.id ? 'is-expanded' : ''}>
-                      <td data-label="תמונה">
-                        {program.imageUrl ? (
-                          <img
-                            src={program.imageUrl}
-                            alt={program.name}
-                            style={{
-                              width: '50px',
-                              height: '50px',
-                              objectFit: 'cover',
-                              borderRadius: '8px',
-                              border: '1px solid var(--border)',
-                              display: 'block',
-                            }}
-                          />
-                        ) : (
-                          <div
-                            style={{
-                              width: '50px',
-                              height: '50px',
-                              borderRadius: '8px',
-                              backgroundColor: 'var(--surface-2)',
-                              border: '1px dashed var(--border-strong)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: '20px',
-                            }}
-                          >
-                            🖼️
-                          </div>
-                        )}
-                      </td>
-                      <td
-                        data-label="שם התוכנית"
-                        className="mgmt-name-cell"
-                        style={{ fontWeight: 'bold' }}
-                        onClick={() => toggleExpand(program.id)}
-                      >
-                        {program.name}
-                      </td>
-                      <td data-label="תיאור" className="muted" style={{ whiteSpace: 'pre-wrap' }}>
-                        {program.description}
-                      </td>
-                      <td data-label="פעולות" className="mgmt-actions-cell">
-                        <div className="mgmt-row-actions">
-                          <button type="button" onClick={() => openEditModal(program)}>
-                            עריכה
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+          <div className="mgmt-list-header">
+            <h2>רשימת תוכניות</h2>
+            {/* Sort by name (the table's sortable header moved here). */}
+            <button type="button" className="mgmt-secondary-btn prog-sort-btn" onClick={toggleSort}>
+              מיון לפי שם {sortDir === 'asc' ? '▲' : '▼'}
+            </button>
           </div>
+
+          {/* Programs are visual — each has a cover image — so they read better
+              as a card gallery than as a cramped table row. Clicking a card opens
+              the full details view. */}
+          {loading ? (
+            <div className="mgmt-loading">טוען תוכניות...</div>
+          ) : filteredPrograms.length === 0 ? (
+            <div className="mgmt-empty">לא נמצאו תוכניות</div>
+          ) : (
+            <div className="prog-grid">
+              {filteredPrograms.map((program) => (
+                <article className="prog-card" key={program.id}>
+
+                  {/* Cover + text are one clickable, keyboard-accessible area that
+                      opens the big details view. */}
+                  <div
+                    className="prog-card-open"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setViewingProgram(program)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setViewingProgram(program);
+                      }
+                    }}
+                    aria-label={`הצגת התוכנית ${program.name}`}
+                  >
+                    {/* Cover image, or a placeholder when none was uploaded. */}
+                    <div className="prog-card-cover">
+                      {program.imageUrl ? (
+                        <img src={program.imageUrl} alt={program.name} />
+                      ) : (
+                        <div className="prog-card-cover-empty" aria-hidden="true">🖼️</div>
+                      )}
+                    </div>
+
+                    {/* Name + a short (clamped) description preview. */}
+                    <div className="prog-card-body">
+                      <h3 className="prog-card-name">{program.name}</h3>
+                      {program.description ? (
+                        <p className="prog-card-desc">{program.description}</p>
+                      ) : (
+                        <p className="prog-card-desc prog-card-desc--empty">אין תיאור</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Edit opens the same modal as before (delete lives inside it). */}
+                  <div className="prog-card-foot">
+                    <button type="button" className="mgmt-secondary-btn" onClick={() => openEditModal(program)}>
+                      עריכה
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </section>
       </section>
 
@@ -434,6 +407,55 @@ const ProgramManagement = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Full-details view — opens when a program card is clicked. Shows the
+          cover image large, the name, and the complete (un-clamped) description. */}
+      {viewingProgram && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => setViewingProgram(null)}>
+          <div className="modal-content prog-view-modal" onClick={(e) => e.stopPropagation()}>
+
+            <div className="prog-view-head">
+              <h2 className="prog-view-title">{viewingProgram.name}</h2>
+              <button
+                type="button"
+                className="prog-view-close"
+                aria-label="סגירה"
+                onClick={() => setViewingProgram(null)}
+              >
+                ✕
+              </button>
+            </div>
+
+            {viewingProgram.imageUrl ? (
+              <img className="prog-view-image" src={viewingProgram.imageUrl} alt={viewingProgram.name} />
+            ) : (
+              <div className="prog-view-image prog-view-image--empty" aria-hidden="true">🖼️</div>
+            )}
+
+            <div className="prog-view-desc">
+              {viewingProgram.description ? viewingProgram.description : 'אין תיאור'}
+            </div>
+
+            <div className="modal-actions" style={{ justifyContent: 'center' }}>
+              {/* Jump straight from viewing into editing this program. */}
+              <button
+                type="button"
+                className="mgmt-secondary-btn"
+                onClick={() => {
+                  const program = viewingProgram;
+                  setViewingProgram(null);
+                  openEditModal(program);
+                }}
+              >
+                עריכה
+              </button>
+              <button type="button" className="btn btn-outline" onClick={() => setViewingProgram(null)}>
+                סגור
+              </button>
+            </div>
           </div>
         </div>
       )}

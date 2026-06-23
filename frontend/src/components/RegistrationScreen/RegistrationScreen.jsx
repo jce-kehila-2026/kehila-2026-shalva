@@ -14,6 +14,9 @@ import { db } from "../../firebase";
 // Allowed activity days (Sunday–Friday; Saturday is not selectable).
 import { ACTIVITY_DAYS } from "../../utils/activityDays";
 
+// Phone validator — a registrant must leave a valid Israeli phone number.
+import { isValidIsraeliPhone } from "../../utils/validators";
+
 // Date picker for the birth date field.
 import BirthDatePicker from "../shared/BirthDatePicker/BirthDatePicker";
 
@@ -111,6 +114,11 @@ const preparePayload = (data) => {
     !cleanData.programId
   ) {
     return { payload: null, error: "נא למלא את כל השדות בטופס." };
+  }
+
+  // The phone must be a valid Israeli number, not merely non-empty.
+  if (!isValidIsraeliPhone(cleanData.phone)) {
+    return { payload: null, error: "יש להזין מספר טלפון ישראלי תקין (לדוגמה: 050-0000000)." };
   }
 
   if (cleanData.age === "" || !Number.isFinite(ageNumber) || ageNumber < 0) {

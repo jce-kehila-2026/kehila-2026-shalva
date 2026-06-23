@@ -19,6 +19,7 @@ import './App.css';
 
 // Screen components (signed-in dashboards, viewer screens and public pages).
 import AdminDashboard from './components/AdminDashboard/AdminDashboard';
+import AdminsManagement from './components/AdminsManagement/AdminsManagement';
 import EventDetails from './components/EventDetails/EventDetails';
 import EventManagement from './components/EventManagement/EventManagement';
 import GuideDashboard from './components/GuideDashboard/GuideDashboard';
@@ -38,6 +39,7 @@ const PUBLIC_LOGIN_URL = '/?login=1';
 
 // Hebrew labels for the system roles shown in the header.
 const ROLE_LABELS = {
+  owner: 'בעלים',
   admin: 'מנהל',
   guide: 'מדריך',
   viewer: 'צופה',
@@ -203,8 +205,9 @@ function App() {
   // True when the signed-in user is on their role's home screen.
   const onHomeView = !user
     || (user.role === 'admin' && adminView === 'overview' && !selectedEvent && !selectedVolunteer)
+    || (user.role === 'owner')
     || (user.role === 'guide' && guideView === 'menu')
-    || (user.role !== 'admin' && user.role !== 'guide'
+    || (user.role !== 'admin' && user.role !== 'owner' && user.role !== 'guide'
         && activeScreen === 'users' && !selectedEvent && !selectedVolunteer);
 
   // The device back button steps back to the home view inside the app.
@@ -303,7 +306,13 @@ function App() {
   const renderRoleContent = () => {
     const role = user?.role || 'viewer';
 
-    // Admins get the admin dashboard.
+    // The owner gets ONLY the focused "manage admins" screen (add / remove
+    // admins + transfer ownership) — none of the operational admin screens.
+    if (role === 'owner') {
+      return <AdminsManagement />;
+    }
+
+    // Admins get the full admin dashboard.
     if (role === 'admin') {
       return (
         <AdminDashboard

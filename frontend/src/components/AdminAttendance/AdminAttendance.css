@@ -200,6 +200,113 @@
   border-inline-start: 3px solid #fb7185;
 }
 
+
+/* ---------- Group list: desktop table ---------- */
+
+/* The cards above are the MOBILE layout. On desktop we hide them and show a
+   compact table instead, so most groups fit on one screen without scrolling. */
+.adm-att-grid {
+  display: none;
+}
+
+.adm-att-table-wrap {
+  display: block;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.adm-att-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15.5px;
+}
+
+/* Header row: muted labels on a tinted strip. */
+.adm-att-table thead th {
+  text-align: right;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+/* The four count columns (volunteers / present / absent / unmarked) are narrow
+   and centered; the two text columns (group, guide) take the remaining width. */
+.adm-att-table thead th:nth-child(n + 3) {
+  text-align: center;
+  width: 104px;
+}
+
+.adm-att-row {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.adm-att-row:nth-child(even) {
+  background: rgba(158, 33, 136, 0.025);
+}
+
+.adm-att-row:hover {
+  background: var(--surface-2);
+}
+
+.adm-att-row:focus-visible {
+  outline: 2px solid var(--brand-500);
+  outline-offset: -2px;
+}
+
+.adm-att-table td {
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.adm-att-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.adm-att-cell-name {
+  font-weight: 800;
+  color: var(--text);
+}
+
+.adm-att-cell-guide {
+  font-size: 14px;
+  color: var(--text-soft);
+}
+
+/* Count cells: centered, equal-width digits, colored like the weekly summary. */
+.adm-att-cell-num {
+  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.adm-att-cell-num.is-present {
+  color: #166534;
+}
+
+.adm-att-cell-num.is-absent {
+  color: #be123c;
+}
+
+.adm-att-cell-num.is-unmarked {
+  color: var(--text-soft);
+}
+
+/* Same red "has absence" accent as the cards, on the row's start (right) edge.
+   box-shadow is used so it never shifts the column alignment. */
+.adm-att-row.has-absence td:first-child {
+  box-shadow: inset -3px 0 0 #fb7185;
+}
+
 /* ---------- Weekly Review View ---------- */
 .adm-att-header-row {
   display: flex;
@@ -698,7 +805,13 @@
     max-width: none;
   }
 
+  /* On phones, hide the desktop table and bring the cards back. */
+  .adm-att-table-wrap {
+    display: none;
+  }
+
   .adm-att-grid {
+    display: grid;
     grid-template-columns: 1fr;
     gap: 10px;
   }
@@ -790,7 +903,11 @@
   }
 
   .adm-week-grid {
-    grid-template-columns: minmax(88px, 1.25fr) repeat(7, minmax(24px, 1fr));
+    /* Six day columns now (Sunday–Friday, no Saturday). With the per-day date
+       hidden on mobile (rule below), each column only needs room for a single
+       status dot, so they share the width evenly (minmax(0, 1fr)) and the whole
+       week fits edge-to-edge — no more sideways scrolling on the phone. */
+    grid-template-columns: minmax(78px, 1.2fr) repeat(6, minmax(0, 1fr));
   }
 
   .adm-week-person-head,
@@ -799,8 +916,11 @@
     font-size: 10.5px;
   }
 
+  /* On phones the DD-MM-YYYY date under each day name is what pushed the table
+     wider than the screen. Hide it here so only the day name (א׳, ב׳ …) remains
+     and the week fits without scrolling. The desktop layout still shows it. */
   .adm-week-day-head small {
-    font-size: 9.5px;
+    display: none;
   }
 
   .adm-week-person {

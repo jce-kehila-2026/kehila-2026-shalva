@@ -10,6 +10,8 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 14px;
+  /* Don't stretch a collapsed card to match an expanded sibling's height. */
+  align-items: start;
 }
 
 /* A single registration card. */
@@ -259,34 +261,114 @@
   }
 }
 
-/* Phone: collapse each card to its name; tap the header to expand the rest —
-   matching the names-only behaviour of the other management screens. */
-@media (max-width: 640px) {
-  .reg-card-fields,
+/* Collapse each card to its header on EVERY screen — click the header to
+   expand the fields / approve / footer. This keeps the received-registrations
+   list short and scannable on desktop too, just like the phone view: you see
+   many names at once and open only the one you need. */
+.reg-card-fields,
+.reg-card-approve,
+.reg-card-foot {
+  display: none;
+}
+
+.reg-card.is-expanded .reg-card-fields {
+  display: grid;
+}
+.reg-card.is-expanded .reg-card-approve,
+.reg-card.is-expanded .reg-card-foot {
+  display: flex;
+}
+
+/* The header is the click target, with an open/close chevron. */
+.reg-card-head {
+  cursor: pointer;
+}
+.reg-card-head::after {
+  content: '▾';
+  flex-shrink: 0;
+  color: var(--brand-600);
+  font-weight: 800;
+}
+.reg-card.is-expanded .reg-card-head::after {
+  content: '▴';
+}
+
+
+/* ---------- Desktop: a denser, tidier card ----------
+   On the computer the old card was tall and busy: nine detail fields stacked in
+   one long column, plus a row of full-width action buttons. Here we compact it —
+   the fields become a two-column grid and the buttons shrink to their natural
+   size — so each card is short and several fit on one screen. Phones are
+   untouched (their rules live in the max-width blocks above). */
+@media (min-width: 641px) {
+  /* A slightly wider minimum lets each card hold two field columns comfortably,
+     while auto-fill still packs several cards across a wide screen. */
+  .reg-list {
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 12px;
+  }
+
+  /* Tighter header + smaller avatar. */
+  .reg-card-head {
+    padding: 11px 14px;
+    gap: 10px;
+  }
+
+  .reg-card-avatar {
+    width: 36px;
+    height: 36px;
+    font-size: 15px;
+  }
+
+  .reg-card-title h3 {
+    font-size: 15.5px;
+  }
+
+  .reg-card-date {
+    font-size: 11.5px;
+  }
+
+  /* The detail fields: a compact two-column grid instead of one tall list. */
+  .reg-card-fields {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 14px;
+    padding: 12px 14px;
+  }
+
+  /* Each field stacks its label above its value (lighter than the old
+     space-between row with a dashed divider). */
+  .reg-field {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 1px;
+    padding: 0;
+    border-bottom: 0;
+  }
+
+  .reg-field dt {
+    font-size: 11px;
+    color: var(--text-soft);
+  }
+
+  .reg-field dd {
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  /* Compact the approve + footer action rows. */
   .reg-card-approve,
   .reg-card-foot {
-    display: none;
+    padding: 10px 14px;
+    gap: 6px;
   }
 
-  .reg-card.is-expanded .reg-card-fields {
-    display: grid;
-  }
-  .reg-card.is-expanded .reg-card-approve,
-  .reg-card.is-expanded .reg-card-foot {
-    display: flex;
-  }
-
-  /* The header is the tap target, with an open/close chevron. */
-  .reg-card-head {
-    cursor: pointer;
-  }
-  .reg-card-head::after {
-    content: '▾';
-    flex-shrink: 0;
-    color: var(--brand-600);
-    font-weight: 800;
-  }
-  .reg-card.is-expanded .reg-card-head::after {
-    content: '▴';
+  /* Buttons take their natural width and wrap tidily, rather than each
+     stretching to fill the row. */
+  .reg-foot-btn {
+    flex: 0 1 auto;
+    padding: 6px 11px;
+    font-size: 12px;
+    border-radius: var(--radius-sm);
   }
 }

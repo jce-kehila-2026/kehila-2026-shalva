@@ -13,6 +13,9 @@ import { deleteApp } from 'firebase/app';
 // on a secondary app.
 import { createUserWithEmailAndPassword, deleteUser } from 'firebase/auth';
 
+// Phone validator — a new guide must have a valid Israeli phone number.
+import { isValidIsraeliPhone } from '../../utils/validators';
+
 // Firestore helpers for reading and writing documents (writeBatch keeps the
 // multi-document guide operations atomic).
 import { collection, query, where, getDocs, doc, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
@@ -103,6 +106,9 @@ function GuideManagement() {
   // The hidden file input behind the "ייבוא מאקסל" button.
   const importFileRef = useRef(null);
 
+  // Lets the header button scroll straight down to the removed-guides section.
+  const removedGuidesRef = useRef(null);
+
   // The form fields for the new / edited guide.
   const [newGuide, setNewGuide] = useState({
     firstName: '',
@@ -135,6 +141,19 @@ function GuideManagement() {
   // Form submit handler — decides whether to update or create.
   const handleSubmitForm = async (e) => {
     e.preventDefault();
+
+    // Phone is required when ADDING a guide, and must be a valid Israeli number
+    // whenever one is entered.
+    const phone = (newGuide.phone || '').trim();
+    if (!isEditing && !phone) {
+      alert('יש להזין מספר טלפון.');
+      return;
+    }
+    if (phone && !isValidIsraeliPhone(phone)) {
+      alert('מספר הטלפון אינו תקין. הזינו מספר ישראלי תקין (לדוגמה: 052-1234567).');
+      return;
+    }
+
     setLoading(true);
 
     if (isEditing) {
@@ -631,7 +650,7 @@ function GuideManagement() {
             <small>מדריכים פעילים</small>
           </div>
 
-          <div className="mgmt-toolbar">
+          <div className="mgmt-toolbar guide-toolbar">
             <button className="mgmt-primary-btn" onClick={handleOpenAdd}>
               + הוסף מדריך חדש
             </button>
@@ -660,6 +679,19 @@ function GuideManagement() {
               }}
             >
               ⬇️ הורדת תבנית אקסל
+            </button>
+
+            {/* Jumps down to the removed-guides list. Disabled when there are
+                none (that section is hidden then), with the count shown so the
+                admin knows how many removed guides exist before clicking. */}
+            <button
+              type="button"
+              className="mgmt-secondary-btn"
+              onClick={() => removedGuidesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              disabled={removedGuides.length === 0}
+              title={removedGuides.length === 0 ? 'אין מדריכים שהוסרו' : 'מעבר לרשימת המדריכים שהוסרו'}
+            >
+              🗂 מדריכים שהוסרו{removedGuides.length > 0 ? ` (${removedGuides.length})` : ''}
             </button>
           </div>
         </header>
@@ -924,9 +956,10 @@ function GuideManagement() {
           </div>
         </section>
 
-        {/* List 2: removed (soft-deleted) guides — shown only when there are any. */}
+        {/* List 2: removed (soft-deleted) guides — shown only when there are any.
+            The ref is the scroll target for the header's "מדריכים שהוסרו" button. */}
         {removedGuides.length > 0 && (
-          <section className="mgmt-section">
+          <section className="mgmt-section" ref={removedGuidesRef}>
             <div className="mgmt-list-header">
               <h2>מדריכים שהוסרו</h2>
             </div>

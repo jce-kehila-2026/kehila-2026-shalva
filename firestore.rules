@@ -45,9 +45,21 @@ service cloud.firestore {
       return isActiveUser() && profile().get('role', 'viewer') == 'viewer';
     }
 
-    // An active admin.
+    // An active admin. The OWNER (the single top-level role) inherits EVERY
+    // admin capability across the app, so it is included here.
     function isAdmin() {
-      return hasRole('admin');
+      return hasRole('admin') || hasRole('owner');
+    }
+
+    // The single top-level role. Only the owner manages admins (promote / remove)
+    // and may hand ownership to another admin — see the users/{uid} rules below.
+    function isOwner() {
+      return hasRole('owner');
+    }
+
+    // True when a role string is a privileged (admin or owner) account.
+    function isPrivilegedRole(r) {
+      return r == 'admin' || r == 'owner';
     }
 
     // An active admin or guide.
@@ -393,25 +405,50 @@ service cloud.firestore {
 
 
 
-    // User profiles / roles: a user may always read their own document (the app
+    // User profiles / roles. A user may always read their own document (the app
     // gate needs it); active users may read others.
     //
-    // Writes are admin-only, with self-guards enforced here (not just in the
-    // UI): an admin can't change their OWN role or disabled flag, and can't
-    // delete their own account. NOTE: the "don't remove the last admin" rule is
-    // enforced only in the UI — strong enforcement needs a counter/transaction
-    // or a backend.
+    // ROLE MANAGEMENT IS OWNER-GATED:
+    //   - the single OWNER may promote users to admin, remove an admin, and hand
+    //     ownership to another admin. The owner's OWN role may change ONLY from
+    //     'owner' to 'admin' (the hand-off step); the "exactly one owner"
+    //     invariant is kept by doing the transfer as one atomic batch in the UI.
+    //   - a regular ADMIN keeps managing NON-privileged users (e.g. creating
+    //     guide accounts) and editing their own profile, but may NOT create,
+    //     promote-to, edit, or delete an admin/owner account.
+    // Self-guards: an admin can never change their OWN role/disabled, and nobody
+    // may delete their own account.
     match /users/{uid} {
       allow read: if request.auth.uid == uid || isActiveUser();
 
-      allow create: if isAdmin();
+      // Admins create non-privileged users (guides/viewers); only the owner may
+      // create an admin or owner document.
+      allow create: if isAdmin()
+        && (!isPrivilegedRole(request.resource.data.get('role', '')) || isOwner());
 
-      allow update: if isAdmin()
-        && (request.auth.uid != uid
-            || (request.resource.data.get('role', '') == resource.data.get('role', '')
-                && request.resource.data.get('disabled', false) == resource.data.get('disabled', false)));
+      allow update: if isOwner()
+          // The owner may edit anyone. The only limit is on the owner's OWN doc:
+          // role may change solely 'owner' -> 'admin' (hand-off), never anything
+          // else, and never their disabled flag.
+          ? (request.auth.uid != uid
+             || ((request.resource.data.get('role', '') == resource.data.get('role', '')
+                  || (resource.data.get('role', '') == 'owner'
+                      && request.resource.data.get('role', '') == 'admin'))
+                 && request.resource.data.get('disabled', false) == resource.data.get('disabled', false)))
+          // A regular admin: edit own profile (role/disabled unchanged), or edit
+          // a NON-privileged user without turning them into an admin/owner.
+          : (isAdmin()
+             && (request.auth.uid == uid
+                 ? (request.resource.data.get('role', '') == resource.data.get('role', '')
+                    && request.resource.data.get('disabled', false) == resource.data.get('disabled', false))
+                 : (!isPrivilegedRole(resource.data.get('role', ''))
+                    && !isPrivilegedRole(request.resource.data.get('role', '')))));
 
-      allow delete: if isAdmin() && request.auth.uid != uid;
+      // Never delete yourself. An admin may delete a non-privileged user;
+      // deleting an admin/owner account requires the owner.
+      allow delete: if isAdmin()
+        && request.auth.uid != uid
+        && (!isPrivilegedRole(resource.data.get('role', '')) || isOwner());
     }
 
     // Guide ↔ group mapping. Read is scoped:
