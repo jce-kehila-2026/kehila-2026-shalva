@@ -3,12 +3,14 @@
 // from the guide dashboard. Only the current day is shown and editable —
 // previous days are never displayed, so a guide cannot change past records.
 
-// React hooks for state, effects, memoization and stable callbacks.
-import { useCallback, useEffect, useMemo, useState } from 'react';
+// React hooks for state, effects, memoization, stable callbacks and refs.
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-// Firestore helpers. A batch keeps the save atomic + deterministic ids avoid
-// duplicate records; a query reads back today's already-saved attendance.
-import { collection, doc, getDocs, query, where, writeBatch } from 'firebase/firestore';
+// Firestore helpers. Each attendance change is an INDEPENDENT setDoc/deleteDoc
+// (no writeBatch — a batch evaluates the per-volunteer Rules for every document
+// in one request and hits the document-access limit); deterministic ids keep a
+// create idempotent. A query reads back today's already-saved attendance.
+import { collection, deleteDoc, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
 
 // Our Firestore database instance.
 import { db } from '../../firebase';
@@ -16,8 +18,23 @@ import { db } from '../../firebase';
 // Shared display-name helper.
 import { getDisplayName } from '../../utils/people';
 
-// Shared attendance normalization (handles old Hebrew/string statuses too).
-import { normalizeAttendanceStatus, getRecordStatus } from '../../utils/attendance';
+// Saturday is not an activity day — used to block attendance on Saturdays.
+import { isSaturdayDateValue } from '../../utils/activityDays';
+
+// Canonical attendance-day key + Hebrew weekday, both resolved in Asia/Jerusalem.
+import { getJerusalemDateKey, getJerusalemWeekdayName } from '../../utils/dateKey';
+
+// Display formatter for the day-only heading (DD-MM-YYYY).
+import { formatDateOnlyForDisplay } from '../../utils/dateDisplay';
+
+// Bounded-concurrency runner (independent writes, never a writeBatch).
+import { runWithConcurrency } from '../../utils/concurrency';
+
+// Pure attendance-write planning + result reconciliation.
+import { buildAttendanceOperations, reconcileAttendanceResults } from '../../utils/attendanceWriter';
+
+// Stale-result guard for the volunteer/attendance load.
+import { createRequestGuard } from '../../utils/requestGuard';
 
 // Styles for this screen.
 import './AttendanceScreen.css';
@@ -25,38 +42,6 @@ import './AttendanceScreen.css';
 
 // A volunteer's display name (this screen's fallback wording).
 const getVolunteerName = (volunteer) => getDisplayName(volunteer, 'מתנדב ללא שם');
-
-
-// Map a stored attendance record to one of the three UI states.
-function getStateFromRecord(record) {
-  // No record at all means the volunteer was never marked today.
-  if (!record) {
-    return 'unmarked';
-  }
-
-  // Normalize boolean / Hebrew / English statuses the same way everywhere.
-  const normalized = normalizeAttendanceStatus(getRecordStatus(record));
-
-  if (normalized === 'present') {
-    return 'present';
-  }
-
-  if (normalized === 'absent') {
-    return 'absent';
-  }
-
-  return 'unmarked';
-}
-
-
-// Format a Date object to YYYY-MM-DD (the day-level key stored on each record).
-function getDayKey(date) {
-  return [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0'),
-  ].join('-');
-}
 
 
 // First character of a name, used for the round avatar.
@@ -92,26 +77,68 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
   // Brief "saved" confirmation flag.
   const [justSaved, setJustSaved] = useState(false);
 
-  // Today, fixed for the lifetime of this screen.
-  const today = useMemo(() => new Date(), []);
-  const todayKey = useMemo(() => getDayKey(today), [today]);
+  // Refs for the day-rollover listener, so it doesn't re-subscribe on every edit
+  // and doesn't fire twice for the same rollover (focus + visibilitychange).
+  const hasEditedRef = useRef(false);
+  const handledDayKeyRef = useRef('');
 
-  // Today written out in Hebrew, e.g. "יום ראשון, 14 ביוני 2026".
-  const todayLabel = useMemo(() => (
-    today.toLocaleDateString('he-IL', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    })
-  ), [today]);
+  // True while a save is in flight (synchronous mirror of `saving`), so handlers
+  // bail out immediately even if called directly during a save.
+  const savingRef = useRef(false);
+
+  // Set when a day rollover is detected DURING a save — handled once the save
+  // finishes (we never reset the screen mid-write).
+  const pendingRolloverRef = useRef(false);
+
+  // Guards the volunteer/attendance load against stale (superseded) responses.
+  const loadGuardRef = useRef(createRequestGuard());
+
+  // The "${canonicalGroupId}|${loadedDateKey}" context that was successfully
+  // loaded. Empty until a load completes; reset on every group / day change.
+  // Marking + saving require it to match the current group + day.
+  const loadedContextRef = useRef('');
+
+  // The instant the screen loaded its day from. Kept as STATE (not useMemo([]))
+  // so it can be reset to reload the new day after the clock rolls past midnight.
+  const [loadedInstant, setLoadedInstant] = useState(() => new Date());
+
+  // The loaded activity day, resolved in Asia/Jerusalem — the canonical dateKey
+  // every record is keyed by (NOT the process/browser timezone).
+  const loadedDateKey = useMemo(() => getJerusalemDateKey(loadedInstant), [loadedInstant]);
+
+  // Saturday is not an activity day — marking is blocked (screen stays open).
+  const isSaturday = useMemo(() => isSaturdayDateValue(loadedDateKey), [loadedDateKey]);
+
+  // The Hebrew weekday of the loaded day, resolved in Asia/Jerusalem. Drives both
+  // the "scheduled today" filter and the heading (never getDay() of local time).
+  const loadedWeekday = useMemo(() => getJerusalemWeekdayName(loadedInstant), [loadedInstant]);
+
+  // The loaded day for the heading: "יום ראשון, 14-06-2026" — Jerusalem weekday
+  // plus the day-only date as DD-MM-YYYY (no timezone-naive locale call).
+  const todayLabel = useMemo(() => {
+    const dateLabel = formatDateOnlyForDisplay(loadedDateKey);
+    if (loadedWeekday && dateLabel) {
+      return `${loadedWeekday}, ${dateLabel}`;
+    }
+    return dateLabel || loadedWeekday;
+  }, [loadedWeekday, loadedDateKey]);
 
   // The full group object matching the current selection.
+  // The canonical group object is resolved STRICTLY by id — never by name — so
+  // two groups sharing a groupName can never change which group is selected.
   const selectedGroup = useMemo(() => (
-    groups.find((group) => group.id === selectedGroupId || group.groupName === selectedGroupName)
-  ), [groups, selectedGroupId, selectedGroupName]);
+    selectedGroupId ? groups.find((group) => group.id === selectedGroupId) || null : null
+  ), [groups, selectedGroupId]);
 
-  // The effective group name to filter volunteers by.
+  // The canonical group document id — NEVER a name fallback. Empty when the
+  // selection can't be resolved to a real group document (then saving is blocked).
+  const canonicalGroupId = useMemo(() => selectedGroup?.id || '', [selectedGroup]);
+
+  // The canonical group name, from the group document. `groupName` is what every
+  // group writer sets; `name` is only a defensive fallback.
+  const canonicalGroupName = useMemo(() => selectedGroup?.groupName || selectedGroup?.name || '', [selectedGroup]);
+
+  // The group name to show in the header (display only).
   const activeGroupName = selectedGroup?.groupName || selectedGroup?.name || selectedGroupName;
 
   // Load the live groups list.
@@ -132,10 +159,16 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
 
   // Load the selected group's volunteers, pre-filled with today's saved marks.
   const fetchVolunteersByGroup = useCallback(async () => {
-    // No group chosen: nothing to load.
-    if (!selectedGroupId && !activeGroupName) {
+    // Claim this load's id BEFORE anything else, so even the "no group" path
+    // supersedes any older in-flight load.
+    const requestId = loadGuardRef.current.next();
+    const requestContext = `${canonicalGroupId}|${loadedDateKey}`;
+
+    // No canonical group resolved: clear and stop.
+    if (!canonicalGroupId) {
       setVolunteers([]);
       setAttendanceRecords([]);
+      setLoading(false);
       return;
     }
 
@@ -145,28 +178,22 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
       // Fetch volunteers and today's attendance in parallel.
       const [volunteersSnap, attendanceSnap] = await Promise.all([
         getDocs(collection(db, 'volunteers')),
-        getDocs(query(collection(db, 'attendance'), where('dateKey', '==', todayKey))),
+        getDocs(query(collection(db, 'attendance'), where('dateKey', '==', loadedDateKey))),
       ]);
 
-      const HEBREW_WEEKDAYS = [
-        'יום ראשון',
-        'יום שני',
-        'יום שלישי',
-        'יום רביעי',
-        'יום חמישי',
-        'יום שישי',
-        'יום שבת'
-      ];
-      const todayHebrewDay = HEBREW_WEEKDAYS[today.getDay()];
+      // A newer load superseded this one while awaiting — drop the stale result.
+      if (!loadGuardRef.current.isCurrent(requestId)) {
+        return;
+      }
 
-      // All volunteers matching the active group filter and scheduled for today.
+      // The loaded weekday, resolved in Asia/Jerusalem (never getDay() of local).
+      const todayHebrewDay = getJerusalemWeekdayName(loadedInstant);
+
+      // Marking list: volunteers of THIS group by canonical groupId ONLY (never
+      // by group name), scheduled for the loaded weekday.
       const volunteersData = volunteersSnap.docs
         .map((documentSnapshot) => ({ id: documentSnapshot.id, ...documentSnapshot.data() }))
-        .filter((volunteer) => (
-          volunteer.groupId === selectedGroupId ||
-          volunteer.groupName === activeGroupName ||
-          volunteer.group === activeGroupName
-        ))
+        .filter((volunteer) => volunteer.groupId === canonicalGroupId)
         .filter((volunteer) => {
           if (volunteer.day && volunteer.day.trim() !== '') {
             return volunteer.day.trim() === todayHebrewDay;
@@ -174,39 +201,76 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
           return true;
         });
 
-      // Today's attendance records for this group.
+      // Today's saved records for THIS group (by canonical groupId), so an
+      // existing record's real document id can be reused on update / delete.
       const attendanceData = attendanceSnap.docs
         .map((documentSnapshot) => ({ id: documentSnapshot.id, ...documentSnapshot.data() }))
-        .filter((record) => (
-          record.groupId === selectedGroupId ||
-          record.groupName === activeGroupName ||
-          record.group === activeGroupName
-        ));
+        .filter((record) => record.groupId === canonicalGroupId);
 
       setVolunteers(volunteersData);
       setAttendanceRecords(attendanceData);
+      // Record the successfully-loaded context (group + day).
+      loadedContextRef.current = requestContext;
     } catch (error) {
-      console.error('Error loading volunteers and attendance:', error);
-      alert('אירעה שגיאה בטעינת הנתונים');
+      // Only the current (non-superseded) load reports a failure.
+      if (loadGuardRef.current.isCurrent(requestId)) {
+        console.error('Error loading volunteers and attendance:', error);
+        alert('אירעה שגיאה בטעינת הנתונים');
+      }
     } finally {
-      setLoading(false);
+      // Only the current load clears the loading flag.
+      if (loadGuardRef.current.isCurrent(requestId)) {
+        setLoading(false);
+      }
     }
-  }, [activeGroupName, selectedGroupId, today, todayKey]);
+  }, [canonicalGroupId, loadedDateKey, loadedInstant]);
 
   // Load the groups once on mount.
   useEffect(() => {
     fetchGroups();
   }, [fetchGroups]);
 
-  // Reload volunteers whenever the selected group changes.
+  // Reload volunteers whenever the selected group (or loaded day) changes.
   useEffect(() => {
     fetchVolunteersByGroup();
   }, [fetchVolunteersByGroup]);
 
   // Update the selection when the dropdown changes.
   const handleGroupChange = (event) => {
+    // Don't switch group while a save is in flight.
+    if (savingRef.current) {
+      return;
+    }
+
     const groupId = event.target.value;
+
+    // Re-selecting the same group is a no-op.
+    if (groupId === selectedGroupId) {
+      return;
+    }
+
+    // Confirm before discarding unsaved marks; a cancel leaves everything as is.
+    if (hasEditedRef.current) {
+      const confirmed = window.confirm('יש סימוני נוכחות שלא נשמרו. מעבר לקבוצה אחרת ימחק אותם. להמשיך?');
+      if (!confirmed) {
+        return;
+      }
+    }
+
     const group = groups.find((item) => item.id === groupId);
+
+    // Cancel any in-flight load and drop stale data, marks and context BEFORE
+    // switching. Show the loading state only for a real (resolvable) group.
+    loadGuardRef.current.invalidate();
+    loadedContextRef.current = '';
+    setVolunteers([]);
+    setAttendanceRecords([]);
+    setMarks({});
+    setTouchedVolunteerIds({});
+    setHasEditedMarks(false);
+    hasEditedRef.current = false;
+    setJustSaved(false);
+    setLoading(Boolean(groupId && group));
 
     setSelectedGroupId(groupId);
     setSelectedGroupName(group?.groupName || group?.name || groupId);
@@ -246,8 +310,101 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
     setTouchedVolunteerIds({});
   }, [volunteers]);
 
+  // Centralized day-change reset: drop unsaved marks, reset every flag + ref
+  // (synchronously where a ref is involved) and reload the new day. Shows at most
+  // one alert, and only when there were unsaved marks AND notifyUnsaved is true.
+  const resetForDayChange = useCallback((now, { notifyUnsaved = true } = {}) => {
+    const key = getJerusalemDateKey(now);
+    const hadUnsavedMarks = hasEditedRef.current;
+
+    // Cancel any in-flight load and drop stale data + context; the new-day load
+    // (triggered by the loadedInstant change) will refill them.
+    loadGuardRef.current.invalidate();
+    loadedContextRef.current = '';
+    setVolunteers([]);
+    setAttendanceRecords([]);
+    setLoading(true);
+
+    setMarks({});
+    setTouchedVolunteerIds({});
+    setHasEditedMarks(false);
+    hasEditedRef.current = false;
+    setJustSaved(false);
+    handledDayKeyRef.current = key;
+    setLoadedInstant(now);
+
+    if (notifyUnsaved && hadUnsavedMarks) {
+      window.alert('התאריך השתנה. הסימונים שלא נשמרו נמחקו כדי שלא יירשמו ביום הלא נכון.');
+    }
+  }, []);
+
+  // Keep the rollover listener's view of "unsaved edits" current (so it doesn't
+  // need hasEditedMarks in its dependency list).
+  useEffect(() => {
+    hasEditedRef.current = hasEditedMarks;
+  }, [hasEditedMarks]);
+
+  // Track the loaded day, so the rollover check has a baseline to compare against.
+  useEffect(() => {
+    handledDayKeyRef.current = loadedDateKey;
+  }, [loadedDateKey]);
+
+  // Auto-detect a Jerusalem day rollover (e.g. Saturday→Sunday) even without a
+  // save click: on window focus, when the tab becomes visible again, and on a
+  // gentle 60s timer. On a rollover we NEVER write — we drop any unsaved marks
+  // (so they can't be recorded on the wrong day) and reload the new day.
+  useEffect(() => {
+    const handleRollover = () => {
+      const now = new Date();
+      const currentKey = getJerusalemDateKey(now);
+      if (!currentKey || currentKey === handledDayKeyRef.current) {
+        return;
+      }
+
+      // Never reset the screen in the middle of a save — defer until it finishes.
+      if (savingRef.current) {
+        pendingRolloverRef.current = true;
+        return;
+      }
+
+      resetForDayChange(now);
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        handleRollover();
+      }
+    };
+
+    window.addEventListener('focus', handleRollover);
+    document.addEventListener('visibilitychange', handleVisibility);
+    const intervalId = window.setInterval(handleRollover, 60000);
+
+    return () => {
+      window.removeEventListener('focus', handleRollover);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.clearInterval(intervalId);
+    };
+  }, [resetForDayChange]);
+
+  // On unmount, invalidate the in-flight load so a late response can't update
+  // state after the component is gone.
+  useEffect(() => () => {
+    loadGuardRef.current.invalidate();
+  }, []);
+
   // Toggle a volunteer's status; clicking the active one clears it.
   const handleStatusSelect = (volunteerId, statusType) => {
+    // No marking while saving / loading / on Saturday, or when the shown data is
+    // for a different group or day than the current context (stale).
+    if (savingRef.current || loading || isSaturday) {
+      return;
+    }
+    if (loadedContextRef.current !== `${canonicalGroupId}|${loadedDateKey}`) {
+      return;
+    }
+
+    hasEditedRef.current = true;
     setHasEditedMarks(true);
     setTouchedVolunteerIds((prev) => ({ ...prev, [volunteerId]: true }));
     setMarks((prev) => {
@@ -258,6 +415,15 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
   };
 
   const handleMarkAllPresent = () => {
+    // No marking while saving / loading / on Saturday, or on a stale context.
+    if (savingRef.current || loading || isSaturday) {
+      return;
+    }
+    if (loadedContextRef.current !== `${canonicalGroupId}|${loadedDateKey}`) {
+      return;
+    }
+
+    hasEditedRef.current = true;
     setHasEditedMarks(true);
     const touched = {};
     volunteers.forEach((volunteer) => {
@@ -289,81 +455,168 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
   });
   const allMarkedPresent = volunteers.length > 0 && presentCount === volunteers.length;
 
-  // Save today's marks — only writing volunteers whose choice changed.
+  // Perform ONE attendance change as an independent Firestore request.
+  const executeOperation = (operation) => {
+    const ref = doc(db, 'attendance', operation.attendanceId);
+    if (operation.type === 'delete') {
+      return deleteDoc(ref);
+    }
+    return setDoc(ref, operation.payload);
+  };
+
+  // Save today's marks. Each changed volunteer is written as its OWN request
+  // (bounded concurrency) — NOT one writeBatch — so a group of any size can be
+  // saved without hitting the per-request Rules document-access limit. Partial
+  // failures are surfaced and only the failures are kept for the next attempt.
   const handleSaveAttendance = async () => {
-    if (!selectedGroupId && !activeGroupName) {
-      alert('יש לבחור קבוצה');
+    // Prevent re-entry while a save is already in flight.
+    if (savingRef.current) {
       return;
     }
 
+    // Fail closed without a canonical group id; never write on Saturday.
+    if (!canonicalGroupId) {
+      alert('שגיאה: לא נמצא מזהה קבוצה קנוני. לא ניתן לשמור נוכחות.');
+      return;
+    }
+    if (isSaturday) {
+      return;
+    }
     if (!hasEditedMarks) {
       alert('יש לסמן נוכחות לפני שמירה');
       return;
     }
 
-    // A filesystem-safe id segment for the group.
-    const groupKey = String(selectedGroupId || selectedGroup?.id || activeGroupName || 'group')
-      .replace(/\//g, '-');
+    // The shown data must be for the current group + day (not a stale load).
+    if (loadedContextRef.current !== `${canonicalGroupId}|${loadedDateKey}`) {
+      alert('הנתונים עדיין נטענים. נסו שוב בעוד רגע.');
+      return;
+    }
 
-    setSaving(true);
+    // One instant for the whole save; its Asia/Jerusalem day must still match the
+    // loaded day — otherwise the clock crossed midnight and we must not record
+    // today's marks on a different day.
+    const saveInstant = new Date();
+    const currentDateKey = getJerusalemDateKey(saveInstant);
 
-    try {
-      const batch = writeBatch(db);
-      let writeCount = 0;
+    if (!currentDateKey) {
+      alert('שגיאה: לא ניתן לחשב את תאריך היום. לא נשמר דבר.');
+      return;
+    }
 
-      for (const volunteer of volunteers) {
-        if (!touchedVolunteerIds[volunteer.id]) {
-          continue;
-        }
+    if (currentDateKey !== loadedDateKey) {
+      // The day already rolled over BEFORE any write — reset to the new day
+      // (resetForDayChange shows the single "date changed" alert).
+      resetForDayChange(saveInstant);
+      return;
+    }
 
-        const state = marks[volunteer.id] || 'unmarked';
+    // Plan every operation up front (no writes yet); an identity mismatch aborts
+    // the whole save before anything is written.
+    const planned = buildAttendanceOperations({
+      volunteers,
+      marks,
+      touchedVolunteerIds,
+      savedByVolunteer,
+      canonicalGroupId,
+      canonicalGroupName,
+      dateKey: currentDateKey,
+      saveInstant,
+    });
 
-        // Compare against what was loaded so untouched volunteers are skipped.
-        const initialState = getStateFromRecord(savedByVolunteer[volunteer.id]);
-        if (state === initialState) {
-          continue;
-        }
+    if (!planned.ok) {
+      alert(planned.error);
+      return;
+    }
 
-        // Deterministic id keeps one record per volunteer per day.
-        const attendanceId = `${groupKey}_${todayKey}_${volunteer.id}`;
+    const { operations } = planned;
 
-        if (state === 'unmarked') {
-          // Clearing a mark removes the record entirely.
-          batch.delete(doc(db, 'attendance', attendanceId));
-        } else {
-          batch.set(doc(db, 'attendance', attendanceId), {
-            groupId: selectedGroupId || selectedGroup?.id || '',
-            group: activeGroupName,
-            groupName: activeGroupName,
-            date: new Date(),
-            dateKey: todayKey,
-            status: state === 'present',
-            volunteerId: volunteer.id,
-            volunteerName: getVolunteerName(volunteer),
-          });
-        }
-
-        writeCount++;
-      }
-
-      if (writeCount > 0) {
-        await batch.commit();
-        await fetchVolunteersByGroup();
-      }
-
+    // Nothing actually changed (e.g. toggled back) — clear and confirm.
+    if (operations.length === 0) {
+      setHasEditedMarks(false);
+      hasEditedRef.current = false;
+      setTouchedVolunteerIds({});
       setJustSaved(true);
       window.setTimeout(() => setJustSaved(false), 2500);
-      setHasEditedMarks(false);
-      setTouchedVolunteerIds({});
+      return;
+    }
+
+    savingRef.current = true;
+    pendingRolloverRef.current = false;
+    setSaving(true);
+    try {
+      // Independent writes, at most 5 in flight; runWithConcurrency never throws.
+      const results = await runWithConcurrency(operations, 5, executeOperation);
+      const reconciled = reconcileAttendanceResults(operations, results, attendanceRecords);
+      const total = operations.length;
+
+      // The day may have rolled over DURING the writes — detected either by the
+      // listener (pendingRolloverRef) OR by comparing the finished instant's
+      // Jerusalem day to the loaded day (covers the case with no focus/timer).
+      const finishedAt = new Date();
+      const finishedDateKey = getJerusalemDateKey(finishedAt);
+      const dayChanged = pendingRolloverRef.current || finishedDateKey !== loadedDateKey;
+
+      if (dayChanged) {
+        // The writes applied to the SAVED (previous) day; do NOT apply that day's
+        // records to the new-day screen. Report, then reset once to the new day.
+        if (reconciled.failedCount === 0) {
+          alert('הנוכחות נשמרה ליום הקודם. המסך עבר ליום החדש.');
+        } else if (reconciled.succeededCount === 0) {
+          const code = reconciled.failed[0]?.reason?.code;
+          alert(`לא נשמר אף סימון, והתאריך השתנה. הסימונים לא הועברו ליום החדש.${code ? ` (קוד: ${code})` : ''}`);
+        } else {
+          alert(`נשמרו ${reconciled.succeededCount} מתוך ${total} סימונים. ${reconciled.failedCount} לא נשמרו, והתאריך השתנה — לא ניתן להעבירם אוטומטית ליום החדש.`);
+        }
+        resetForDayChange(finishedAt, { notifyUnsaved: false });
+      } else {
+        // Apply ONLY the writes that succeeded to the local baseline.
+        setAttendanceRecords(reconciled.nextRecords);
+
+        // Keep only the FAILED volunteers touched, so a retry re-sends just them.
+        const failedIds = new Set(reconciled.failed.map((entry) => entry.volunteerId));
+        setTouchedVolunteerIds((prev) => {
+          const next = {};
+          Object.keys(prev).forEach((id) => {
+            if (failedIds.has(id)) {
+              next[id] = true;
+            }
+          });
+          return next;
+        });
+
+        if (reconciled.failedCount === 0) {
+          // All succeeded.
+          setHasEditedMarks(false);
+          hasEditedRef.current = false;
+          setJustSaved(true);
+          window.setTimeout(() => setJustSaved(false), 2500);
+        } else if (reconciled.succeededCount === 0) {
+          // Nothing saved — keep every choice for a retry (no false success).
+          setJustSaved(false);
+          const code = reconciled.failed[0]?.reason?.code;
+          alert(`שגיאה: לא נשמר אף סימון מתוך ${total}. ניתן לנסות שוב.${code ? ` (קוד: ${code})` : ''}`);
+        } else {
+          // Partial — surface exactly what was and wasn't saved.
+          setHasEditedMarks(true);
+          setJustSaved(false);
+          const names = reconciled.failed.length <= 5
+            ? ` (${reconciled.failed.map((entry) => entry.volunteerName).join(', ')})`
+            : '';
+          alert(`נשמרו ${reconciled.succeededCount} מתוך ${total} סימונים. ${reconciled.failedCount} סימונים לא נשמרו וניתן לנסות שוב.${names}`);
+        }
+      }
     } catch (error) {
       console.error('Error saving attendance:', error);
       alert(`אירעה שגיאה בשמירת הנוכחות: ${error.code || ''} ${error.message || error}`);
     } finally {
+      savingRef.current = false;
       setSaving(false);
+      pendingRolloverRef.current = false;
     }
   };
 
-  const hasGroup = Boolean(selectedGroupId || activeGroupName);
+  const hasGroup = Boolean(canonicalGroupId);
 
   return (
     <div className="attendance-page" dir="rtl">
@@ -388,12 +641,19 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
             </div>
           )
         ) : (
-          <select className="att-select" value={selectedGroupId} onChange={handleGroupChange}>
+          <select className="att-select" value={selectedGroupId} onChange={handleGroupChange} disabled={saving}>
             <option value="">בחר קבוצה</option>
             {groups.map((group) => (
               <option key={group.id} value={group.id}>{group.groupName || group.name || group.id}</option>
             ))}
           </select>
+        )}
+
+        {/* Saturday: not an activity day — the screen stays open, marking is off. */}
+        {!loading && hasGroup && isSaturday && (
+          <p className="att-note att-note-shabbat">
+            שבת אינה יום פעילות — אין סימון נוכחות בשבת. ניתן לצפות במסך, אך הסימון והשמירה אינם זמינים.
+          </p>
         )}
 
         {/* Loading / empty states. */}
@@ -433,7 +693,7 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
                 type="button"
                 className="att-mark-all-present"
                 onClick={handleMarkAllPresent}
-                disabled={allMarkedPresent}
+                disabled={saving || loading || isSaturday || allMarkedPresent}
               >
                 {allMarkedPresent ? 'כולם סומנו כנוכחים' : 'סמן את כולם כנוכחים'}
               </button>
@@ -458,6 +718,7 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
                         type="button"
                         className={`att-action-toggle present ${status === 'present' ? 'is-active' : ''}`}
                         onClick={() => handleStatusSelect(volunteer.id, 'present')}
+                        disabled={saving || loading || isSaturday}
                         aria-pressed={status === 'present'}
                         aria-label={`סמן ${name} כנוכח`}
                         title="נוכח"
@@ -468,6 +729,7 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
                         type="button"
                         className={`att-action-toggle absent ${status === 'absent' ? 'is-active' : ''}`}
                         onClick={() => handleStatusSelect(volunteer.id, 'absent')}
+                        disabled={saving || loading || isSaturday}
                         aria-pressed={status === 'absent'}
                         aria-label={`סמן ${name} כחסר`}
                         title="חסר"
@@ -479,7 +741,7 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
             </ul>
 
             {/* Save. */}
-            <button className="att-save" onClick={handleSaveAttendance} disabled={saving}>
+            <button className="att-save" onClick={handleSaveAttendance} disabled={saving || loading || isSaturday}>
               {saving ? 'שומר...' : justSaved ? 'נשמרה הנוכחות' : 'שמירת נוכחות'}
             </button>
           </>

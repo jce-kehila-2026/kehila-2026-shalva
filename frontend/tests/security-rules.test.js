@@ -32,6 +32,8 @@ const ADMIN_UID = 'admin1';
 const GUIDE_UID = 'guide1';
 const VIEWER_UID = 'viewer1';
 const DISABLED_UID = 'disabled1';
+const NOROLE_UID = 'norole1';
+const UNKNOWN_UID = 'unknown1';
 
 // A valid attendance payload for the guide's own group (groupA / vol1).
 // Uses ONLY the fields firestore.rules whitelists for guide writes.
@@ -110,6 +112,8 @@ beforeEach(async () => {
     await db.collection('users').doc(GUIDE_UID).set({ role: 'guide' });
     await db.collection('users').doc(VIEWER_UID).set({ role: 'viewer' });
     await db.collection('users').doc(DISABLED_UID).set({ role: 'guide', disabled: true });
+    await db.collection('users').doc(NOROLE_UID).set({});                 // active, no role
+    await db.collection('users').doc(UNKNOWN_UID).set({ role: 'banana' }); // active, unknown role
 
     // The guide is assigned to groupA.
     await db.collection('guides').doc(GUIDE_UID).set({ groupId: 'groupA' });
@@ -117,8 +121,18 @@ beforeEach(async () => {
     // Two groups and one volunteer in each.
     await db.collection('groups').doc('groupA').set({ groupName: 'קבוצה א' });
     await db.collection('groups').doc('groupB').set({ groupName: 'קבוצה ב' });
+    // groupC shares groupA's NAME on purpose (same-name attack scenario).
+    await db.collection('groups').doc('groupC').set({ groupName: 'קבוצה א' });
     await db.collection('volunteers').doc('vol1').set({ name: 'דני כהן', groupId: 'groupA' });
     await db.collection('volunteers').doc('vol2').set({ name: 'רן לוי', groupId: 'groupB' });
+    // A second real groupA volunteer (for the volunteerId-immutability test).
+    await db.collection('volunteers').doc('vol1b').set({ name: 'מתנדב שני', groupId: 'groupA' });
+    // A groupB volunteer whose groupName matches groupA (name-match attack).
+    await db.collection('volunteers').doc('volBname').set({ name: 'רן', groupId: 'groupB', groupName: 'קבוצה א' });
+    // A volunteer with NO canonical groupId, groupName matching groupA.
+    await db.collection('volunteers').doc('volNoId').set({ name: 'נועם', groupName: 'קבוצה א' });
+    // A groupC volunteer (same-name group) — belongs to groupC, not groupA.
+    await db.collection('volunteers').doc('volC').set({ name: 'גיא', groupId: 'groupC', groupName: 'קבוצה א' });
 
     // One existing attendance record per group (for update/steal tests).
     await db.collection('attendance').doc('att-own').set({
@@ -130,6 +144,22 @@ beforeEach(async () => {
       groupId: 'groupB', group: 'קבוצה ב', groupName: 'קבוצה ב',
       date: new Date(), dateKey: '2026-06-11',
       status: true, volunteerId: 'vol2', volunteerName: 'רן לוי',
+    });
+
+    // groupA records with a Saturday / missing / malformed dateKey (delete tests).
+    await db.collection('attendance').doc('att-sat').set({
+      groupId: 'groupA', group: 'קבוצה א', groupName: 'קבוצה א',
+      date: new Date(), dateKey: '2026-06-20', // 2026-06-20 is a Saturday
+      status: true, volunteerId: 'vol1', volunteerName: 'דני כהן',
+    });
+    await db.collection('attendance').doc('att-nodate').set({
+      groupId: 'groupA', group: 'קבוצה א', groupName: 'קבוצה א',
+      date: new Date(), status: true, volunteerId: 'vol1', volunteerName: 'דני כהן',
+    });
+    await db.collection('attendance').doc('att-baddate').set({
+      groupId: 'groupA', group: 'קבוצה א', groupName: 'קבוצה א',
+      date: new Date(), dateKey: 'garbage',
+      status: true, volunteerId: 'vol1', volunteerName: 'דני כהן',
     });
 
     // One event.
@@ -148,6 +178,8 @@ const anonDb = () => testEnv.unauthenticatedContext().firestore();
 const viewerDb = () => testEnv.authenticatedContext(VIEWER_UID).firestore();
 const guideDb = () => testEnv.authenticatedContext(GUIDE_UID).firestore();
 const disabledDb = () => testEnv.authenticatedContext(DISABLED_UID).firestore();
+const noRoleDb = () => testEnv.authenticatedContext(NOROLE_UID).firestore();
+const unknownRoleDb = () => testEnv.authenticatedContext(UNKNOWN_UID).firestore();
 const adminDb = () => testEnv.authenticatedContext(ADMIN_UID).firestore();
 
 
@@ -256,9 +288,17 @@ describe('guide (scoped to their own group)', () => {
     );
   });
 
-  it('CAN update their own group\'s attendance record', async () => {
+  it('CAN update their own group\'s attendance record (status only, identity unchanged)', async () => {
+    // att-own was seeded with dateKey 2026-06-11 — keep the identity and flip status.
     await assertSucceeds(
-      guideDb().collection('attendance').doc('att-own').set({ ...ownGroupAttendance(), status: false }),
+      guideDb().collection('attendance').doc('att-own').set({ ...ownGroupAttendance(), dateKey: '2026-06-11', status: false }),
+    );
+  });
+
+  it('CAN update an existing record with a NON-canonical document id (legacy), identity unchanged', async () => {
+    // att-own's document id ('att-own') is not canonical; updating it in place is allowed.
+    await assertSucceeds(
+      guideDb().collection('attendance').doc('att-own').set({ ...ownGroupAttendance(), dateKey: '2026-06-11', status: true }),
     );
   });
 
@@ -298,21 +338,12 @@ describe('guide (scoped to their own group)', () => {
     await assertSucceeds(guideDb().collection('attendance').doc('att-own').delete());
   });
 
-  it('CAN create attendance for a volunteer matched by groupName/group only', async () => {
-    // Seed a volunteer that only has groupName matching, no groupId.
-    await testEnv.withSecurityRulesDisabled(async (context) => {
-      const db = context.firestore();
-      await db.collection('volunteers').doc('vol-name-only').set({
-        name: 'שם זמני',
-        groupName: 'קבוצה א',
-      });
-    });
-
-    await assertSucceeds(
-      guideDb().collection('attendance').doc('groupA_2026-06-12_vol-name-only').set({
+  it('cannot create attendance for a volunteer matched by name only (no canonical groupId)', async () => {
+    await assertFails(
+      guideDb().collection('attendance').doc('groupA_2026-06-12_volNoId').set({
         ...ownGroupAttendance(),
-        volunteerId: 'vol-name-only',
-        volunteerName: 'שם זמני',
+        volunteerId: 'volNoId',
+        volunteerName: 'נועם',
       }),
     );
   });
@@ -321,6 +352,158 @@ describe('guide (scoped to their own group)', () => {
     await assertFails(guideDb().collection('volunteers').doc('vol1').update({ name: 'x' }));
     await assertFails(guideDb().collection('groups').doc('groupA').update({ groupName: 'x' }));
     await assertFails(guideDb().collection('users').doc(GUIDE_UID).update({ role: 'admin' }));
+  });
+});
+
+
+describe('guide attendance — strict validation (9ב)', () => {
+  // A valid own-group payload, with overrides. canonId derives the canonical id.
+  const guideAtt = (over = {}) => ({ ...ownGroupAttendance(), ...over });
+  const canonId = (data) => `${data.groupId}_${data.dateKey}_${data.volunteerId}`;
+
+  // ---- allowed ----
+  it('ALLOWS a valid create with the canonical document id', async () => {
+    const data = guideAtt();
+    await assertSucceeds(guideDb().collection('attendance').doc(canonId(data)).set(data));
+  });
+
+  it('ALLOWS flipping the boolean status on the same record', async () => {
+    const data = guideAtt();
+    await assertSucceeds(guideDb().collection('attendance').doc(canonId(data)).set(data));
+    await assertSucceeds(guideDb().collection('attendance').doc(canonId(data)).set({ ...data, status: false }));
+  });
+
+  it('ALLOWS deleting a valid own-group record', async () => {
+    await assertSucceeds(guideDb().collection('attendance').doc('att-own').delete());
+  });
+
+  it('DENIES a guide deleting a Saturday record', async () => {
+    await assertFails(guideDb().collection('attendance').doc('att-sat').delete());
+  });
+
+  it('DENIES a guide deleting a record with a missing dateKey', async () => {
+    await assertFails(guideDb().collection('attendance').doc('att-nodate').delete());
+  });
+
+  it('DENIES a guide deleting a record with a malformed dateKey', async () => {
+    await assertFails(guideDb().collection('attendance').doc('att-baddate').delete());
+  });
+
+  it('ALLOWS admin to delete Saturday / missing / malformed dateKey records', async () => {
+    await assertSucceeds(adminDb().collection('attendance').doc('att-sat').delete());
+    await assertSucceeds(adminDb().collection('attendance').doc('att-nodate').delete());
+    await assertSucceeds(adminDb().collection('attendance').doc('att-baddate').delete());
+  });
+
+  it('ALLOWS a valid leap day that is not a Saturday (2024-02-29, Thursday)', async () => {
+    const data = guideAtt({ dateKey: '2024-02-29' });
+    await assertSucceeds(guideDb().collection('attendance').doc(canonId(data)).set(data));
+  });
+
+  // ---- denied: cross-group / spoofing (the probe attacks) ----
+  it('DENIES a volunteer from another group even when groupName matches (name-match attack)', async () => {
+    const data = guideAtt({ volunteerId: 'volBname', volunteerName: 'רן' });
+    await assertFails(guideDb().collection('attendance').doc(canonId(data)).set(data));
+  });
+
+  it('DENIES a same-name-group volunteer (two groups share a name)', async () => {
+    const data = guideAtt({ volunteerId: 'volC', volunteerName: 'גיא' });
+    await assertFails(guideDb().collection('attendance').doc(canonId(data)).set(data));
+  });
+
+  it('DENIES a wrong (non-canonical) document id on create', async () => {
+    await assertFails(guideDb().collection('attendance').doc('wrong-id').set(guideAtt()));
+  });
+
+  // ---- denied: identity mutation on update ----
+  it('DENIES changing groupId on an existing record', async () => {
+    await assertFails(
+      guideDb().collection('attendance').doc('att-own').set({ ...guideAtt({ dateKey: '2026-06-11' }), groupId: 'groupB' }),
+    );
+  });
+
+  it('DENIES changing volunteerId on an existing record', async () => {
+    await assertFails(
+      guideDb().collection('attendance').doc('att-own').set({ ...guideAtt({ dateKey: '2026-06-11' }), volunteerId: 'vol1b', volunteerName: 'מתנדב שני' }),
+    );
+  });
+
+  it('DENIES changing dateKey on an existing record', async () => {
+    await assertFails(
+      guideDb().collection('attendance').doc('att-own').set(guideAtt({ dateKey: '2026-06-12' })),
+    );
+  });
+
+  // ---- denied: schema / types ----
+  it('DENIES status as a string', async () => {
+    const data = guideAtt({ status: 'נוכח' });
+    await assertFails(guideDb().collection('attendance').doc(canonId(data)).set(data));
+  });
+
+  it('DENIES status as an object', async () => {
+    const data = guideAtt({ status: { x: 1 } });
+    await assertFails(guideDb().collection('attendance').doc(canonId(data)).set(data));
+  });
+
+  it('DENIES a missing status / date / dateKey / volunteerName', async () => {
+    for (const field of ['status', 'date', 'dateKey', 'volunteerName']) {
+      const data = guideAtt();
+      delete data[field];
+      await assertFails(guideDb().collection('attendance').doc('groupA_2026-06-12_vol1').set(data));
+    }
+  });
+
+  it('DENIES an extra (ninth) field', async () => {
+    const data = guideAtt({ extra: 'x' });
+    await assertFails(guideDb().collection('attendance').doc(canonId(data)).set(data));
+  });
+
+  // ---- denied: dateKey value ----
+  it('DENIES a malformed dateKey', async () => {
+    const data = guideAtt({ dateKey: 'not-a-date' });
+    await assertFails(guideDb().collection('attendance').doc('groupA_not-a-date_vol1').set(data));
+  });
+
+  it('DENIES an impossible date (2026-02-30)', async () => {
+    const data = guideAtt({ dateKey: '2026-02-30' });
+    await assertFails(guideDb().collection('attendance').doc(canonId(data)).set(data));
+  });
+
+  it('DENIES a non-leap Feb 29 (2026-02-29)', async () => {
+    const data = guideAtt({ dateKey: '2026-02-29' });
+    await assertFails(guideDb().collection('attendance').doc(canonId(data)).set(data));
+  });
+
+  it('DENIES a Saturday dateKey (2026-06-20)', async () => {
+    const data = guideAtt({ dateKey: '2026-06-20' });
+    await assertFails(guideDb().collection('attendance').doc(canonId(data)).set(data));
+  });
+
+  // ---- denied: name mismatches ----
+  it('DENIES group / groupName that do not match the group document', async () => {
+    const data = guideAtt({ group: 'שם שגוי', groupName: 'שם שגוי' });
+    await assertFails(guideDb().collection('attendance').doc(canonId(data)).set(data));
+  });
+
+  it('DENIES volunteerName that does not match the volunteer document', async () => {
+    const data = guideAtt({ volunteerName: 'שם אחר' });
+    await assertFails(guideDb().collection('attendance').doc(canonId(data)).set(data));
+  });
+
+  it('DENIES a volunteer without a canonical groupId', async () => {
+    const data = guideAtt({ volunteerId: 'volNoId', volunteerName: 'נועם' });
+    await assertFails(guideDb().collection('attendance').doc(canonId(data)).set(data));
+  });
+
+  // ---- denied: non-guide writers ----
+  it('DENIES viewer / role-less / unknown-role / disabled / anonymous writes', async () => {
+    const data = guideAtt();
+    const id = canonId(data);
+    await assertFails(viewerDb().collection('attendance').doc(id).set(data));
+    await assertFails(noRoleDb().collection('attendance').doc(id).set(data));
+    await assertFails(unknownRoleDb().collection('attendance').doc(id).set(data));
+    await assertFails(disabledDb().collection('attendance').doc(id).set(data));
+    await assertFails(anonDb().collection('attendance').doc(id).set(data));
   });
 });
 

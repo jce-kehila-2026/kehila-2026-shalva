@@ -58,28 +58,69 @@ service cloud.firestore {
            );
     }
 
-    // A guide writing an attendance record for THEIR OWN group only:
-    //  - the record's groupId equals the guide's assigned group,
-    //  - the record only carries the known attendance fields,
-    //  - the volunteer it points at also belongs to the guide's group.
-    function guideAttendanceWrite(data) {
-      return isGuideOfGroup(data.get('groupId', ''))
-        && data.keys().hasOnly([
-             'groupId', 'group', 'groupName', 'date', 'dateKey',
-             'status', 'volunteerId', 'volunteerName'
-           ])
+    // A strict 'YYYY-MM-DD' that is a REAL Gregorian date and NOT a Saturday.
+    // The parts are parsed from the string and round-tripped through
+    // timestamp.date(...): an impossible date (e.g. 2026-02-30) rolls over so a
+    // component no longer matches and is rejected. dayOfWeek() of that calendar
+    // date is timezone-independent, so a Saturday key is rejected here too
+    // (Firestore Rules dayOfWeek: 1=Mon .. 7=Sun, so Saturday == 6).
+    function isRealNonSaturdayDateKey(dateKey) {
+      return dateKey is string
+        && dateKey.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && timestamp.date(int(dateKey[0:4]), int(dateKey[5:7]), int(dateKey[8:10])).year() == int(dateKey[0:4])
+        && timestamp.date(int(dateKey[0:4]), int(dateKey[5:7]), int(dateKey[8:10])).month() == int(dateKey[5:7])
+        && timestamp.date(int(dateKey[0:4]), int(dateKey[5:7]), int(dateKey[8:10])).day() == int(dateKey[8:10])
+        && timestamp.date(int(dateKey[0:4]), int(dateKey[5:7]), int(dateKey[8:10])).dayOfWeek() != 6;
+    }
+
+    // A complete, well-typed attendance payload: exactly the eight known fields,
+    // non-empty strings of the right type, a boolean status, a timestamp date,
+    // and a real non-Saturday dateKey. The group's name fields must match the
+    // canonical group document, the volunteer must exist and belong to the same
+    // group BY groupId ONLY (no name fallback), and volunteerName must match the
+    // volunteer document's canonical 'name'. (Identical get()/exists() calls are
+    // cached within one evaluation, so repeating them is cheap.)
+    function attendancePayloadValid(data) {
+      return data.keys().hasOnly(['groupId', 'group', 'groupName', 'date', 'dateKey', 'status', 'volunteerId', 'volunteerName'])
+        && data.keys().hasAll(['groupId', 'group', 'groupName', 'date', 'dateKey', 'status', 'volunteerId', 'volunteerName'])
+        && data.groupId is string && data.groupId.size() > 0
+        && data.group is string && data.group.size() > 0
+        && data.groupName is string && data.groupName.size() > 0
+        && data.volunteerId is string && data.volunteerId.size() > 0
+        && data.volunteerName is string && data.volunteerName.size() > 0
+        && data.status is bool
+        && data.date is timestamp
+        && isRealNonSaturdayDateKey(data.dateKey)
+        && exists(/databases/$(database)/documents/groups/$(data.groupId))
+        && get(/databases/$(database)/documents/groups/$(data.groupId)).data.get('groupName', '') == data.group
+        && get(/databases/$(database)/documents/groups/$(data.groupId)).data.get('groupName', '') == data.groupName
         && exists(/databases/$(database)/documents/volunteers/$(data.volunteerId))
-        && (
-             get(/databases/$(database)/documents/volunteers/$(data.volunteerId)).data.get('groupId', '') == data.get('groupId', '')
-             || (
-                  get(/databases/$(database)/documents/volunteers/$(data.volunteerId)).data.get('groupName', '') != ''
-                  && get(/databases/$(database)/documents/volunteers/$(data.volunteerId)).data.get('groupName', '') == data.get('groupName', '')
-                )
-             || (
-                  get(/databases/$(database)/documents/volunteers/$(data.volunteerId)).data.get('group', '') != ''
-                  && get(/databases/$(database)/documents/volunteers/$(data.volunteerId)).data.get('group', '') == data.get('groupName', '')
-                )
-           );
+        && get(/databases/$(database)/documents/volunteers/$(data.volunteerId)).data.get('groupId', '') == data.groupId
+        && get(/databases/$(database)/documents/volunteers/$(data.volunteerId)).data.get('name', '') == data.volunteerName;
+    }
+
+    // A guide CREATING a new own-group record. The document id MUST be the
+    // canonical groupId_dateKey_volunteerId (compared as one whole string, so
+    // underscores inside groupId/volunteerId are never an issue).
+    function guideAttendanceCreate(id, data) {
+      return hasRole('guide')
+        && attendancePayloadValid(data)
+        && isGuideOfGroup(data.groupId)
+        && id == data.groupId + '_' + data.dateKey + '_' + data.volunteerId;
+    }
+
+    // A guide UPDATING an existing own-group record: identity (groupId,
+    // volunteerId, dateKey) is immutable, BOTH the existing and the new record
+    // belong to the guide's group, and the new payload is fully valid. The
+    // existing document id need NOT be canonical, so legacy records stay editable.
+    function guideAttendanceUpdate(data, existing) {
+      return hasRole('guide')
+        && attendancePayloadValid(data)
+        && isGuideOfGroup(data.groupId)
+        && isGuideOfGroup(existing.get('groupId', ''))
+        && data.groupId == existing.get('groupId', '')
+        && data.volunteerId == existing.get('volunteerId', '')
+        && data.dateKey == existing.get('dateKey', '');
     }
 
 
@@ -254,25 +295,32 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Attendance: active users may read. Admins manage everything; a guide may
-    // only write attendance for THEIR OWN group (matched against
-    // guides/{uid}.groupId), enforced here and not just hidden in the UI.
+    // Attendance: active users may read (read scoping is intentionally UNCHANGED
+    // here — it is tightened in a later step). Admins manage everything; a guide
+    // may only write attendance for THEIR OWN group, with strict server-side
+    // validation (canonical groupId, real non-Saturday dateKey, typed fields,
+    // immutable identity), not just hidden in the UI.
     match /attendance/{id} {
       allow read: if isActiveUser();
 
-      // Create: admin, or a guide writing a record for their own group.
-      allow create: if isAdmin() || guideAttendanceWrite(request.resource.data);
+      // Create: admin, or a guide creating a strict, canonical own-group record.
+      allow create: if isAdmin() || guideAttendanceCreate(id, request.resource.data);
 
-      // Update: same as create, but the EXISTING document must also belong to
-      // the guide's group — otherwise a guide could grab another group's record
-      // and rewrite its groupId to their own.
+      // Update: admin, or a guide editing an existing own-group record with the
+      // identity (groupId / volunteerId / dateKey) left unchanged.
       allow update: if isAdmin()
-        || (guideAttendanceWrite(request.resource.data)
-            && isGuideOfGroup(resource.data.get('groupId', '')));
+        || guideAttendanceUpdate(request.resource.data, resource.data);
 
+      // Delete: admin, or a guide removing an own-group record with a real,
+      // non-Saturday dateKey, whose volunteer also belongs to that group. No
+      // cross-group delete; a Saturday / missing / malformed dateKey record can
+      // only be removed by an admin (guides never touch it).
       allow delete: if isAdmin()
         || (hasRole('guide')
-            && isGuideOfGroup(resource.data.get('groupId', '')));
+            && isRealNonSaturdayDateKey(resource.data.get('dateKey', ''))
+            && isGuideOfGroup(resource.data.get('groupId', ''))
+            && exists(/databases/$(database)/documents/volunteers/$(resource.data.get('volunteerId', '')))
+            && get(/databases/$(database)/documents/volunteers/$(resource.data.get('volunteerId', ''))).data.get('groupId', '') == resource.data.get('groupId', ''));
     }
 
     // Events: active users may read; only an admin may write.
