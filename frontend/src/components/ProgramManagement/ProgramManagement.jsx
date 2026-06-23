@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { collection, doc, getDocs, setDoc, deleteDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { db, storage } from '../../firebase';
@@ -35,6 +35,8 @@ const uploadProgramImage = async (file, programId) => {
 };
 
 const ProgramManagement = () => {
+  const isMountedRef = useRef(true);
+
   const [programs, setPrograms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -58,15 +60,32 @@ const ProgramManagement = () => {
   const [uploadingImage, setUploadingImage] = useState(false);
 
   const fetchData = useCallback(async () => {
+    if (!isMountedRef.current) {
+      return false;
+    }
+
     setLoading(true);
     try {
       const snap = await getDocs(collection(db, 'programs'));
+      if (!isMountedRef.current) {
+        return false;
+      }
       setPrograms(snap.docs.map(toRecord));
+      return true;
     } catch (error) {
       console.error('שגיאה בשליפת תוכניות:', error);
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
+  }, []);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -92,13 +111,18 @@ const ProgramManagement = () => {
     setUploadingNewImage(true);
     try {
       const downloadUrl = await uploadProgramImage(file, newProgramId);
+      if (!isMountedRef.current) {
+        return;
+      }
       setNewImageUrl(downloadUrl);
     } catch (error) {
       console.error('שגיאה בהעלאת התמונה:', error);
       alert('אירעה שגיאה בהעלאת התמונה.');
     } finally {
-      setUploadingNewImage(false);
-      event.target.value = '';
+      if (isMountedRef.current) {
+        setUploadingNewImage(false);
+        event.target.value = '';
+      }
     }
   };
 
@@ -115,6 +139,9 @@ const ProgramManagement = () => {
         imageUrl: newImageUrl,
         createdAt: new Date(),
       });
+      if (!isMountedRef.current) {
+        return;
+      }
       setIsAddModalOpen(false);
       await fetchData();
     } catch (error) {
@@ -144,13 +171,18 @@ const ProgramManagement = () => {
     setUploadingImage(true);
     try {
       const downloadUrl = await uploadProgramImage(file, programToEdit.id);
+      if (!isMountedRef.current) {
+        return;
+      }
       setEditForm((prev) => ({ ...prev, imageUrl: downloadUrl }));
     } catch (error) {
       console.error('שגיאה בהעלאת התמונה:', error);
       alert('אירעה שגיאה בהעלאת התמונה.');
     } finally {
-      setUploadingImage(false);
-      event.target.value = '';
+      if (isMountedRef.current) {
+        setUploadingImage(false);
+        event.target.value = '';
+      }
     }
   };
 
@@ -168,6 +200,9 @@ const ProgramManagement = () => {
         imageUrl: editForm.imageUrl,
         createdAt: programToEdit.createdAt || new Date(),
       }, { merge: true });
+      if (!isMountedRef.current) {
+        return;
+      }
       setIsEditModalOpen(false);
       setProgramToEdit(null);
       await fetchData();
@@ -184,6 +219,9 @@ const ProgramManagement = () => {
 
     try {
       await deleteDoc(doc(db, 'programs', programToEdit.id));
+      if (!isMountedRef.current) {
+        return;
+      }
       setIsEditModalOpen(false);
       setProgramToEdit(null);
       await fetchData();

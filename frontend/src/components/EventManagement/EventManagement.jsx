@@ -4,7 +4,7 @@
 // browse-only view for viewers.
 
 // React hooks for state, effects and memoization.
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 // Firestore helpers for reading, writing, deleting and live-subscribing.
 import {
@@ -224,6 +224,16 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
   // On phones event cards start collapsed, like the other management lists.
   const [expandedEventId, setExpandedEventId] = useState(null)
 
+  const isMountedRef = useRef(true)
+
+  useEffect(() => {
+    isMountedRef.current = true
+
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
+
   // Dashboard back button: an open form returns to the list first.
   useEffect(() => {
     if (!registerBack) return
@@ -440,8 +450,18 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
         const extension = (file.name.split('.').pop() || 'jpg').toLowerCase()
         const storageRef = ref(storage, `events/${currentEventId}/img-${Date.now()}-${i}.${extension}`)
         await uploadBytes(storageRef, file)
+        if (!isMountedRef.current) {
+          return
+        }
         const url = await getDownloadURL(storageRef)
+        if (!isMountedRef.current) {
+          return
+        }
         uploadedUrls.push(url)
+      }
+
+      if (!isMountedRef.current) {
+        return
       }
 
       setForm((prev) => ({
@@ -449,11 +469,17 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
         imageUrls: uploadedUrls,
       }))
     } catch (error) {
+      if (!isMountedRef.current) {
+        return
+      }
+
       console.error('Error uploading images:', error)
       window.alert('אירעה שגיאה בהעלאת התמונות. ודא/י שחוקי ה-Storage נפרסו.')
     } finally {
-      setUploading(false)
-      e.target.value = ''
+      if (isMountedRef.current) {
+        setUploading(false)
+        e.target.value = ''
+      }
     }
   }
 
@@ -510,6 +536,10 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
         })
       }
 
+      if (!isMountedRef.current) {
+        return
+      }
+
       // Reset the form back to add mode (bump the key so the date picker
       // clears) and return to the list view.
       setForm(EMPTY_FORM)
@@ -518,13 +548,19 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
       setFormResetKey((key) => key + 1)
       setShowForm(false)
     } catch (firebaseError) {
+      if (!isMountedRef.current) {
+        return
+      }
+
       // Report a failed save.
       console.error('Error saving event:', firebaseError)
 
       window.alert(`שגיאה בשמירת האירוע: ${firebaseError.message}`)
     } finally {
       // Always clear the saving state.
-      setSaving(false)
+      if (isMountedRef.current) {
+        setSaving(false)
+      }
     }
   }
 
@@ -559,12 +595,20 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
       // Remove the document.
       await deleteDoc(doc(db, EVENTS_COLLECTION_NAME, eventId))
 
+      if (!isMountedRef.current) {
+        return
+      }
+
       // If we were editing that event, reset the form.
       if (editingEventId === eventId) {
         setForm(EMPTY_FORM)
         setEditingEventId(null)
       }
     } catch (firebaseError) {
+      if (!isMountedRef.current) {
+        return
+      }
+
       console.error('Error deleting event:', firebaseError)
 
       window.alert(`שגיאה במחיקת האירוע: ${firebaseError.message}`)

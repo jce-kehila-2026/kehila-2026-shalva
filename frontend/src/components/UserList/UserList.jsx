@@ -40,10 +40,18 @@ const UserList = ({ onOpenVolunteerDetails }) => {
 
   // Load the volunteers once when the screen opens.
   useEffect(() => {
+    let isActive = true;
+
     const fetchVolunteers = async () => {
+      setError(null);
+
       try {
         // Read the volunteers collection.
         const querySnapshot = await getDocs(collection(db, 'volunteers'));
+
+        if (!isActive) {
+          return;
+        }
 
         // Convert each Firestore document into a plain object with its id.
         const volunteerList = querySnapshot.docs.map((documentSnapshot) => ({
@@ -53,16 +61,26 @@ const UserList = ({ onOpenVolunteerDetails }) => {
 
         setVolunteers(volunteerList);
       } catch (err) {
+        if (!isActive) {
+          return;
+        }
+
         // Record the error.
         console.error('Error fetching volunteers:', err);
         setError(err.message);
       } finally {
         // Clear the loading flag.
-        setLoading(false);
+        if (isActive) {
+          setLoading(false);
+        }
       }
     };
 
     fetchVolunteers();
+
+    return () => {
+      isActive = false;
+    };
   }, []);
 
   // While loading, show a spinner.

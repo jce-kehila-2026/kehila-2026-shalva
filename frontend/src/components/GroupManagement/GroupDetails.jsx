@@ -27,6 +27,10 @@ import './GroupDetails.css';
 const getPersonName = (person) => getDisplayName(person, 'לא הוזן שם');
 
 
+const EMPTY_ATTENDANCE_SUMMARY = { present: 0, absent: 0, unmarked: 0 };
+const EMPTY_WEEKLY_ATTENDANCE = { present: [], absent: [], byDay: [] };
+
+
 // First character of a name, used for the round avatars.
 const getInitial = (name) => {
   const trimmed = (name || '').trim();
@@ -231,8 +235,8 @@ const GroupDetails = ({ groupId, onBack, guideScopedRead = false, currentGuideUi
   const [volunteers, setVolunteers] = useState([]);
 
   // This week's attendance summary + the group's events.
-  const [attendanceSummary, setAttendanceSummary] = useState({ present: 0, absent: 0, unmarked: 0 });
-  const [weeklyAttendance, setWeeklyAttendance] = useState({ present: [], absent: [], byDay: [] });
+  const [attendanceSummary, setAttendanceSummary] = useState(EMPTY_ATTENDANCE_SUMMARY);
+  const [weeklyAttendance, setWeeklyAttendance] = useState(EMPTY_WEEKLY_ATTENDANCE);
   const [openCards, setOpenCards] = useState({
     attendance: false,
     guide: false,
@@ -270,11 +274,24 @@ const GroupDetails = ({ groupId, onBack, guideScopedRead = false, currentGuideUi
 
   // Load everything for the given group whenever the id changes.
   useEffect(() => {
+    let isActive = true;
+
+    const clearGroupData = () => {
+      setGroup(null);
+      setGuide(null);
+      setVolunteers([]);
+      setAttendanceSummary(EMPTY_ATTENDANCE_SUMMARY);
+      setWeeklyAttendance(EMPTY_WEEKLY_ATTENDANCE);
+      setEvents([]);
+    };
+
     const fetchAllGroupData = async () => {
       // No group id: nothing to load.
       if (!groupId) {
-        setGroup(null);
-        setLoading(false);
+        if (isActive) {
+          clearGroupData();
+          setLoading(false);
+        }
         return;
       }
 
@@ -285,17 +302,20 @@ const GroupDetails = ({ groupId, onBack, guideScopedRead = false, currentGuideUi
         const groupRef = doc(db, 'groups', groupId);
         const groupSnap = await getDoc(groupRef);
 
+        if (!isActive) {
+          return;
+        }
+
         // Bail out if the group doesn't exist.
         if (!groupSnap.exists()) {
           console.error('קבוצה לא נמצאה');
-          setGroup(null);
+          clearGroupData();
           return;
         }
 
         // Store the group and remember its name for matching volunteers.
         const groupData = { id: groupSnap.id, ...groupSnap.data() };
         const groupName = groupData.groupName || groupData.name || '';
-        setGroup(groupData);
 
         // Load the assigned guide's contact details (merging guides + users).
         // This is OPTIONAL metadata: a failure or a missing document must NOT
@@ -309,6 +329,7 @@ const GroupDetails = ({ groupId, onBack, guideScopedRead = false, currentGuideUi
         //   - ADMIN / VIEWER path: unchanged — groups/{}.guideId selects whose
         //     contact card to show (legacy behaviour preserved).
         const guideUid = guideScopedRead ? currentGuideUid : groupData.guideId;
+        let nextGuide = null;
 
         if (guideUid) {
           try {
@@ -317,19 +338,23 @@ const GroupDetails = ({ groupId, onBack, guideScopedRead = false, currentGuideUi
               getDoc(doc(db, 'users', guideUid)),
             ]);
 
-            setGuide({
+            if (!isActive) {
+              return;
+            }
+
+            nextGuide = {
               id: guideUid,
               ...(guideSnap.exists() ? guideSnap.data() : {}),
               ...(guideUserSnap.exists() ? guideUserSnap.data() : {}),
-            });
+            };
           } catch (guideError) {
+            if (!isActive) {
+              return;
+            }
+
             // Metadata only — keep the screen working, just without the details.
             console.error('שגיאה בטעינת פרטי המדריך (לא חוסם את המסך):', guideError);
-            setGuide(null);
           }
-        } else {
-          // No guide to show.
-          setGuide(null);
         }
 
         // Load this group's volunteers.
@@ -359,7 +384,9 @@ const GroupDetails = ({ groupId, onBack, guideScopedRead = false, currentGuideUi
             );
         }
 
-        setVolunteers(volData);
+        if (!isActive) {
+          return;
+        }
 
         // This week's attendance summary for the group (present / absent /
         // unmarked across the group's volunteers × 7 days).
@@ -391,8 +418,10 @@ const GroupDetails = ({ groupId, onBack, guideScopedRead = false, currentGuideUi
         const present = attendanceDetails.present.length;
         const absent = attendanceDetails.absent.length;
         const unmarked = Math.max(0, volData.length * weekKeys.length - present - absent);
-        setAttendanceSummary({ present, absent, unmarked });
-        setWeeklyAttendance(attendanceDetails);
+
+        if (!isActive) {
+          return;
+        }
 
         // The group's events (linked by the event's assignedGroup = group name).
         const eventsSnap = await getDocs(
@@ -401,15 +430,36 @@ const GroupDetails = ({ groupId, onBack, guideScopedRead = false, currentGuideUi
         const eventsData = eventsSnap.docs
           .map((eventDoc) => ({ id: eventDoc.id, ...eventDoc.data() }))
           .sort((first, second) => (first.date || '').localeCompare(second.date || ''));
+
+        if (!isActive) {
+          return;
+        }
+
+        setGroup(groupData);
+        setGuide(nextGuide);
+        setVolunteers(volData);
+        setAttendanceSummary({ present, absent, unmarked });
+        setWeeklyAttendance(attendanceDetails);
         setEvents(eventsData);
       } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
         console.error('שגיאה בשליפת נתוני הקבוצה המלאים:', error);
+        clearGroupData();
       } finally {
-        setLoading(false);
+        if (isActive) {
+          setLoading(false);
+        }
       }
     };
 
     fetchAllGroupData();
+
+    return () => {
+      isActive = false;
+    };
   }, [currentWeekStartKey, groupId, guideScopedRead, currentGuideUid]);
 
   // While loading, show a placeholder.

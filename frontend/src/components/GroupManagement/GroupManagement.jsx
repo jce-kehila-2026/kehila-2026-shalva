@@ -144,6 +144,8 @@ const buildGroupImportReport = ({
 
 
 const GroupManagement = ({ registerBack }) => {
+  const isMountedRef = useRef(true);
+
   // The group currently opened in the details view (null = list view).
   const [selectedGroupId, setSelectedGroupId] = useState(null);
 
@@ -223,11 +225,22 @@ const GroupManagement = ({ registerBack }) => {
   // True while a cover image is uploading to Storage.
   const [uploadingImage, setUploadingImage] = useState(false);
 
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Load the four core sources together and gate import readiness on all of
   // them. Returns true only when every source loaded; false on any failure
   // (old state is kept, import stays blocked). Used both on mount and as the
   // post-import refresh.
   const fetchData = useCallback(async () => {
+    if (!isMountedRef.current) {
+      return false;
+    }
+
     // Block import while (re)loading; only a full success re-enables it.
     setImportDataReady(false);
     try {
@@ -239,6 +252,9 @@ const GroupManagement = ({ registerBack }) => {
         getDocs(collection(db, 'users')),
         getDocs(collection(db, 'guides')),
       ]);
+      if (!isMountedRef.current) {
+        return false;
+      }
 
       const users = usersSnap.docs.map(toRecord);
       const guideLinks = guideLinksSnap.docs.map(toRecord);
@@ -297,6 +313,10 @@ const GroupManagement = ({ registerBack }) => {
         imageUrl: newGroupImageUrl,
         createdAt: new Date(),
       });
+
+      if (!isMountedRef.current) {
+        return;
+      }
 
       // Reset the form and refresh the list.
       setNewGroupName('');
@@ -370,6 +390,9 @@ const GroupManagement = ({ registerBack }) => {
       );
 
       await batch.commit();
+      if (!isMountedRef.current) {
+        return;
+      }
 
       // Close the modal and refresh.
       setIsAssignModalOpen(false);
@@ -410,6 +433,9 @@ const GroupManagement = ({ registerBack }) => {
       }
 
       await batch.commit();
+      if (!isMountedRef.current) {
+        return;
+      }
       await fetchData();
     } catch (error) {
       console.error('שגיאה בהסרת מדריך:', error);
@@ -444,15 +470,20 @@ const GroupManagement = ({ registerBack }) => {
 
     try {
       const downloadUrl = await uploadCoverImage(file, groupToEdit.id);
+      if (!isMountedRef.current) {
+        return;
+      }
       setEditForm((previous) => ({ ...previous, imageUrl: downloadUrl }));
     } catch (error) {
       console.error('שגיאה בהעלאת התמונה:', error);
       alert('אירעה שגיאה בהעלאת התמונה. ודא/י שחוקי ה-Storage נפרסו.');
     } finally {
-      setUploadingImage(false);
+      if (isMountedRef.current) {
+        setUploadingImage(false);
 
-      // Reset the input so the same file can be re-selected if needed.
-      event.target.value = '';
+        // Reset the input so the same file can be re-selected if needed.
+        event.target.value = '';
+      }
     }
   };
 
@@ -473,13 +504,18 @@ const GroupManagement = ({ registerBack }) => {
 
     try {
       const downloadUrl = await uploadCoverImage(file, newGroupId);
+      if (!isMountedRef.current) {
+        return;
+      }
       setNewGroupImageUrl(downloadUrl);
     } catch (error) {
       console.error('שגיאה בהעלאת התמונה:', error);
       alert('אירעה שגיאה בהעלאת התמונה. ודא/י שחוקי ה-Storage נפרסו.');
     } finally {
-      setUploadingNewImage(false);
-      event.target.value = '';
+      if (isMountedRef.current) {
+        setUploadingNewImage(false);
+        event.target.value = '';
+      }
     }
   };
 
@@ -525,6 +561,9 @@ const GroupManagement = ({ registerBack }) => {
       }
 
       await batch.commit();
+      if (!isMountedRef.current) {
+        return;
+      }
 
       // Close the modal and refresh.
       setIsEditModalOpen(false);
@@ -574,6 +613,9 @@ const GroupManagement = ({ registerBack }) => {
       });
 
       await batch.commit();
+      if (!isMountedRef.current) {
+        return;
+      }
 
       // Close the modal and refresh.
       setIsEditModalOpen(false);
@@ -607,6 +649,9 @@ const GroupManagement = ({ registerBack }) => {
       const XLSX = await import('xlsx');
       const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      if (!isMountedRef.current) {
+        return;
+      }
 
       // 1) Inspect the RAW header row BEFORE object parsing.
       const headerRow = XLSX.utils.sheet_to_json(worksheet, { header: 1 })[0] || [];
@@ -664,10 +709,16 @@ const GroupManagement = ({ registerBack }) => {
       //    stopping at the first failure.
       const plans = buildGroupImportPlans(ready);
       const result = await commitGroupPlans(plans, (plan) => commitOneGroup(db, plan));
+      if (!isMountedRef.current) {
+        return;
+      }
 
       // 4) Refresh; a refresh failure is reported separately and keeps import
       //    blocked (readiness stays false until a clean reload).
       const refreshOk = await fetchData();
+      if (!isMountedRef.current) {
+        return;
+      }
 
       alert(buildGroupImportReport({
         written: result.writtenGroups,
@@ -678,12 +729,17 @@ const GroupManagement = ({ registerBack }) => {
         refreshOk,
       }));
     } catch (error) {
+      if (!isMountedRef.current) {
+        return;
+      }
       console.error('שגיאה בייבוא קבוצות:', error);
       alert('אירעה שגיאה בייבוא הקובץ. ודאו שזהו קובץ התבנית.');
     } finally {
-      setIsImporting(false);
-      if (importFileRef.current) {
-        importFileRef.current.value = null;
+      if (isMountedRef.current) {
+        setIsImporting(false);
+        if (importFileRef.current) {
+          importFileRef.current.value = null;
+        }
       }
     }
   };

@@ -319,6 +319,8 @@ function SignaturePad({ onChange }) {
 function SignatureForm({ registrantId = '', prefillName = '' }) {
   // Hidden, clean document used only for generating the PDF file.
   const pdfDocumentRef = useRef(null);
+  const isMountedRef = useRef(true);
+  const submittedPdfUrlRef = useRef('');
 
   // Split a prefilled full name into first + last (rest) for the fields.
   const nameParts = prefillName.trim().split(/\s+/);
@@ -346,6 +348,17 @@ function SignatureForm({ registrantId = '', prefillName = '' }) {
 
   // Available groups loaded from Firestore.
   const [groupOptions, setGroupOptions] = useState([]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (submittedPdfUrlRef.current) {
+        URL.revokeObjectURL(submittedPdfUrlRef.current);
+        submittedPdfUrlRef.current = '';
+      }
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -452,19 +465,33 @@ function SignatureForm({ registrantId = '', prefillName = '' }) {
       // Store the signed form record after the PDF is already available.
       await setDoc(formDocRef, payload);
 
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      if (!isMountedRef.current) {
+        URL.revokeObjectURL(pdfUrl);
+        return;
+      }
+      if (submittedPdfUrlRef.current) {
+        URL.revokeObjectURL(submittedPdfUrlRef.current);
+      }
+      submittedPdfUrlRef.current = pdfUrl;
       setSubmittedPdf({
-        url: URL.createObjectURL(pdfBlob),
+        url: pdfUrl,
         fileName: pdfFileName,
       });
       setSubmitted(true);
     } catch (error) {
+      if (!isMountedRef.current) {
+        return;
+      }
       console.error('שמירת הטופס החתום נכשלה:', error);
       if (error && error.stack) {
         console.error('שגיאה מלאה:', error.stack);
       }
       setErrorText('לא הצלחנו לשמור את הטופס כ-PDF. בדקו חיבור ונסו שוב.');
     } finally {
-      setSubmitting(false);
+      if (isMountedRef.current) {
+        setSubmitting(false);
+      }
     }
   };
 

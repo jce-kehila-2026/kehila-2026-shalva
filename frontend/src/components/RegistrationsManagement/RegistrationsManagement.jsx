@@ -3,7 +3,7 @@
 // that came back, with all the details the volunteer filled in.
 
 // React hooks for state, memoized derivations and side effects.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 // Firestore helpers. A writeBatch makes "approve" atomic — the new volunteer
 // and the registration removal succeed or fail together.
@@ -111,6 +111,9 @@ function formatFieldValue(key, value) {
 
 
 function RegistrationsManagement() {
+  const isMountedRef = useRef(true);
+  const copiedTimerRef = useRef(null);
+
   // The loaded registrants.
   const [registrants, setRegistrants] = useState([]);
 
@@ -302,6 +305,17 @@ function RegistrationsManagement() {
     { name: 'ageMax', label: 'גיל מקסימום', type: 'number', placeholder: 'עד' },
   ];
 
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (copiedTimerRef.current) {
+        window.clearTimeout(copiedTimerRef.current);
+        copiedTimerRef.current = null;
+      }
+    };
+  }, []);
+
   // Load the registrants once on mount.
   useEffect(() => {
     // Guards against state updates after unmount.
@@ -364,8 +378,19 @@ function RegistrationsManagement() {
   const handleCopyLink = async () => {
     try {
       await navigator.clipboard.writeText(formLink);
+      if (!isMountedRef.current) {
+        return;
+      }
       setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
+      if (copiedTimerRef.current) {
+        window.clearTimeout(copiedTimerRef.current);
+      }
+      copiedTimerRef.current = window.setTimeout(() => {
+        if (isMountedRef.current) {
+          setCopied(false);
+          copiedTimerRef.current = null;
+        }
+      }, 2000);
     } catch {
       // Clipboard may be unavailable; the WhatsApp / email options still work.
     }
@@ -424,16 +449,24 @@ function RegistrationsManagement() {
       batch.delete(doc(db, 'registrants', registrant.id));
 
       await batch.commit();
+      if (!isMountedRef.current) {
+        return;
+      }
 
       // Drop it from the visible list.
       setRegistrants((current) => current.filter((item) => item.id !== registrant.id));
 
       alert(`${getFullName(registrant)} אושר/ה ושויך/ה לקבוצת "${groupName}".`);
     } catch (approveError) {
+      if (!isMountedRef.current) {
+        return;
+      }
       console.error('שגיאה באישור ההרשמה:', approveError);
       alert(`האישור נכשל: ${approveError.message}`);
     } finally {
-      setApprovingId(null);
+      if (isMountedRef.current) {
+        setApprovingId(null);
+      }
     }
   };
 
@@ -477,9 +510,15 @@ function RegistrationsManagement() {
       if (storageDeletes.length > 0) {
         await Promise.all(storageDeletes);
       }
+      if (!isMountedRef.current) {
+        return;
+      }
 
       setRegistrants((current) => current.filter((registrant) => registrant.id !== id));
     } catch (deleteError) {
+      if (!isMountedRef.current) {
+        return;
+      }
       console.error('שגיאה במחיקת הרשמה:', deleteError);
       alert(`המחיקה נכשלה: ${deleteError.message}`);
     }

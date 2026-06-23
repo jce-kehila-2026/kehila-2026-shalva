@@ -47,6 +47,8 @@ import '../VolunteersManagement/VolunteersManagement.css';
 
 
 function GuideManagement() {
+  const isMountedRef = useRef(true);
+
   // Whether the add/edit form modal is open.
   const [showAddForm, setShowAddForm] = useState(false);
 
@@ -119,6 +121,13 @@ function GuideManagement() {
     password: '',
   });
 
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Open the form in edit mode, pre-filled with a guide's data.
   const startEditing = (guide) => {
     setEditingGuideId(guide.id);
@@ -166,6 +175,9 @@ function GuideManagement() {
           phone: newGuide.phone || '',
           birthDate: newGuide.birthDate
         });
+        if (!isMountedRef.current) {
+          return;
+        }
 
         alert('פרטי המדריך עודכנו בהצלחה!');
 
@@ -175,12 +187,20 @@ function GuideManagement() {
         setNewGuide({ firstName: '', lastName: '', email: '', phone: '', birthDate: '', password: '' });
         setShowAddForm(false);
         await fetchAllGuidesData();
+        if (!isMountedRef.current) {
+          return;
+        }
 
       } catch (error) {
+        if (!isMountedRef.current) {
+          return;
+        }
         console.error("Error updating guide:", error);
         alert(`העדכון נכשל: ${error.message}`);
       } finally {
-        setLoading(false);
+        if (isMountedRef.current) {
+          setLoading(false);
+        }
       }
     } else {
       // Mode 2: create a new guide account + documents.
@@ -228,6 +248,9 @@ function GuideManagement() {
         await batch.commit();
 
         await fetchAllGuidesData();
+        if (!isMountedRef.current) {
+          return;
+        }
 
         alert('המדריך נוסף בהצלחה!');
 
@@ -246,6 +269,9 @@ function GuideManagement() {
           }
         }
 
+        if (!isMountedRef.current) {
+          return;
+        }
         console.error("Database initialization fault:", error);
         alert(`ההוספה נכשלה: ${error.message}`);
       } finally {
@@ -254,13 +280,19 @@ function GuideManagement() {
         if (secondaryApp) {
           await deleteApp(secondaryApp);
         }
-        setLoading(false);
+        if (isMountedRef.current) {
+          setLoading(false);
+        }
       }
     }
   };
 
   // Load all guides, merging the "users" profile with the "guides" group mapping.
   const fetchAllGuidesData = async () => {
+    if (!isMountedRef.current) {
+      return false;
+    }
+
     try {
       setTableLoading(true);
 
@@ -268,6 +300,9 @@ function GuideManagement() {
       const usersRef = collection(db, 'users');
       const q = query(usersRef, where('role', '==', 'guide'));
       const querySnapshot = await getDocs(q);
+      if (!isMountedRef.current) {
+        return false;
+      }
 
       const combinedGuides = [];
 
@@ -279,6 +314,9 @@ function GuideManagement() {
         // Read the matching guides document.
         const guideDocRef = doc(db, 'guides', userId);
         const guideDocSnap = await getDoc(guideDocRef);
+        if (!isMountedRef.current) {
+          return false;
+        }
 
         // Default to "Unassigned" when there's no group.
         let groupName = 'Unassigned';
@@ -301,10 +339,14 @@ function GuideManagement() {
       }
 
       setGuidesList(combinedGuides);
+      return true;
     } catch (error) {
       console.error("Error aggregating guide collections:", error);
+      return false;
     } finally {
-      setTableLoading(false);
+      if (isMountedRef.current) {
+        setTableLoading(false);
+      }
     }
   };
 
@@ -315,16 +357,23 @@ function GuideManagement() {
 
   // Load the groups once (used by the Excel template and row matching).
   useEffect(() => {
+    let isActive = true;
+
     const fetchGroups = async () => {
       try {
         const snapshot = await getDocs(collection(db, 'groups'));
-        setGroupsList(snapshot.docs.map((groupDoc) => ({ id: groupDoc.id, ...groupDoc.data() })));
+        if (isActive && isMountedRef.current) {
+          setGroupsList(snapshot.docs.map((groupDoc) => ({ id: groupDoc.id, ...groupDoc.data() })));
+        }
       } catch (error) {
         console.error('שגיאה בטעינת קבוצות:', error);
       }
     };
 
     fetchGroups();
+    return () => {
+      isActive = false;
+    };
   }, []);
 
   // A random temporary password for an imported guide (letters + digits, 10
@@ -357,6 +406,9 @@ function GuideManagement() {
       const XLSX = await import('xlsx');
       const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
       const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+      if (!isMountedRef.current) {
+        return;
+      }
 
       const secondary = createSecondaryAuth('SecondaryImportApp');
       secondaryApp = secondary.secondaryApp;
@@ -430,6 +482,9 @@ function GuideManagement() {
           }
 
           await batch.commit();
+          if (!isMountedRef.current) {
+            return;
+          }
 
           results.push({ name: displayName, email, password: tempPassword, error: '' });
         } catch (rowError) {
@@ -452,6 +507,10 @@ function GuideManagement() {
         }
       }
 
+      if (!isMountedRef.current) {
+        return;
+      }
+
       if (results.length === 0) {
         alert('לא נמצאו שורות תקינות בקובץ. ודאו שקיימת עמודת "אימייל".');
       } else {
@@ -460,15 +519,20 @@ function GuideManagement() {
         await fetchAllGuidesData();
       }
     } catch (error) {
+      if (!isMountedRef.current) {
+        return;
+      }
       console.error('שגיאה בייבוא קובץ מדריכים:', error);
       alert('אירעה שגיאה בייבוא הקובץ. ודאו שזהו קובץ אקסל תקין.');
     } finally {
       if (secondaryApp) {
         await deleteApp(secondaryApp);
       }
-      setIsImporting(false);
-      if (importFileRef.current) {
-        importFileRef.current.value = null;
+      if (isMountedRef.current) {
+        setIsImporting(false);
+        if (importFileRef.current) {
+          importFileRef.current.value = null;
+        }
       }
     }
   };
@@ -530,6 +594,9 @@ function GuideManagement() {
 
       // Free any group this guide was assigned to.
       const assignedGroups = await getDocs(query(collection(db, 'groups'), where('guideId', '==', guideId)));
+      if (!isMountedRef.current) {
+        return;
+      }
       assignedGroups.docs.forEach((groupDoc) => {
         batch.update(doc(db, 'groups', groupDoc.id), { guideId: '', guideName: '' });
       });
@@ -538,14 +605,22 @@ function GuideManagement() {
       batch.set(doc(db, 'guides', guideId), { groupId: '', groupName: 'Unassigned' }, { merge: true });
 
       await batch.commit();
+      if (!isMountedRef.current) {
+        return;
+      }
 
       alert('המדריך הוסר. אפשר להחזיר אותו בכל עת דרך "שחזר".');
       await fetchAllGuidesData();
     } catch (error) {
+      if (!isMountedRef.current) {
+        return;
+      }
       console.error('Error removing guide:', error);
       alert(`ההסרה נכשלה: ${error.message}`);
     } finally {
-      setTableLoading(false);
+      if (isMountedRef.current) {
+        setTableLoading(false);
+      }
     }
   };
 
@@ -560,14 +635,22 @@ function GuideManagement() {
 
       // Re-enable the account.
       await updateDoc(doc(db, 'users', guideId), { disabled: false });
+      if (!isMountedRef.current) {
+        return;
+      }
 
       alert('המדריך הוחזר ויכול להתחבר שוב עם אותם אימייל וסיסמה.');
       await fetchAllGuidesData();
     } catch (error) {
+      if (!isMountedRef.current) {
+        return;
+      }
       console.error('Error restoring guide:', error);
       alert(`השחזור נכשל: ${error.message}`);
     } finally {
-      setTableLoading(false);
+      if (isMountedRef.current) {
+        setTableLoading(false);
+      }
     }
   };
 

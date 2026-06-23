@@ -95,6 +95,9 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
   // Guards the volunteer/attendance load against stale (superseded) responses.
   const loadGuardRef = useRef(createRequestGuard());
 
+  // Clears the brief saved confirmation if the screen closes before it expires.
+  const justSavedTimerRef = useRef(null);
+
   // The "${canonicalGroupId}|${loadedDateKey}" context that was successfully
   // loaded. Empty until a load completes; reset on every group / day change.
   // Marking + saving require it to match the current group + day.
@@ -124,6 +127,17 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
     }
     return dateLabel || loadedWeekday;
   }, [loadedWeekday, loadedDateKey]);
+
+  const showSavedConfirmation = useCallback(() => {
+    setJustSaved(true);
+    if (justSavedTimerRef.current) {
+      window.clearTimeout(justSavedTimerRef.current);
+    }
+    justSavedTimerRef.current = window.setTimeout(() => {
+      setJustSaved(false);
+      justSavedTimerRef.current = null;
+    }, 2500);
+  }, []);
 
   // The full group object matching the current selection.
   // The canonical group object is resolved STRICTLY by id — never by name — so
@@ -444,6 +458,10 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
   // state after the component is gone.
   useEffect(() => () => {
     loadGuardRef.current.invalidate();
+    if (justSavedTimerRef.current) {
+      window.clearTimeout(justSavedTimerRef.current);
+      justSavedTimerRef.current = null;
+    }
   }, []);
 
   // Toggle a volunteer's status; clicking the active one clears it.
@@ -589,8 +607,7 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
       setHasEditedMarks(false);
       hasEditedRef.current = false;
       setTouchedVolunteerIds({});
-      setJustSaved(true);
-      window.setTimeout(() => setJustSaved(false), 2500);
+      showSavedConfirmation();
       return;
     }
 
@@ -642,8 +659,7 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
           // All succeeded.
           setHasEditedMarks(false);
           hasEditedRef.current = false;
-          setJustSaved(true);
-          window.setTimeout(() => setJustSaved(false), 2500);
+          showSavedConfirmation();
         } else if (reconciled.succeededCount === 0) {
           // Nothing saved — keep every choice for a retry (no false success).
           setJustSaved(false);

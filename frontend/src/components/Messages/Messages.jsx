@@ -5,8 +5,8 @@
 // so the admin can tweak the wording before it goes out. The search covers
 // BOTH volunteers and guides, so anyone can be reached in a couple of taps.
 
-// React hooks for state, effects and derived values.
-import { useEffect, useMemo, useState } from 'react';
+// React hooks for state, effects, refs and derived values.
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 // Firestore helpers for reading the collections.
 import { collection, getDocs } from 'firebase/firestore';
@@ -58,9 +58,13 @@ function Messages() {
 
   // A short-lived "copied!" confirmation on the copy button.
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef(null);
+  const isMountedRef = useRef(false);
 
   // Load volunteers + guides + groups once.
   useEffect(() => {
+    let isActive = true;
+
     const load = async () => {
       try {
         const [volunteersSnap, guidesSnap, groupsSnap] = await Promise.all([
@@ -69,15 +73,36 @@ function Messages() {
           getDocs(collection(db, 'groups')),
         ]);
 
+        if (!isActive) {
+          return;
+        }
+
         setVolunteers(volunteersSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
         setGuides(guidesSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
         setGroups(groupsSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
       } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
         console.error('שגיאה בטעינת נתונים:', error);
       }
     };
 
     load();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+      window.clearTimeout(copiedTimerRef.current);
+    };
   }, []);
 
   // Tag a person with their role + a stable React key, so volunteers and guides
@@ -175,7 +200,7 @@ function Messages() {
     }
 
     const recipient = reachableRecipients[sendIndex];
-    window.open(buildWhatsAppUrl(recipient.phone, messageText), '_blank');
+    window.open(buildWhatsAppUrl(recipient.phone, messageText), '_blank', 'noopener,noreferrer');
     setSendIndex(sendIndex + 1);
   };
 
@@ -183,8 +208,17 @@ function Messages() {
   const handleCopyMessage = async () => {
     try {
       await navigator.clipboard.writeText(messageText);
+      if (!isMountedRef.current) {
+        return;
+      }
+
       setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
+      window.clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = window.setTimeout(() => {
+        if (isMountedRef.current) {
+          setCopied(false);
+        }
+      }, 1800);
     } catch {
       // Clipboard blocked — leave the button as-is; the text is still on screen.
     }

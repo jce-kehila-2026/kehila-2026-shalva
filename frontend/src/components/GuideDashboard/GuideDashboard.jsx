@@ -52,21 +52,32 @@ const GuideDashboard = ({ user, currentView, setCurrentView }) => {
 
   // Load the signed-in guide's profile + group mapping.
   useEffect(() => {
+    let isActive = true;
+
     const fetchGuideData = async () => {
       // The current guide (from props or Firebase auth).
       const currentUser = user || auth.currentUser;
 
       // No signed-in user: nothing to load.
       if (!currentUser?.uid) {
-        setGuideData(null);
-        setLoading(false);
+        if (isActive) {
+          setGuideData(null);
+          setLoading(false);
+        }
         return;
       }
+
+      setLoading(true);
 
       try {
         // Read the guide's mapping document.
         const guideRef = doc(db, 'guides', currentUser.uid);
         const guideSnap = await getDoc(guideRef);
+
+        if (!isActive) {
+          return;
+        }
+
         const guideFields = guideSnap.exists() ? guideSnap.data() : {};
 
         // The assignment may live only on the GROUP side (groups/{}.guideId) and
@@ -84,6 +95,11 @@ const GuideDashboard = ({ user, currentView, setCurrentView }) => {
           const ownedGroups = await getDocs(
             query(collection(db, 'groups'), where('guideId', '==', currentUser.uid)),
           );
+
+          if (!isActive) {
+            return;
+          }
+
           if (!ownedGroups.empty) {
             const groupDoc = ownedGroups.docs[0];
             const groupData = groupDoc.data();
@@ -96,6 +112,10 @@ const GuideDashboard = ({ user, currentView, setCurrentView }) => {
         }
 
         // Merge the auth user with the stored guide fields + the resolved group.
+        if (!isActive) {
+          return;
+        }
+
         setGuideData({
           id: currentUser.uid,
           email: currentUser.email,
@@ -106,6 +126,10 @@ const GuideDashboard = ({ user, currentView, setCurrentView }) => {
           groupName: resolvedGroupName,
         });
       } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
         // On error, fall back to just the auth user's basics.
         console.error('שגיאה בשליפת נתוני המדריך:', error);
         setGuideData({
@@ -115,11 +139,17 @@ const GuideDashboard = ({ user, currentView, setCurrentView }) => {
           lastName: currentUser.lastName || '',
         });
       } finally {
-        setLoading(false);
+        if (isActive) {
+          setLoading(false);
+        }
       }
     };
 
     fetchGuideData();
+
+    return () => {
+      isActive = false;
+    };
   }, [user]);
 
   // A freshly-created guide is stored with the literal group name "Unassigned"

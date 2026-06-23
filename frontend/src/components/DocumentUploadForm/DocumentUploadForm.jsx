@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes } from 'firebase/storage';
 import { db, storage } from '../../firebase';
@@ -11,6 +11,16 @@ function DocumentUploadForm({ registrantId = '', prefillName = '', docType = '' 
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [errorText, setErrorText] = useState('');
+  const isMountedRef = useRef(true);
+  const submittingRef = useRef(false);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const docTitle = docType === 'police' ? 'טופס משטרתי' : 'טופס רפואי';
   const collectionName = docType === 'police' ? 'policeForms' : 'medicalForms';
@@ -31,6 +41,15 @@ function DocumentUploadForm({ registrantId = '', prefillName = '', docType = '' 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (submittingRef.current) {
+      return;
+    }
+
+    if (!registrantId.trim()) {
+      setErrorText('קישור הטופס חסר מזהה נרשם תקין.');
+      return;
+    }
+
     if (!fullName.trim()) {
       setErrorText('יש למלא שם מלא.');
       return;
@@ -48,6 +67,7 @@ function DocumentUploadForm({ registrantId = '', prefillName = '', docType = '' 
     }
 
     setErrorText('');
+    submittingRef.current = true;
     setSubmitting(true);
 
     try {
@@ -70,12 +90,23 @@ function DocumentUploadForm({ registrantId = '', prefillName = '', docType = '' 
         createdAt: serverTimestamp(),
       });
 
+      if (!isMountedRef.current) {
+        return;
+      }
+
       setSubmitted(true);
     } catch (err) {
+      if (!isMountedRef.current) {
+        return;
+      }
+
       console.error('שגיאה בהעלאת המסמך:', err);
       setErrorText('לא הצלחנו להעלות את הקובץ. בדקו חיבור ונסו שוב.');
     } finally {
-      setSubmitting(false);
+      submittingRef.current = false;
+      if (isMountedRef.current) {
+        setSubmitting(false);
+      }
     }
   };
 

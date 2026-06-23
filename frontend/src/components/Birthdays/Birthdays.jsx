@@ -3,7 +3,7 @@
 // WhatsApp greeting. With `editable` (admin) a birth date can be fixed inline.
 
 // React hooks used by this screen.
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 // Firestore helpers for reading and updating documents.
 import { collection, doc, getDocs, updateDoc } from 'firebase/firestore';
@@ -91,6 +91,8 @@ function toInputDate(date) {
 
 
 function Birthdays({ onBack, editable = false }) {
+  const isMountedRef = useRef(true);
+
   // The list of people (with parsed birthday info) to display.
   const [people, setPeople] = useState([]);
 
@@ -109,9 +111,20 @@ function Birthdays({ onBack, editable = false }) {
   // True while a save is being written to Firestore.
   const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
 
   // Load everyone's birthdays from Firestore and prepare them for display.
   const loadBirthdays = useCallback(async () => {
+    if (!isMountedRef.current) {
+      return false;
+    }
+
     // Show the loading state.
     setLoading(true);
 
@@ -175,6 +188,10 @@ function Birthdays({ onBack, editable = false }) {
       return true;
     });
 
+    if (!isMountedRef.current) {
+      return false;
+    }
+
     // Publish the results to state.
     setPeople(unique);
 
@@ -183,6 +200,7 @@ function Birthdays({ onBack, editable = false }) {
 
     // Loading is done.
     setLoading(false);
+    return true;
   }, []);
 
 
@@ -236,17 +254,25 @@ function Birthdays({ onBack, editable = false }) {
         // Volunteers store a single name field.
         await updateDoc(ref, { name, birthDate });
       }
+      if (!isMountedRef.current) {
+        return;
+      }
 
       // Close the modal and refresh the list.
       setEditing(null);
       await loadBirthdays();
     } catch (error) {
+      if (!isMountedRef.current) {
+        return;
+      }
       // Report a failed save to the user.
       console.error('שגיאה בעדכון יום הולדת:', error);
       alert(`העדכון נכשל: ${error.message}`);
     } finally {
       // Always clear the saving state.
-      setSaving(false);
+      if (isMountedRef.current) {
+        setSaving(false);
+      }
     }
   };
 

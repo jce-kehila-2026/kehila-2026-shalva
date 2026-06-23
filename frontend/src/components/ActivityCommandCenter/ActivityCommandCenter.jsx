@@ -55,6 +55,18 @@ function addDays(date, days) {
 }
 
 
+// Build a local Date from a YYYY-MM-DD key without the native string parser.
+function dateFromDateKey(dateKey) {
+  const [year, month, day] = String(dateKey || '').split('-').map(Number);
+
+  if (!year || !month || !day) {
+    return startOfDay(new Date());
+  }
+
+  return new Date(year, month - 1, day);
+}
+
+
 // A day-level key (YYYY-MM-DD) from any shape: a Date, a Firestore Timestamp,
 // a { seconds } object, or a date string. Used to line attendance records
 // (stored per group + day) up with the day an event falls on.
@@ -137,6 +149,9 @@ function ActivityCommandCenter({ groupFilter = null, onBack, leadingCard = null,
   // True when at least one collection failed to load (numbers may be partial).
   const [hadLoadError, setHadLoadError] = useState(false);
 
+  // Current local day. Kept in state so counters roll over if the tab stays open.
+  const [currentDayKey, setCurrentDayKey] = useState(() => toDateKey(new Date()));
+
   // The event expanded into its panel (null when none).
   const [selectedEventId, setSelectedEventId] = useState(null);
 
@@ -179,6 +194,26 @@ function ActivityCommandCenter({ groupFilter = null, onBack, leadingCard = null,
 
     query.addEventListener('change', sync);
     return () => query.removeEventListener('change', sync);
+  }, []);
+
+  // Refresh day-based counters when a long-lived tab crosses midnight.
+  useEffect(() => {
+    const syncCurrentDay = () => {
+      const nextDayKey = toDateKey(new Date());
+      setCurrentDayKey((previousDayKey) => (
+        previousDayKey === nextDayKey ? previousDayKey : nextDayKey
+      ));
+    };
+
+    const intervalId = window.setInterval(syncCurrentDay, 60 * 1000);
+    window.addEventListener('focus', syncCurrentDay);
+    document.addEventListener('visibilitychange', syncCurrentDay);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', syncCurrentDay);
+      document.removeEventListener('visibilitychange', syncCurrentDay);
+    };
   }, []);
 
   // Load every collection once (and again whenever reloadToken changes).
@@ -284,7 +319,7 @@ function ActivityCommandCenter({ groupFilter = null, onBack, leadingCard = null,
   }, [groups]);
 
   // Today and tomorrow at local midnight, used to bucket the upcoming events.
-  const todayStart = startOfDay(new Date());
+  const todayStart = useMemo(() => startOfDay(dateFromDateKey(currentDayKey)), [currentDayKey]);
   const todayTime = todayStart.getTime();
   const tomorrowTime = addDays(todayStart, 1).getTime();
 
@@ -340,31 +375,29 @@ function ActivityCommandCenter({ groupFilter = null, onBack, leadingCard = null,
   // People (volunteers + active guides) with a birthday in the next 7 days,
   // scoped to the filtered group when one is set.
   const birthdaysThisWeek = useMemo(() => {
-    const today = new Date();
+    const today = todayStart;
     const guideUsers = users.filter((person) => person.role === 'guide' && !person.disabled);
 
     return [...volunteers, ...guideUsers]
       .filter(matchesGroupFilter)
       .filter((person) => birthdaySoon(person, today, 7))
       .length;
-  }, [volunteers, users, matchesGroupFilter]);
+  }, [volunteers, users, matchesGroupFilter, todayStart]);
 
   // Volunteers marked absent today, scoped to the filtered group when one is set.
   const absentTodayCount = useMemo(() => {
-    const todayKey = toDateKey(new Date());
-
     return attendance.filter((record) => {
       if (!matchesGroupFilter(record)) {
         return false;
       }
 
       const dateKey = record.dateKey || toDateKey(record.date);
-      const isToday = dateKey === todayKey;
+      const isToday = dateKey === currentDayKey;
       const isAbsent = normalizeAttendanceStatus(getRecordStatus(record)) === 'absent';
 
       return isToday && isAbsent;
     }).length;
-  }, [attendance, matchesGroupFilter]);
+  }, [attendance, matchesGroupFilter, currentDayKey]);
 
   // Build a ready-to-send broadcast message for the event's group (name, when,
   // location, plus the description).

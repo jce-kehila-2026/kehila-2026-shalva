@@ -140,6 +140,7 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
   const [dataReady, setDataReady] = useState(false);
 
   const fileInputRef = useRef(null);
+  const isMountedRef = useRef(true);
 
   // --- UPDATED: formData now includes all fields ---
   const defaultFormData = {
@@ -163,6 +164,14 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
   };
 
   const [formData, setFormData] = useState(defaultFormData);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // Age derived from the selected birth date — never typed by hand.
   const computedAge = formData.birthDate
@@ -191,6 +200,10 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
   // best-effort and never affect readiness. On failure the old state is kept
   // (not cleared); only further imports are blocked.
   const fetchData = useCallback(async () => {
+    if (!isMountedRef.current) {
+      return false;
+    }
+
     // Block imports until the core snapshot finishes reloading.
     setDataReady(false);
 
@@ -205,6 +218,10 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
         getDocs(collection(db, 'programs')),
       ]);
 
+      if (!isMountedRef.current) {
+        return false;
+      }
+
       setVolunteers(volunteersSnap.docs.map(toRecord));
       setGroups(groupsSnap.docs.map(toRecord));
       setPrograms(programsSnap.docs.map(toRecord));
@@ -213,6 +230,10 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
       setDataReady(true);
       coreLoaded = true;
     } catch (error) {
+      if (!isMountedRef.current) {
+        return false;
+      }
+
       // Keep whatever data is already in state; just block further imports.
       console.error('שגיאה בשליפת נתוני הליבה:', error);
       setDataReady(false);
@@ -226,6 +247,11 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
         getDocs(collection(db, 'policeForms')).catch(() => null),
         getDocs(collection(db, 'medicalForms')).catch(() => null),
       ]);
+
+      if (!isMountedRef.current) {
+        return coreLoaded;
+      }
+
       if (signedSnap) setSignedForms(signedSnap.docs.map(toRecord));
       if (policeSnap) setPoliceForms(policeSnap.docs.map(toRecord));
       if (medicalSnap) setMedicalForms(medicalSnap.docs.map(toRecord));
@@ -282,7 +308,13 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
     }
 
     const reader = new FileReader();
-    reader.onload = () => setFormData((previous) => ({ ...previous, signedFormImage: reader.result }));
+    reader.onload = () => {
+      if (!isMountedRef.current) {
+        return;
+      }
+
+      setFormData((previous) => ({ ...previous, signedFormImage: reader.result }));
+    };
     reader.readAsDataURL(file);
     event.target.value = '';
   };
@@ -525,13 +557,19 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
           createdAt: new Date(),
         });
       }
+      if (!isMountedRef.current) {
+        return;
+      }
+
       setIsModalOpen(false);
       await fetchData();
     } catch (error) {
       console.error('שגיאה בשמירת מתנדב:', error);
       alert('אירעה שגיאה בשמירת המתנדב');
     } finally {
-      setSaving(false);
+      if (isMountedRef.current) {
+        setSaving(false);
+      }
     }
   };
 
@@ -584,6 +622,10 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
         await Promise.all(storageDeletes);
       }
 
+      if (!isMountedRef.current) {
+        return;
+      }
+
       await fetchData();
     } catch (error) {
       console.error('שגיאה במחיקת מתנדב:', error);
@@ -611,7 +653,16 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
       // for it, so the main bundle stays small for everyone else.
       const XLSX = await import('xlsx');
 
+      if (!isMountedRef.current) {
+        return;
+      }
+
       const data = await file.arrayBuffer();
+
+      if (!isMountedRef.current) {
+        return;
+      }
+
       const workbook = XLSX.read(data, { type: 'array' });
       
       const firstSheetName = workbook.SheetNames[0];
@@ -688,6 +739,10 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
           450,
         );
 
+      if (!isMountedRef.current) {
+        return;
+      }
+
       if (writeError) {
         console.error('שגיאה בכתיבת מתנדבים:', writeError);
       }
@@ -699,6 +754,9 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
       let refreshFailed = false;
       if (written > 0) {
         const refreshed = await fetchData();
+        if (!isMountedRef.current) {
+          return;
+        }
         refreshFailed = !refreshed;
       }
 
@@ -735,8 +793,10 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
       console.error('שגיאה בייבוא קובץ:', error);
       alert('אירעה שגיאה בייבוא הקובץ. ודא שזהו קובץ אקסל תקין.');
     } finally {
-      setIsImporting(false);
-      if (fileInputRef.current) {
+      if (isMountedRef.current) {
+        setIsImporting(false);
+      }
+      if (isMountedRef.current && fileInputRef.current) {
         fileInputRef.current.value = null;
       }
     }

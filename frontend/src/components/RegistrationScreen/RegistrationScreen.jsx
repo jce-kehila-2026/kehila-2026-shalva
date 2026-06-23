@@ -193,6 +193,9 @@ function RegistrationScreen() {
           id: doc.id,
           name: doc.data().name || "תוכנית ללא שם",
         })).sort((a, b) => a.name.localeCompare(b.name, "he"));
+        if (!isMountedRef.current) {
+          return;
+        }
         setPrograms(list);
       } catch (err) {
         console.error("Error loading programs:", err);

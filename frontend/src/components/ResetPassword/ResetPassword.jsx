@@ -5,7 +5,7 @@
 // and confirm it — all in Hebrew and matching the app's design.
 
 // React hooks for state and the initial code check.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // Firebase helpers: validate the reset code and set the new password.
 import { confirmPasswordReset, verifyPasswordResetCode } from 'firebase/auth';
@@ -28,6 +28,8 @@ const ERROR_MESSAGES = {
 // `oobCode` is Firebase's one-time reset code from the link; `onDone` returns to
 // the normal app once finished.
 function ResetPassword({ oobCode, onDone }) {
+  const isMountedRef = useRef(true);
+
   // The email the reset code belongs to (shown to the user once verified).
   const [email, setEmail] = useState('');
 
@@ -44,24 +46,50 @@ function ResetPassword({ oobCode, onDone }) {
   // The current error message (empty when none).
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // On mount, verify the reset code and fetch the email it belongs to.
   useEffect(() => {
+    let isActive = true;
+
     const verifyCode = async () => {
+      setVerifying(true);
+      setValidCode(false);
+      setEmail('');
+      setError('');
+
       try {
         // Throws if the code is invalid / expired; otherwise returns the email.
         const resolvedEmail = await verifyPasswordResetCode(auth, oobCode);
+        if (!isActive || !isMountedRef.current) {
+          return;
+        }
         setEmail(resolvedEmail);
         setValidCode(true);
       } catch (err) {
+        if (!isActive || !isMountedRef.current) {
+          return;
+        }
         // Show a friendly message for the returned error code.
         console.error('Invalid reset code:', err.code);
         setError(ERROR_MESSAGES[err.code] || 'הקישור לאיפוס הסיסמה אינו תקין.');
       } finally {
-        setVerifying(false);
+        if (isActive && isMountedRef.current) {
+          setVerifying(false);
+        }
       }
     };
 
     verifyCode();
+
+    return () => {
+      isActive = false;
+    };
   }, [oobCode]);
 
   // Save the new password.
@@ -82,13 +110,21 @@ function ResetPassword({ oobCode, onDone }) {
     try {
       // Apply the new password for this reset code.
       await confirmPasswordReset(auth, oobCode, password);
+      if (!isMountedRef.current) {
+        return;
+      }
       setDone(true);
     } catch (err) {
+      if (!isMountedRef.current) {
+        return;
+      }
       // Show a friendly message for the returned error code.
       console.error('Reset failed:', err.code);
       setError(ERROR_MESSAGES[err.code] || 'איפוס הסיסמה נכשל. נסו שוב.');
     } finally {
-      setSaving(false);
+      if (isMountedRef.current) {
+        setSaving(false);
+      }
     }
   };
 

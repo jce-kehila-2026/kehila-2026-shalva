@@ -106,10 +106,16 @@ function App() {
   // Subscribe to Firebase auth changes and enrich the user with their
   // Firestore profile (role defaults to "viewer" when none is set).
   useEffect(() => {
+    let isActive = true;
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (!isActive) {
+        return;
+      }
+
       // Show the loader only for the very first session check; later
       // re-emissions (token refresh / reconnect) keep the current screen.
-      if (!initialAuthResolved.current) {
+      if (isActive && !initialAuthResolved.current) {
         setLoading(true);
       }
 
@@ -125,6 +131,10 @@ function App() {
         const userDocRef = doc(db, 'users', currentUser.uid);
         const userDocSnap = await getDoc(userDocRef);
 
+        if (!isActive) {
+          return;
+        }
+
         // The profile record (if any).
         const userData = userDocSnap.exists() ? userDocSnap.data() : null;
 
@@ -132,6 +142,9 @@ function App() {
         // out so a leftover login can't use the app.
         if (!userData || userData.disabled) {
           await signOut(auth);
+          if (!isActive) {
+            return;
+          }
           setUser(null);
           setPublicView('main');
           window.alert('אין לחשבון זה הרשאת גישה למערכת. פנה/י למנהל המערכת.');
@@ -147,17 +160,26 @@ function App() {
           role: userData.role || 'viewer',
         });
       } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
         // On error, treat the user as logged out.
         console.error('Error fetching user role:', error);
         setUser(null);
       } finally {
-        initialAuthResolved.current = true;
-        setLoading(false);
+        if (isActive) {
+          initialAuthResolved.current = true;
+          setLoading(false);
+        }
       }
     });
 
     // Stop listening when the component unmounts.
-    return () => unsubscribe();
+    return () => {
+      isActive = false;
+      unsubscribe();
+    };
   }, []);
 
   // Auto sign-out after 5 minutes with no activity at all (no clicks,
