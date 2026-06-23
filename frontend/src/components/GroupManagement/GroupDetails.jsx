@@ -16,6 +16,9 @@ import { getDisplayName } from '../../utils/people';
 // Shared attendance status normalization (handles old string/boolean statuses).
 import { normalizeAttendanceStatus, getRecordStatus } from '../../utils/attendance';
 
+// Display-only date formatter: a 'YYYY-MM-DD' string -> 'DD-MM-YYYY'.
+import { formatDateOnlyForDisplay } from '../../utils/dateDisplay';
+
 // This screen's own modern, mobile-first styles.
 import './GroupDetails.css';
 
@@ -83,12 +86,14 @@ function getThisWeekDayKeys(weekStartKey = getCurrentWeekStartKey()) {
 
 
 function getThisWeekRangeLabel(weekStartKey = getCurrentWeekStartKey()) {
-  const start = getDateFromDayKey(weekStartKey);
-  const end = new Date(start);
-  end.setDate(start.getDate() + 6);
+  // Keep BOTH endpoints as logical 'YYYY-MM-DD' keys (built by safe numeric date
+  // math in getThisWeekDayKeys — never new Date('YYYY-MM-DD')); format ONLY the
+  // two ends for display, as DD-MM-YYYY.
+  const dayKeys = getThisWeekDayKeys(weekStartKey);
+  const startKey = dayKeys[0];
+  const endKey = dayKeys[dayKeys.length - 1];
 
-  const options = { day: 'numeric', month: 'long' };
-  return `${start.toLocaleDateString('he-IL', options)} - ${end.toLocaleDateString('he-IL', options)}`;
+  return `${formatDateOnlyForDisplay(startKey)} - ${formatDateOnlyForDisplay(endKey)}`;
 }
 
 
@@ -687,8 +692,11 @@ const GroupDetails = ({ groupId, onBack, guideScopedRead = false, currentGuideUi
                 <ul className="gd-events">
                   {events.map((eventItem) => {
                     // A short "date · location" meta line (drops empty parts).
+                    // The date is shown as DD-MM-YYYY; an invalid value falls back
+                    // to '' (a raw invalid date is NEVER shown). event.date itself,
+                    // sorting, filtering and status are untouched.
                     const meta = [
-                      eventItem.date || '',
+                      formatDateOnlyForDisplay(eventItem.date, { fallback: '' }),
                       eventItem.location || '',
                     ].filter(Boolean).join(' · ') || '—';
 

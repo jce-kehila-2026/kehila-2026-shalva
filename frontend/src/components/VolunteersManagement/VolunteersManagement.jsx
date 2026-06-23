@@ -20,6 +20,9 @@ import { db, storage } from '../../firebase';
 // Date picker for the birth date field.
 import BirthDatePicker from '../shared/BirthDatePicker/BirthDatePicker';
 
+// Display-only date formatter: a 'YYYY-MM-DD' string -> 'DD-MM-YYYY'.
+import { formatDateOnlyForDisplay } from '../../utils/dateDisplay';
+
 // Button that opens a pre-filled WhatsApp message.
 import WhatsAppButton from '../shared/WhatsAppButton/WhatsAppButton';
 
@@ -886,7 +889,7 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
               <div><strong>שם משפחה:</strong> {viewingVolunteer.lastName || '—'}</div>
               <div><strong>תעודת זהות:</strong> {viewingVolunteer.idNumber || '—'}</div>
               <div><strong>טלפון:</strong> <span dir="ltr">{viewingVolunteer.phone || '—'}</span></div>
-              <div><strong>תאריך לידה:</strong> {viewingVolunteer.birthDate || '—'}</div>
+              <div><strong>תאריך לידה:</strong> {formatDateOnlyForDisplay(viewingVolunteer.birthDate, { fallback: '—' })}</div>
               <div><strong>גיל:</strong> {viewingVolunteer.age || '—'}</div>
               <div><strong>אימייל:</strong> {viewingVolunteer.email || '—'}</div>
               <div><strong>כתובת:</strong> {viewingVolunteer.address || '—'}</div>
