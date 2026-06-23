@@ -7,7 +7,7 @@ import { test, expect } from '@playwright/test';
 
 import { loginAs } from './helpers/emulator-login.js';
 import { freezeClock } from './helpers/clock.js';
-import { VOLUNTEERS, GROUPS } from './fixtures/seed-data.js';
+import { VOLUNTEERS, GROUPS, TEST_USERS } from './fixtures/seed-data.js';
 
 const VOL_A_NAMES = VOLUNTEERS.filter((v) => v.groupId === 'groupA').map((v) => v.name);
 const VOL_B1 = VOLUNTEERS.find((v) => v.id === 'volB1');
@@ -37,11 +37,27 @@ test.describe('permission isolation (real UI via emulators)', () => {
     }
   });
 
-  test('a role-less (viewer) user does NOT get the guide flow', async ({ page }) => {
+  test('a role-less user is denied access — the gate signs them out', async ({ page }) => {
     await freezeClock(page);
-    await loginAs(page, 'noRole');
-    // Authenticated, but as a viewer — never the guide dashboard.
-    await expect(page.locator('.auth-role-badge')).toContainText('צופה');
+
+    // A role-less account passes Auth but fails the app's access gate: it alerts
+    // then signs out, so the authenticated shell / guide dashboard never appear.
+    // We drive the login UI directly — the loginAs helper waits for a shell that
+    // never shows here. The access-denied alert is auto-accepted.
+    page.on('dialog', (dialog) => dialog.accept());
+
+    const noRole = TEST_USERS.noRole;
+    const password = globalThis.process?.env?.E2E_EMULATOR_PASSWORD;
+
+    await page.goto('/?login=1', { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('#login-email', { timeout: 15000 });
+    await page.fill('#login-email', noRole.email);
+    await page.fill('#login-password', password);
+    await page.click('button.login-submit');
+
+    // No authenticated shell, no role badge, no guide dashboard.
+    await expect(page.locator('.authenticated-header')).toHaveCount(0);
+    await expect(page.locator('.auth-role-badge')).toHaveCount(0);
     await expect(page.locator('.guide-dashboard-container')).toHaveCount(0);
   });
 

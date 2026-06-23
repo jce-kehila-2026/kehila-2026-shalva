@@ -3,8 +3,9 @@ rules_version = '2';
 // Firestore security rules for Kehila Hub.
 //
 // Role-based access enforced on the server. Roles live in users/{uid}.role
-// ('admin' | 'guide' | 'viewer'); a removed guide has users/{uid}.disabled ===
-// true and is treated as "no access" — disabled users can't even read data.
+// ('owner' | 'admin' | 'guide'); a user with none of these roles (or a removed
+// guide with users/{uid}.disabled === true) is treated as "no access" and can't
+// even read data. There is no read-only "viewer" tier.
 //
 // NOTE: the first admin's users/{uid} document must be created manually in the
 // Firebase Console. Review and test in the Emulator / a test project before
@@ -34,15 +35,6 @@ service cloud.firestore {
     // An active user with the given role (a missing 'role' counts as no role).
     function hasRole(role) {
       return isActiveUser() && profile().get('role', '') == role;
-    }
-
-    // A "viewer-compatible" reader: an active user who is an explicit 'viewer'
-    // OR has NO role at all. App.jsx maps a missing role to 'viewer', so the
-    // server mirrors that exact contract here. An UNKNOWN role (anything other
-    // than admin / guide / viewer) is NOT viewer-compatible and gets no broad
-    // read. Used to keep viewers' existing full read without granting it to guides.
-    function isViewerCompatible() {
-      return isActiveUser() && profile().get('role', 'viewer') == 'viewer';
     }
 
     // An active admin. The OWNER (the single top-level role) inherits EVERY
@@ -343,7 +335,7 @@ service cloud.firestore {
     }
 
     // Volunteers carry personal data. Read is GROUP-SCOPED for guides:
-    //   - admin and viewer-compatible users keep full read;
+    //   - admins (and the owner) keep full read;
     //   - a guide may read ONLY volunteers whose canonical groupId is their own
     //     group, so a volunteer with no canonical groupId is unreadable to a
     //     guide, and an unscoped guide list (mixing other groups) fails — rules
@@ -352,13 +344,12 @@ service cloud.firestore {
     // Only an admin may write — guides never edit volunteers in the app.
     match /volunteers/{id} {
       allow read: if isAdmin()
-        || isViewerCompatible()
         || (hasRole('guide') && isGuideOfGroup(resource.data.get('groupId', '')));
       allow write: if isAdmin();
     }
 
     // Attendance: read is GROUP-SCOPED for guides:
-    //   - admin and viewer-compatible users keep full read;
+    //   - admins (and the owner) keep full read;
     //   - a guide may read ONLY attendance whose canonical groupId is their own
     //     group, so a legacy record without a canonical groupId is unreadable to
     //     a guide, and a query by dateKey ALONE (no groupId) fails — the query
@@ -368,7 +359,6 @@ service cloud.firestore {
     // non-Saturday dateKey, typed fields, immutable identity) — unchanged from 9ב.
     match /attendance/{id} {
       allow read: if isAdmin()
-        || isViewerCompatible()
         || (hasRole('guide') && isGuideOfGroup(resource.data.get('groupId', '')));
 
       // Create: admin, or a guide creating a strict, canonical own-group record.
@@ -421,7 +411,7 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if request.auth.uid == uid || isActiveUser();
 
-      // Admins create non-privileged users (guides/viewers); only the owner may
+      // Admins create non-privileged users (guides); only the owner may
       // create an admin or owner document.
       allow create: if isAdmin()
         && (!isPrivilegedRole(request.resource.data.get('role', '')) || isOwner());
@@ -452,14 +442,13 @@ service cloud.firestore {
     }
 
     // Guide ↔ group mapping. Read is scoped:
-    //   - admin and viewer-compatible users keep full read;
+    //   - admins (and the owner) keep full read;
     //   - a guide may read ONLY their OWN mapping document (guides/{their uid}),
     //     never the whole guides collection;
     //   - disabled / unknown-role / anonymous are denied.
     // Only an admin writes.
     match /guides/{uid} {
       allow read: if isAdmin()
-        || isViewerCompatible()
         || (hasRole('guide') && request.auth.uid == uid);
       allow write: if isAdmin();
     }

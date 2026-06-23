@@ -262,11 +262,16 @@ describe('logged-out user (no auth)', () => {
 });
 
 
-describe('viewer (read-only role)', () => {
-  it('can read volunteers, attendance, events and programs', async () => {
-    await assertSucceeds(viewerDb().collection('volunteers').get());
-    await assertSucceeds(viewerDb().collection('attendance').get());
-    await assertSucceeds(viewerDb().collection('events').get());
+// A signed-in user whose role is not owner/admin/guide (here a legacy 'viewer'
+// value): the sensitive collections (volunteers/attendance) are denied — there
+// is no read-only "viewer" tier anymore. Public programs stay readable.
+describe('role-less / legacy-role user (no viewer tier)', () => {
+  it('CANNOT read volunteers or attendance (no read-only viewer tier)', async () => {
+    await assertFails(viewerDb().collection('volunteers').get());
+    await assertFails(viewerDb().collection('attendance').get());
+  });
+
+  it('can still read public programs', async () => {
     await assertSucceeds(viewerDb().collection('programs').get());
   });
 
@@ -616,16 +621,16 @@ describe('read-scope role matrix — broad reads (9ג)', () => {
     await assertSucceeds(adminDb().collection('guides').get());
   });
 
-  it('explicit viewer CAN read all volunteers and attendance (unscoped)', async () => {
-    await assertSucceeds(viewerDb().collection('volunteers').get());
-    await assertSucceeds(viewerDb().collection('attendance').get());
-    await assertSucceeds(viewerDb().collection('guides').get());
+  it('legacy viewer-role user CANNOT read volunteers / attendance / guides (no viewer tier)', async () => {
+    await assertFails(viewerDb().collection('volunteers').get());
+    await assertFails(viewerDb().collection('attendance').get());
+    await assertFails(viewerDb().collection('guides').get());
   });
 
-  it('role-less (missing role) user CAN read broadly — viewer-compatible per App.jsx', async () => {
-    await assertSucceeds(noRoleDb().collection('volunteers').get());
-    await assertSucceeds(noRoleDb().collection('attendance').get());
-    await assertSucceeds(noRoleDb().collection('guides').get());
+  it('role-less (missing role) user CANNOT read broadly — no access without a role', async () => {
+    await assertFails(noRoleDb().collection('volunteers').get());
+    await assertFails(noRoleDb().collection('attendance').get());
+    await assertFails(noRoleDb().collection('guides').get());
   });
 
   it('UNKNOWN role CANNOT read volunteers / attendance / guides', async () => {
@@ -809,16 +814,14 @@ describe('guide authority — single source of truth (9ג fix)', () => {
 });
 
 
-describe('GroupDetails legacy compatibility — admin/viewer vs guide (9ג)', () => {
+describe('GroupDetails legacy compatibility — admin vs guide (9ג)', () => {
   // att-nogroup + volNoId carry NO canonical groupId — they model legacy data
-  // that the admin/viewer GroupDetails path can still surface (by name), while a
+  // that the admin GroupDetails path can still surface (by name), while a
   // guide cannot read them at all. (The client read-strategy branch is selected
   // by the guideScopedRead prop; here we prove the Rules-level access gap.)
-  it('legacy no-groupId records are readable by admin/viewer but NOT by a guide', async () => {
+  it('legacy no-groupId records are readable by an admin but NOT by a guide', async () => {
     await assertSucceeds(adminDb().collection('attendance').doc('att-nogroup').get());
-    await assertSucceeds(viewerDb().collection('attendance').doc('att-nogroup').get());
     await assertSucceeds(adminDb().collection('volunteers').doc('volNoId').get());
-    await assertSucceeds(viewerDb().collection('volunteers').doc('volNoId').get());
 
     await assertFails(guideDb().collection('attendance').doc('att-nogroup').get());
     await assertFails(guideDb().collection('volunteers').doc('volNoId').get());
@@ -932,7 +935,7 @@ describe('admin (full management, with self-guards)', () => {
   });
 
   it('cannot change their OWN role', async () => {
-    await assertFails(adminDb().collection('users').doc(ADMIN_UID).update({ role: 'viewer' }));
+    await assertFails(adminDb().collection('users').doc(ADMIN_UID).update({ role: 'guide' }));
   });
 
   it('cannot disable themselves', async () => {

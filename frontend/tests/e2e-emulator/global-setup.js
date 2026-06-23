@@ -78,7 +78,8 @@ export default async function globalSetup() {
   await testEnv.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
 
-    // users/{uid}: role drives the app gate. A '' role models a viewer.
+    // users/{uid}: role drives the app gate. A role-less doc models a user with
+    // NO access (the gate signs them out — there is no read-only viewer tier).
     await db.collection('users').doc(uidByRole.admin).set({ role: 'admin', firstName: TEST_USERS.admin.firstName });
     await db.collection('users').doc(uidByRole.guideA).set({ role: 'guide', firstName: TEST_USERS.guideA.firstName });
     await db.collection('users').doc(uidByRole.guideB).set({ role: 'guide', firstName: TEST_USERS.guideB.firstName });

@@ -1,5 +1,5 @@
 // CENTRAL E2E PROOF: a record WRITTEN through the guide UI propagates to the
-// admin/viewer consumers across THREE states — (A) אבי present + בני absent,
+// admin consumers across THREE states — (A) אבי present + בני absent,
 // (B) אבי absent + בני cleared, (C) all cleared — using the SAME records the
 // guide UI wrote (no seedAttendance, no reset between guide write and consumer
 // checks). Firestore is read out of band only to verify the underlying aggregate.
@@ -154,34 +154,6 @@ async function assertVisualSmoke(page) {
   await expect(page.locator('.error-boundary')).toHaveCount(0);
 }
 
-// One viewer session: open a volunteer and check whether the test-day record is
-// shown (with the expected status) or absent. `expectedStatus` is 'נוכח' |
-// 'חסר' | null (no record for that day).
-async function verifyVolunteerDetails(page, volunteerName, expectedStatus, shot) {
-  await loginAs(page, 'noRole');
-  await page.locator('li.user-item', { hasText: volunteerName }).locator('button.user-details-button').click();
-  await expect(page.locator('.volunteer-details-container')).toBeVisible();
-
-  const dayRow = page.locator('.volunteer-details-table tbody tr', { hasText: DATE });
-  if (expectedStatus === null) {
-    await expect(dayRow).toHaveCount(0);
-  } else {
-    await expect(dayRow).toHaveCount(1);
-    await expect(dayRow.locator('.volunteer-details-status')).toHaveText(expectedStatus);
-    // Never a raw ISO or dotted date.
-    const rowText = (await dayRow.innerText());
-    expect(rowText).not.toMatch(/\d{4}-\d{2}-\d{2}/);
-    expect(rowText).not.toContain('23.6');
-  }
-
-  if (shot) {
-    await assertVisualSmoke(page);
-    await page.screenshot({ path: shot.testInfo.outputPath('volunteerdetails.png'), fullPage: true });
-  }
-
-  await logout(page);
-}
-
 const groupADay = async () => (await readAttendance())
   .filter((r) => r.groupId === GROUPS.groupA.id && r.dateKey === FROZEN_DATE_KEY);
 
@@ -215,8 +187,6 @@ test.describe('propagation: guide UI write -> all reachable consumers (real E2E)
     expect(await groupADay()).toHaveLength(2); // exactly 2 records, no duplicate
 
     await verifyAdmin(page, { missing: 1, present: 1, absent: 1 }, { testInfo });
-    await verifyVolunteerDetails(page, VOL_A1.name, 'נוכח', { testInfo });
-    await verifyVolunteerDetails(page, VOL_A2.name, 'חסר');
 
     // ========== STATE B: אבי absent (update), בני cleared (delete) ==========
     await loginAs(page, 'guideA');
@@ -236,8 +206,6 @@ test.describe('propagation: guide UI write -> all reachable consumers (real E2E)
     expect(dayB[0].status).toBe(false);
 
     await verifyAdmin(page, { missing: 1, present: 0, absent: 1 });
-    await verifyVolunteerDetails(page, VOL_A1.name, 'חסר');
-    await verifyVolunteerDetails(page, VOL_A2.name, null); // record gone
 
     // ========== STATE C: אבי cleared too -> zero ==========
     await loginAs(page, 'guideA');
@@ -253,6 +221,5 @@ test.describe('propagation: guide UI write -> all reachable consumers (real E2E)
     expect(await groupADay()).toHaveLength(0); // zero records
 
     await verifyAdmin(page, { missing: 0, present: 0, absent: 0 });
-    await verifyVolunteerDetails(page, VOL_A1.name, null);
   });
 });

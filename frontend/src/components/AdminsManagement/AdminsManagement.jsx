@@ -1,6 +1,6 @@
 // AdminsManagement — the OWNER-only screen. The single owner can:
 //   - promote any user to admin ("add admin"),
-//   - remove an admin (demote back to viewer),
+//   - remove an admin (clear their role → no access),
 //   - hand ownership to another admin (transfer).
 // There is always exactly ONE owner: the transfer demotes the current owner and
 // promotes the target in one atomic batch. The server rules in firestore.rules
@@ -218,20 +218,21 @@ export default function AdminsManagement() {
     }
   };
 
-  // Remove an admin: demote them back to a plain viewer.
+  // Remove an admin: clear their role entirely. With no role they have no
+  // access to the app at all (there is no read-only "viewer" tier).
   const removeAdmin = async (admin) => {
     if (busy) {
       return;
     }
 
-    if (!window.confirm(`להסיר את הרשאת האדמין מ-${userName(admin)}? התפקיד יורד ל"צופה".`)) {
+    if (!window.confirm(`להסיר את הרשאת האדמין מ-${userName(admin)}? המשתמש יישאר ללא תפקיד וללא גישה למערכת.`)) {
       return;
     }
 
     setBusy(true);
 
     try {
-      await updateDoc(doc(db, 'users', admin.id), { role: 'viewer' });
+      await updateDoc(doc(db, 'users', admin.id), { role: '' });
       await load();
     } catch (error) {
       console.error('שגיאה בהסרת אדמין:', error);

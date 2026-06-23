@@ -3,9 +3,11 @@
 Audit of the app against the JCE "Kehila App Security Checklist and Guide"
 (Eliedaat Adler). Last verified: 2026-06-12, branch `kehila-fixed-test`.
 
-Roles in THIS app: `admin` / `guide` / `viewer` (stored in `users/{uid}.role`).
-They map onto the guide's generic roles as: admin → admin, guide → volunteer
-(scoped to one assigned group), viewer → read-only participant-style access.
+Roles in THIS app: `owner` / `admin` / `guide` (stored in `users/{uid}.role`).
+They map onto the guide's generic roles as: owner → super-admin (manages admins
++ ownership only), admin → admin, guide → volunteer (scoped to one assigned
+group). A signed-in user with NONE of these roles has NO access — there is no
+read-only "viewer" tier (the app signs them out and the rules deny their reads).
 
 Legend: ✅ done · ⚠️ done with a documented caveat · ❌ open item
 
@@ -63,15 +65,16 @@ Legend: ✅ done · ⚠️ done with a documented caveat · ❌ open item
   attendance only for their own group, only with the known attendance fields,
   and only for volunteers that belong to that group; updates also check the
   EXISTING doc's group so records can't be "stolen" across groups.
-- ✅ **Role-based rules** — `admin` / `guide` / `viewer` via `hasRole()`;
-  user-management writes are admin-only with self-guards (an admin cannot
-  change their own role/disabled flag or delete themselves).
+- ✅ **Role-based rules** — `owner` / `admin` / `guide` via `hasRole()` (a
+  role-less user is denied broad reads); user-management writes are admin-only
+  with self-guards (an admin cannot change their own role/disabled flag or
+  delete themselves), and admin/owner accounts are owner-gated.
 - ✅ **Data validation rules** — public registrations are fully validated;
   attendance writes are restricted to a known field set (`keys().hasOnly`).
 - ✅ **Emulator tests** — automated: `npm run test:rules` (repo root) starts
   the Firestore + Storage emulators, runs 40 tests in
   `frontend/tests/security-rules.test.js` covering every role (no auth /
-  viewer / guide / disabled / admin) against every collection's CRUD rules —
+  role-less / guide / disabled / admin / owner) against every collection's CRUD rules —
   including the guide group-scoping, the registrant validation, the admin
   self-guards and the storage upload limits — then shuts the emulators down.
   40/40 passing as of 2026-06-12. Requires Java (the emulator runtime).
@@ -101,7 +104,8 @@ Legend: ✅ done · ⚠️ done with a documented caveat · ❌ open item
   (`initialGroup` / `lockGroup` props) AND `firestore.rules` enforces it.
 - ✅ **Admins → manage users and roles** — admin-only writes to `users`,
   `guides`, `volunteers`, `groups`, `events`; self-guards included.
-- ✅ **Viewers → read-only** — no write rule matches the `viewer` role.
+- ✅ **No access without a role** — a signed-in user with no `owner`/`admin`/`guide`
+  role is denied broad reads by the rules and signed out by the app.
 - ✅ **UI hides unauthorized actions / rules enforce the same** — both layers
   exist; the rules are the source of truth.
 

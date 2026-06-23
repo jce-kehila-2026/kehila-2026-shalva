@@ -42,8 +42,12 @@ const ROLE_LABELS = {
   owner: 'בעלים',
   admin: 'מנהל',
   guide: 'מדריך',
-  viewer: 'צופה',
 };
+
+// The roles that actually grant access to the app. A signed-in user whose
+// profile has none of these gets NO access — treated exactly like a disabled
+// account (see the auth gate below). There is no read-only "viewer" tier.
+const APP_ROLES = ['owner', 'admin', 'guide'];
 
 
 // Restore a saved view from sessionStorage (so an unexpected page reload —
@@ -104,7 +108,7 @@ function App() {
   }, [activeScreen, adminView, guideView]);
 
   // Subscribe to Firebase auth changes and enrich the user with their
-  // Firestore profile (role defaults to "viewer" when none is set).
+  // Firestore profile. A user with no recognised role is signed out (no access).
   useEffect(() => {
     let isActive = true;
 
@@ -138,9 +142,9 @@ function App() {
         // The profile record (if any).
         const userData = userDocSnap.exists() ? userDocSnap.data() : null;
 
-        // No record, or a disabled one (a removed guide) → no access. Sign them
-        // out so a leftover login can't use the app.
-        if (!userData || userData.disabled) {
+        // No record, a disabled one (a removed guide), or no recognised role →
+        // no access. Sign them out so a leftover login can't use the app.
+        if (!userData || userData.disabled || !APP_ROLES.includes(userData.role)) {
           await signOut(auth);
           if (!isActive) {
             return;
@@ -151,13 +155,14 @@ function App() {
           return;
         }
 
-        // Merge the auth user with the profile (defaulting the role).
+        // Merge the auth user with the profile. The role is already guaranteed
+        // to be one of APP_ROLES by the access gate above.
         setUser({
           uid: currentUser.uid,
           email: currentUser.email,
           displayName: currentUser.displayName,
           ...userData,
-          role: userData.role || 'viewer',
+          role: userData.role,
         });
       } catch (error) {
         if (!isActive) {
@@ -228,9 +233,7 @@ function App() {
   const onHomeView = !user
     || (user.role === 'admin' && adminView === 'overview' && !selectedEvent && !selectedVolunteer)
     || (user.role === 'owner')
-    || (user.role === 'guide' && guideView === 'menu')
-    || (user.role !== 'admin' && user.role !== 'owner' && user.role !== 'guide'
-        && activeScreen === 'users' && !selectedEvent && !selectedVolunteer);
+    || (user.role === 'guide' && guideView === 'menu');
 
   // The device back button steps back to the home view inside the app.
   useEffect(() => {
@@ -326,7 +329,7 @@ function App() {
 
   // Render the content for the signed-in user's role.
   const renderRoleContent = () => {
-    const role = user?.role || 'viewer';
+    const role = user?.role;
 
     // The owner gets ONLY the focused "manage admins" screen (add / remove
     // admins + transfer ownership) — none of the operational admin screens.
@@ -351,7 +354,8 @@ function App() {
       return <GuideDashboard user={user} currentView={guideView} setCurrentView={setGuideView} />;
     }
 
-    // Everyone else gets the tabbed viewer screens.
+    // Defensive fallback only — the access gate admits ONLY owner / admin /
+    // guide, so no signed-in user actually reaches this branch.
     return (
       <>
         {/* Tab nav (hidden while an event / volunteer is open). */}
@@ -564,7 +568,7 @@ function App() {
               </button>
               <div className="auth-user">
                 <h2 className="auth-greeting">שלום, {user.firstName || user.displayName || user.email}</h2>
-                <span className="auth-role-badge">הרשאה: {ROLE_LABELS[user.role] || user.role || 'צופה'}</span>
+                <span className="auth-role-badge">הרשאה: {ROLE_LABELS[user.role] || user.role}</span>
               </div>
             </div>
 
