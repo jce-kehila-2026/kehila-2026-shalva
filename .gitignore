@@ -29,3 +29,6 @@ backend/privateKey.json
 .firebase/
 .firebaserc
 .env.local
+# Playwright E2E artifacts (screenshots, reports, traces)
+test-results/
+playwright-report/

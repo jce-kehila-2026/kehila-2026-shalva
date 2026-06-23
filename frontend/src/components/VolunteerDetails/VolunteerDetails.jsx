@@ -10,6 +10,10 @@ import { db } from '../../firebase'
 // Shared attendance normalization (one definition across all screens).
 import { normalizeAttendanceStatus, getRecordStatus } from '../../utils/attendance'
 
+// Pure resolver for an attendance record's display date (DD-MM-YYYY), with an
+// explicit dateKey -> date -> createdAt precedence.
+import { resolveAttendanceDisplayDate } from '../../utils/attendanceDisplayDate'
+
 // Styles for this screen.
 import './VolunteerDetails.css'
 
@@ -140,29 +144,10 @@ function statusClass(status) {
 }
 
 
-// Readable date from an attendance record, handling the several shapes
-// Firestore can return (string, Timestamp, native Date, or { seconds }).
+// Readable DD-MM-YYYY date for an attendance record, via the shared pure resolver
+// (explicit precedence, no type-guessing, never a raw or dotted "23.6.2026").
 function getAttendanceDate(attendanceItem) {
-  // Prefer an explicit date, fall back to createdAt.
-  const value = attendanceItem.date || attendanceItem.createdAt
-
-  // No date at all.
-  if (!value) return 'ללא תאריך'
-
-  // Plain string date (e.g. "2026-05-31").
-  if (typeof value === 'string') return value
-
-  // Firestore Timestamp.
-  if (typeof value.toDate === 'function') return value.toDate().toLocaleDateString('he-IL')
-
-  // Native Date.
-  if (value instanceof Date) return value.toLocaleDateString('he-IL')
-
-  // Plain { seconds } object.
-  if (typeof value.seconds === 'number') return new Date(value.seconds * 1000).toLocaleDateString('he-IL')
-
-  // Unrecognized shape — show something rather than crash.
-  return String(value)
+  return resolveAttendanceDisplayDate(attendanceItem)
 }
 
 

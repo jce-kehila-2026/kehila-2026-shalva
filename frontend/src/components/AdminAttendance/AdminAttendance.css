@@ -373,7 +373,10 @@
 
 .adm-week-grid {
   display: grid;
-  grid-template-columns: minmax(170px, 1.45fr) repeat(7, minmax(34px, 1fr));
+  /* Day columns are wide enough for a full DD-MM-YYYY header; the board
+     (.adm-week-board, overflow:auto) scrolls horizontally on narrow screens so
+     the page itself never overflows. */
+  grid-template-columns: minmax(150px, 1.3fr) repeat(7, minmax(82px, 1fr));
   min-width: 0;
 }
 

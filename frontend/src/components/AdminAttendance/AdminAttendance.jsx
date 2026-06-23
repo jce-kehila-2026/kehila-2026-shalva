@@ -13,6 +13,9 @@ import { db } from '../../firebase';
 // Shared attendance normalization (one definition across all screens).
 import { normalizeAttendanceStatus, getRecordStatus } from '../../utils/attendance';
 
+// Display-only date formatter: a 'YYYY-MM-DD' string -> 'DD-MM-YYYY'.
+import { formatDateOnlyForDisplay } from '../../utils/dateDisplay';
+
 // Styles for this screen.
 import './AdminAttendance.css';
 
@@ -60,17 +63,15 @@ function getDayKey(date) {
 }
 
 
-// Formats a Sunday date into a Hebrew range string (e.g. "7 ביוני – 13 ביוני 2026").
+// Formats a Sunday date into a DD-MM-YYYY range string (e.g.
+// "07-06-2026 – 13-06-2026"). The two endpoints are turned into canonical
+// 'YYYY-MM-DD' keys via getDayKey (no new Date('YYYY-MM-DD')) and only the
+// DISPLAY is formatted — the dateKeys driving grouping/filtering are untouched.
 function getWeekRangeLabel(sunday) {
   const saturday = new Date(sunday);
   saturday.setDate(sunday.getDate() + 6);
-  
-  const options = { day: 'numeric', month: 'long' };
-  const sunLabel = sunday.toLocaleDateString('he-IL', options);
-  const satLabel = saturday.toLocaleDateString('he-IL', options);
-  const year = sunday.getFullYear();
-  
-  return `${sunLabel} – ${satLabel} ${year}`;
+
+  return `${formatDateOnlyForDisplay(getDayKey(sunday))} – ${formatDateOnlyForDisplay(getDayKey(saturday))}`;
 }
 
 
@@ -362,7 +363,8 @@ function AdminAttendance({ registerBack }) {
               {weekDays.map((day) => {
                 const dKey = getDayKey(day);
                 const dayName = day.toLocaleDateString('he-IL', { weekday: 'short' }).replace('יום ', '');
-                const dateStr = day.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' });
+                // Full date as DD-MM-YYYY (from the canonical dateKey), not "23.6".
+                const dateStr = formatDateOnlyForDisplay(dKey);
 
                 return (
                   <div className="adm-week-day-head" key={dKey}>

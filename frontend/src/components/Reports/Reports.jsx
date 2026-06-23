@@ -21,6 +21,9 @@ import { computeEventStatus } from '../../utils/eventStatus'
 // Shared attendance normalization (kept in one place across screens).
 import { normalizeAttendanceStatus, getRecordStatus } from '../../utils/attendance'
 
+// Canonical grouping key (YYYY-MM-DD) vs DD-MM-YYYY display date for a meeting.
+import { resolveAttendanceDateKey, resolveAttendanceDisplayDate } from '../../utils/attendanceDisplayDate'
+
 // Shared day / month / year date selector.
 import BirthDatePicker from '../shared/BirthDatePicker/BirthDatePicker'
 
@@ -260,44 +263,6 @@ function getAttendanceCounts(attendanceItem) {
 }
 
 
-// Readable date string from an attendance record, handling several date shapes.
-function getAttendanceDate(attendanceItem) {
-  // Prefer an explicit date, fall back to createdAt.
-  const value = attendanceItem.date ?? attendanceItem.createdAt
-
-  // No date at all.
-  if (!value) {
-    return 'ללא תאריך'
-  }
-
-  // Plain string date (e.g. "2026-05-31") — format it like the Timestamp dates
-  // so the whole column reads consistently (and the same day from different
-  // sources collapses into one meeting row instead of two).
-  if (typeof value === 'string') {
-    const parsed = new Date(value)
-    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString('he-IL')
-  }
-
-  // Firestore Timestamp.
-  if (typeof value.toDate === 'function') {
-    return value.toDate().toLocaleDateString('he-IL')
-  }
-
-  // Native Date.
-  if (value instanceof Date) {
-    return value.toLocaleDateString('he-IL')
-  }
-
-  // Plain { seconds } object.
-  if (typeof value.seconds === 'number') {
-    return new Date(value.seconds * 1000).toLocaleDateString('he-IL')
-  }
-
-  // Unrecognized shape.
-  return 'ללא תאריך'
-}
-
-
 // Build one combined per-group report from volunteers, events and attendance.
 function buildGroupRows(users, events, attendanceRecords) {
   // Group name -> accumulated stats.
@@ -341,7 +306,7 @@ function buildGroupRows(users, events, attendanceRecords) {
     const group = ensureGroup(getAttendanceGroup(attendanceItem))
     const counts = getAttendanceCounts(attendanceItem)
 
-    group.meetingKeys.add(getAttendanceDate(attendanceItem))
+    group.meetingKeys.add(resolveAttendanceDateKey(attendanceItem))
     group.present += counts.present
     group.absent += counts.absent
   })
@@ -365,16 +330,20 @@ function buildAttendanceRows(attendanceRecords) {
   const meetings = new Map()
 
   attendanceRecords.forEach((attendanceItem) => {
-    // Identify the meeting this record belongs to.
-    const date = getAttendanceDate(attendanceItem)
+    // Identify the meeting by its CANONICAL dateKey (grouping/sorting), but show
+    // a DD-MM-YYYY display date — the key is never used as a user-facing label.
+    const dateKey = resolveAttendanceDateKey(attendanceItem)
+    const displayDate = resolveAttendanceDisplayDate(attendanceItem)
     const group = getAttendanceGroup(attendanceItem)
-    const key = `${group}__${date}`
+    const key = `${group}__${dateKey}`
 
-    // Start a fresh row the first time we see this meeting.
+    // Start a fresh row the first time we see this meeting. Both the canonical
+    // dateKey (logical / searchable) and the DD-MM-YYYY display date are kept.
     if (!meetings.has(key)) {
       meetings.set(key, {
         id: key,
-        date,
+        dateKey,
+        date: displayDate,
         group,
         present: 0,
         absent: 0,
@@ -645,7 +614,11 @@ export default function Reports({ registerBack }) {
     }
 
     return scopedAttendance.filter((attendanceItem) => {
+      // Searchable tokens: BOTH the canonical dateKey (YYYY-MM-DD) and the
+      // DD-MM-YYYY display date, so either spelling finds the row (a dotted
+      // "23.6.2026" intentionally does not).
       const text = [
+        attendanceItem.dateKey,
         attendanceItem.date,
         attendanceItem.group,
       ]

@@ -31,8 +31,9 @@ import { formatDateOnlyForDisplay } from '../../utils/dateDisplay';
 // Bounded-concurrency runner (independent writes, never a writeBatch).
 import { runWithConcurrency } from '../../utils/concurrency';
 
-// Pure attendance-write planning + result reconciliation.
-import { buildAttendanceOperations, reconcileAttendanceResults } from '../../utils/attendanceWriter';
+// Pure attendance-write planning + result reconciliation. attendanceStateFromRecord
+// maps a saved record to its 'present' | 'absent' | 'unmarked' toggle state.
+import { attendanceStateFromRecord, buildAttendanceOperations, reconcileAttendanceResults } from '../../utils/attendanceWriter';
 
 // Stale-result guard for the volunteer/attendance load.
 import { createRequestGuard } from '../../utils/requestGuard';
@@ -336,11 +337,26 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
     return map;
   }, [attendanceRecords]);
 
-  // Start each attendance session empty so the guide actively fills today's marks.
+  // Keep the latest saved-records map in a ref, so the marks initializer can read
+  // it WITHOUT re-running every time attendanceRecords changes mid-session (which
+  // would wipe a guide's in-progress / partial-retry marks). The initializer
+  // below depends ONLY on `volunteers` — i.e. a fresh load — and reads this ref.
+  const savedByVolunteerRef = useRef(savedByVolunteer);
   useEffect(() => {
+    savedByVolunteerRef.current = savedByVolunteer;
+  }, [savedByVolunteer]);
+
+  // On a fresh volunteer load, PRE-FILL each toggle from today's already-saved
+  // record, so a guide returning to the screen (e.g. after a reload) sees what
+  // they marked. A volunteer with no saved record starts 'unmarked'. These
+  // pre-filled marks are NOT treated as edits (hasEditedMarks stays false and
+  // nothing is touched), so nothing is re-written until the guide actively
+  // changes a mark — no duplicate writes.
+  useEffect(() => {
+    const saved = savedByVolunteerRef.current;
     const initial = {};
     volunteers.forEach((volunteer) => {
-      initial[volunteer.id] = 'unmarked';
+      initial[volunteer.id] = attendanceStateFromRecord(saved[volunteer.id]);
     });
     setMarks(initial);
     setHasEditedMarks(false);
