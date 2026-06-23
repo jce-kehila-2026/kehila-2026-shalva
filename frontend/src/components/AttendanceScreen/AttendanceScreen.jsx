@@ -9,8 +9,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 // Firestore helpers. Each attendance change is an INDEPENDENT setDoc/deleteDoc
 // (no writeBatch — a batch evaluates the per-volunteer Rules for every document
 // in one request and hits the document-access limit); deterministic ids keep a
-// create idempotent. A query reads back today's already-saved attendance.
-import { collection, deleteDoc, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
+// create idempotent. Reads are GROUP-SCOPED: a locked (guide) screen reads only
+// its one group via getDoc, and volunteers/attendance are queried by groupId.
+import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, where } from 'firebase/firestore';
 
 // Our Firestore database instance.
 import { db } from '../../firebase';
@@ -141,21 +142,47 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
   // The group name to show in the header (display only).
   const activeGroupName = selectedGroup?.groupName || selectedGroup?.name || selectedGroupName;
 
-  // Load the live groups list.
+  // Load the groups that back the screen.
+  //
+  // A LOCKED (guide) screen reads ONLY its one assigned group document — never
+  // the whole groups collection — and fails closed (empty) when the id is
+  // missing or the document doesn't exist. There is no fallback to loading all
+  // groups. An unlocked (admin / viewer) screen still loads the full list for
+  // the picker.
   const fetchGroups = useCallback(async () => {
     try {
+      if (lockGroup) {
+        // No id to lock onto: nothing to load (fail closed).
+        if (!initialGroupId) {
+          setGroups([]);
+          return;
+        }
+
+        // Read just this one group document.
+        const groupSnap = await getDoc(doc(db, 'groups', initialGroupId));
+
+        // Missing document: fail closed — do NOT widen to the whole collection.
+        if (!groupSnap.exists()) {
+          setGroups([]);
+          return;
+        }
+
+        setGroups([{ id: groupSnap.id, ...groupSnap.data() }]);
+        return;
+      }
+
+      // Admin / viewer path: the full live list backs the picker (unchanged).
       const snapshot = await getDocs(collection(db, 'groups'));
       const groupsData = snapshot.docs.map((documentSnapshot) => ({
         id: documentSnapshot.id,
         ...documentSnapshot.data(),
       }));
 
-      // Live groups only — the picker always mirrors the real system.
       setGroups(groupsData);
     } catch (error) {
       console.error('Error loading groups:', error);
     }
-  }, []);
+  }, [lockGroup, initialGroupId]);
 
   // Load the selected group's volunteers, pre-filled with today's saved marks.
   const fetchVolunteersByGroup = useCallback(async () => {
@@ -175,10 +202,20 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
     setLoading(true);
 
     try {
-      // Fetch volunteers and today's attendance in parallel.
+      // Fetch volunteers and today's attendance in parallel — BOTH scoped to the
+      // canonical group on the SERVER (where('groupId', ...)), not just filtered
+      // in the browser. The guide read Rules require this: an unscoped query, or
+      // an attendance query by dateKey alone, would be denied.
       const [volunteersSnap, attendanceSnap] = await Promise.all([
-        getDocs(collection(db, 'volunteers')),
-        getDocs(query(collection(db, 'attendance'), where('dateKey', '==', loadedDateKey))),
+        getDocs(query(
+          collection(db, 'volunteers'),
+          where('groupId', '==', canonicalGroupId),
+        )),
+        getDocs(query(
+          collection(db, 'attendance'),
+          where('groupId', '==', canonicalGroupId),
+          where('dateKey', '==', loadedDateKey),
+        )),
       ]);
 
       // A newer load superseded this one while awaiting — drop the stale result.

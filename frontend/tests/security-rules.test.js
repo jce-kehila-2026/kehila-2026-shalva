@@ -4,7 +4,7 @@
 // root (it starts the emulators, runs this file, and shuts them down).
 
 // Vitest test API.
-import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, it, expect } from 'vitest';
 
 // The official rules testing harness: spins up isolated per-user contexts
 // against the emulator and asserts whether the rules allow each operation.
@@ -117,6 +117,9 @@ beforeEach(async () => {
 
     // The guide is assigned to groupA.
     await db.collection('guides').doc(GUIDE_UID).set({ groupId: 'groupA' });
+    // A SECOND guide mapping (another uid → groupB), so a guide listing the
+    // whole guides collection has a foreign doc it must not be able to read.
+    await db.collection('guides').doc('guide2').set({ groupId: 'groupB' });
 
     // Two groups and one volunteer in each.
     await db.collection('groups').doc('groupA').set({ groupName: 'קבוצה א' });
@@ -159,6 +162,13 @@ beforeEach(async () => {
     await db.collection('attendance').doc('att-baddate').set({
       groupId: 'groupA', group: 'קבוצה א', groupName: 'קבוצה א',
       date: new Date(), dateKey: 'garbage',
+      status: true, volunteerId: 'vol1', volunteerName: 'דני כהן',
+    });
+    // A LEGACY record with NO canonical groupId (groupName only) — used to prove
+    // a guide cannot read a record that isn't keyed to their group by groupId.
+    await db.collection('attendance').doc('att-nogroup').set({
+      group: 'קבוצה א', groupName: 'קבוצה א',
+      date: new Date(), dateKey: '2026-06-11',
       status: true, volunteerId: 'vol1', volunteerName: 'דני כהן',
     });
 
@@ -504,6 +514,378 @@ describe('guide attendance — strict validation (9ב)', () => {
     await assertFails(unknownRoleDb().collection('attendance').doc(id).set(data));
     await assertFails(disabledDb().collection('attendance').doc(id).set(data));
     await assertFails(anonDb().collection('attendance').doc(id).set(data));
+  });
+});
+
+
+describe('guide read-scope — guides / volunteers / attendance (9ג)', () => {
+  // ---- guides mapping: own document only ----
+  it('guide CAN read their OWN guides document', async () => {
+    await assertSucceeds(guideDb().collection('guides').doc(GUIDE_UID).get());
+  });
+
+  it('guide CANNOT read another guide\'s mapping document', async () => {
+    await assertFails(guideDb().collection('guides').doc('guide2').get());
+  });
+
+  it('guide CANNOT list the whole guides collection', async () => {
+    await assertFails(guideDb().collection('guides').get());
+  });
+
+  // ---- groups: PUBLIC by design (deliberate deviation — see firestore.rules) ----
+  it('guide CAN still read any group (groups are public whole documents by existing product decision)', async () => {
+    await assertSucceeds(guideDb().collection('groups').doc('groupB').get());
+    await assertSucceeds(guideDb().collection('groups').get());
+  });
+
+  // ---- volunteers: own group only ----
+  it('guide CAN read a volunteer in their own group (direct get)', async () => {
+    await assertSucceeds(guideDb().collection('volunteers').doc('vol1').get());
+  });
+
+  it('guide CANNOT read a volunteer from another group (direct get)', async () => {
+    await assertFails(guideDb().collection('volunteers').doc('vol2').get());
+  });
+
+  it('guide CANNOT read a volunteer with no canonical groupId', async () => {
+    await assertFails(guideDb().collection('volunteers').doc('volNoId').get());
+  });
+
+  it('guide CAN list volunteers scoped to their group — and gets ONLY that group', async () => {
+    const snapshot = await assertSucceeds(
+      guideDb().collection('volunteers').where('groupId', '==', 'groupA').get(),
+    );
+    // Only the two real groupA volunteers (vol1, vol1b) — never groupB/C/no-id.
+    expect(snapshot.size).toBe(2);
+    snapshot.forEach((document) => expect(document.data().groupId).toBe('groupA'));
+  });
+
+  it('guide CANNOT run an unscoped volunteers query', async () => {
+    await assertFails(guideDb().collection('volunteers').get());
+  });
+
+  it('guide CANNOT query volunteers of another group', async () => {
+    await assertFails(guideDb().collection('volunteers').where('groupId', '==', 'groupB').get());
+  });
+
+  // ---- attendance: own group only, query must carry groupId ----
+  it('guide CAN read an attendance record of their own group (direct get)', async () => {
+    await assertSucceeds(guideDb().collection('attendance').doc('att-own').get());
+  });
+
+  it('guide CANNOT read an attendance record of another group (direct get)', async () => {
+    await assertFails(guideDb().collection('attendance').doc('att-other').get());
+  });
+
+  it('guide CANNOT read a legacy attendance record with no canonical groupId', async () => {
+    await assertFails(guideDb().collection('attendance').doc('att-nogroup').get());
+  });
+
+  it('guide CAN query attendance scoped by groupId + dateKey — and gets ONLY that group', async () => {
+    const snapshot = await assertSucceeds(
+      guideDb().collection('attendance')
+        .where('groupId', '==', 'groupA')
+        .where('dateKey', '==', '2026-06-11')
+        .get(),
+    );
+    // Only att-own matches (att-nogroup has no groupId; att-other is groupB).
+    expect(snapshot.size).toBe(1);
+    snapshot.forEach((document) => expect(document.data().groupId).toBe('groupA'));
+  });
+
+  it('guide CANNOT query attendance by dateKey ALONE (no groupId scope)', async () => {
+    await assertFails(
+      guideDb().collection('attendance').where('dateKey', '==', '2026-06-11').get(),
+    );
+  });
+
+  it('guide CANNOT run an unscoped attendance query', async () => {
+    await assertFails(guideDb().collection('attendance').get());
+  });
+
+  it('guide CANNOT query attendance of another group', async () => {
+    await assertFails(guideDb().collection('attendance').where('groupId', '==', 'groupB').get());
+  });
+});
+
+
+describe('read-scope role matrix — broad reads (9ג)', () => {
+  it('admin CAN read all volunteers and attendance (unscoped)', async () => {
+    await assertSucceeds(adminDb().collection('volunteers').get());
+    await assertSucceeds(adminDb().collection('attendance').get());
+    await assertSucceeds(adminDb().collection('guides').get());
+  });
+
+  it('explicit viewer CAN read all volunteers and attendance (unscoped)', async () => {
+    await assertSucceeds(viewerDb().collection('volunteers').get());
+    await assertSucceeds(viewerDb().collection('attendance').get());
+    await assertSucceeds(viewerDb().collection('guides').get());
+  });
+
+  it('role-less (missing role) user CAN read broadly — viewer-compatible per App.jsx', async () => {
+    await assertSucceeds(noRoleDb().collection('volunteers').get());
+    await assertSucceeds(noRoleDb().collection('attendance').get());
+    await assertSucceeds(noRoleDb().collection('guides').get());
+  });
+
+  it('UNKNOWN role CANNOT read volunteers / attendance / guides', async () => {
+    await assertFails(unknownRoleDb().collection('volunteers').get());
+    await assertFails(unknownRoleDb().collection('attendance').get());
+    await assertFails(unknownRoleDb().collection('guides').get());
+  });
+
+  it('disabled and anonymous CANNOT read volunteers / attendance', async () => {
+    await assertFails(disabledDb().collection('volunteers').get());
+    await assertFails(disabledDb().collection('attendance').get());
+    await assertFails(anonDb().collection('volunteers').get());
+    await assertFails(anonDb().collection('attendance').get());
+  });
+});
+
+
+// NOTE: these prove the Firestore QUERY SHAPE + Rules only — NOT React. They run
+// the exact queries the screens issue and assert allow/deny + scoping. React
+// state / rendering is proven separately by UI E2E in step 9ה.
+describe('Firestore query shape (emulator, not React) — the real screen reads (9ג)', () => {
+  // The exact week window GroupDetails builds, containing att-own's 2026-06-11.
+  const weekKeys = [
+    '2026-06-07', '2026-06-08', '2026-06-09', '2026-06-10',
+    '2026-06-11', '2026-06-12', '2026-06-13',
+  ];
+
+  it('AttendanceScreen guide reads succeed and return only their group', async () => {
+    // volunteers by groupId
+    const volunteers = await assertSucceeds(
+      guideDb().collection('volunteers').where('groupId', '==', 'groupA').get(),
+    );
+    expect(volunteers.size).toBe(2);
+
+    // attendance by groupId + dateKey
+    const attendance = await assertSucceeds(
+      guideDb().collection('attendance')
+        .where('groupId', '==', 'groupA')
+        .where('dateKey', '==', '2026-06-11')
+        .get(),
+    );
+    expect(attendance.size).toBe(1);
+  });
+
+  it('GroupDetails guide reads succeed (volunteers + weekly attendance by groupId)', async () => {
+    const volunteers = await assertSucceeds(
+      guideDb().collection('volunteers').where('groupId', '==', 'groupA').get(),
+    );
+    expect(volunteers.size).toBe(2);
+
+    const weeklyAttendance = await assertSucceeds(
+      guideDb().collection('attendance')
+        .where('groupId', '==', 'groupA')
+        .where('dateKey', 'in', weekKeys)
+        .get(),
+    );
+    // Only att-own (2026-06-11) falls in this window for groupA.
+    expect(weeklyAttendance.size).toBe(1);
+    weeklyAttendance.forEach((document) => expect(document.data().groupId).toBe('groupA'));
+  });
+
+  it('the same screens\' UNSCOPED queries are denied for a guide', async () => {
+    await assertFails(guideDb().collection('volunteers').get());
+    await assertFails(guideDb().collection('attendance').where('dateKey', 'in', weekKeys).get());
+  });
+
+  it('admin still reads the same collections without scoping', async () => {
+    await assertSucceeds(adminDb().collection('volunteers').get());
+    await assertSucceeds(adminDb().collection('attendance').where('dateKey', 'in', weekKeys).get());
+  });
+});
+
+
+describe('guide authority — single source of truth (9ג fix)', () => {
+  // Re-seed specific docs with rules DISABLED to model each conflict, on top of
+  // the default beforeEach seed (guides/guide1 = groupA, groupA has no guideId).
+  async function reseed(mutate) {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await mutate(context.firestore());
+    });
+  }
+
+  // A fully-valid groupB attendance payload (so the ONLY possible denial reason
+  // is authorization, not schema) + its canonical id.
+  const groupBAttendance = () => ({
+    groupId: 'groupB', group: 'קבוצה ב', groupName: 'קבוצה ב',
+    date: new Date(), dateKey: '2026-06-12',
+    status: true, volunteerId: 'vol2', volunteerName: 'רן לוי',
+  });
+
+  // א. canonical mapping = groupA, AND a STALE legacy link groups/groupB.guideId
+  //    = guide1. The stale link must grant NOTHING.
+  describe('א. canonical groupA + stale groups/groupB.guideId = guide1', () => {
+    beforeEach(async () => {
+      await reseed(async (db) => {
+        await db.collection('groups').doc('groupB').set({ guideId: GUIDE_UID }, { merge: true });
+      });
+    });
+
+    it('reads of groupA are ALLOWED', async () => {
+      await assertSucceeds(guideDb().collection('volunteers').doc('vol1').get());
+      await assertSucceeds(guideDb().collection('attendance').doc('att-own').get());
+      await assertSucceeds(guideDb().collection('volunteers').where('groupId', '==', 'groupA').get());
+    });
+
+    it('reads of groupB are DENIED despite the stale legacy link', async () => {
+      await assertFails(guideDb().collection('volunteers').doc('vol2').get());
+      await assertFails(guideDb().collection('attendance').doc('att-other').get());
+      await assertFails(guideDb().collection('volunteers').where('groupId', '==', 'groupB').get());
+      await assertFails(guideDb().collection('attendance').where('groupId', '==', 'groupB').get());
+    });
+
+    it('writes to groupB are DENIED despite the stale legacy link', async () => {
+      await assertFails(
+        guideDb().collection('attendance').doc('groupB_2026-06-12_vol2').set(groupBAttendance()),
+      );
+      await assertFails(guideDb().collection('attendance').doc('att-other').delete());
+      await assertFails(
+        guideDb().collection('attendance').doc('att-other').set({ ...groupBAttendance(), dateKey: '2026-06-11' }),
+      );
+    });
+  });
+
+  // ב. canonical mapping = groupA, but groupA.guideId is MISSING / points to
+  //    another guide. The canonical mapping still wins → groupA allowed.
+  describe('ב. canonical groupA, but groupA.guideId points elsewhere', () => {
+    beforeEach(async () => {
+      await reseed(async (db) => {
+        await db.collection('groups').doc('groupA').set({ guideId: 'someOtherGuide' }, { merge: true });
+      });
+    });
+
+    it('groupA stays ALLOWED — the guides mapping is authoritative', async () => {
+      await assertSucceeds(guideDb().collection('volunteers').doc('vol1').get());
+      await assertSucceeds(guideDb().collection('attendance').doc('att-own').get());
+      await assertSucceeds(guideDb().collection('volunteers').where('groupId', '==', 'groupA').get());
+    });
+  });
+
+  // ג. NO canonical mapping (guides/guide1 missing, or its groupId empty), AND
+  //    groups/groupA.guideId = guide1 → legacy fallback applies → groupA allowed.
+  describe('ג. no canonical mapping + legacy groups/groupA.guideId = guide1', () => {
+    it('allows groupA via legacy fallback when guides/guide1 is MISSING', async () => {
+      await reseed(async (db) => {
+        await db.collection('guides').doc(GUIDE_UID).delete();
+        await db.collection('groups').doc('groupA').set({ guideId: GUIDE_UID }, { merge: true });
+      });
+      await assertSucceeds(guideDb().collection('volunteers').doc('vol1').get());
+      await assertSucceeds(guideDb().collection('attendance').doc('att-own').get());
+      await assertSucceeds(guideDb().collection('volunteers').where('groupId', '==', 'groupA').get());
+    });
+
+    it('allows groupA via legacy fallback when guides/guide1.groupId is EMPTY', async () => {
+      await reseed(async (db) => {
+        await db.collection('guides').doc(GUIDE_UID).set({ groupId: '' });
+        await db.collection('groups').doc('groupA').set({ guideId: GUIDE_UID }, { merge: true });
+      });
+      await assertSucceeds(guideDb().collection('volunteers').doc('vol1').get());
+      await assertSucceeds(guideDb().collection('attendance').doc('att-own').get());
+    });
+  });
+
+  // ד. NO canonical mapping AND no group points to the guide → denied everywhere.
+  describe('ד. no canonical mapping AND no group points to the guide', () => {
+    beforeEach(async () => {
+      await reseed(async (db) => {
+        await db.collection('guides').doc(GUIDE_UID).delete();
+        // groupA still has NO guideId (default seed) — nothing points to guide1.
+      });
+    });
+
+    it('reads and writes are DENIED', async () => {
+      await assertFails(guideDb().collection('volunteers').doc('vol1').get());
+      await assertFails(guideDb().collection('attendance').doc('att-own').get());
+      await assertFails(guideDb().collection('volunteers').where('groupId', '==', 'groupA').get());
+      await assertFails(
+        guideDb().collection('attendance').doc('groupA_2026-06-12_vol1').set(ownGroupAttendance()),
+      );
+    });
+  });
+});
+
+
+describe('GroupDetails legacy compatibility — admin/viewer vs guide (9ג)', () => {
+  // att-nogroup + volNoId carry NO canonical groupId — they model legacy data
+  // that the admin/viewer GroupDetails path can still surface (by name), while a
+  // guide cannot read them at all. (The client read-strategy branch is selected
+  // by the guideScopedRead prop; here we prove the Rules-level access gap.)
+  it('legacy no-groupId records are readable by admin/viewer but NOT by a guide', async () => {
+    await assertSucceeds(adminDb().collection('attendance').doc('att-nogroup').get());
+    await assertSucceeds(viewerDb().collection('attendance').doc('att-nogroup').get());
+    await assertSucceeds(adminDb().collection('volunteers').doc('volNoId').get());
+    await assertSucceeds(viewerDb().collection('volunteers').doc('volNoId').get());
+
+    await assertFails(guideDb().collection('attendance').doc('att-nogroup').get());
+    await assertFails(guideDb().collection('volunteers').doc('volNoId').get());
+  });
+});
+
+
+describe('GroupDetails full read sequence — guide identity = current uid (9ג)', () => {
+  // Proves the Firestore reads + Rules ONLY (NOT React): the WHOLE ordered guide
+  // sequence GroupDetails issues — the group doc, the guide's OWN guides/{uid} +
+  // users/{uid} (BY the current uid, never groups/{}.guideId), then the scoped
+  // volunteers + weekly attendance.
+  const weekKeys = [
+    '2026-06-07', '2026-06-08', '2026-06-09', '2026-06-10',
+    '2026-06-11', '2026-06-12', '2026-06-13',
+  ];
+
+  async function reseed(mutate) {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await mutate(context.firestore());
+    });
+  }
+
+  // The guide's own GroupDetails sequence for groupA — every step must succeed.
+  async function expectGuideGroupAFullSequenceSucceeds() {
+    await assertSucceeds(guideDb().collection('groups').doc('groupA').get());
+    await assertSucceeds(guideDb().collection('guides').doc(GUIDE_UID).get());
+    await assertSucceeds(guideDb().collection('users').doc(GUIDE_UID).get());
+    await assertSucceeds(guideDb().collection('volunteers').where('groupId', '==', 'groupA').get());
+    await assertSucceeds(
+      guideDb().collection('attendance')
+        .where('groupId', '==', 'groupA')
+        .where('dateKey', 'in', weekKeys)
+        .get(),
+    );
+  }
+
+  it('א: groups/groupA.guideId = guide2 — guide1 full sequence succeeds; guides/guide2 is DENIED', async () => {
+    await reseed(async (db) => {
+      await db.collection('groups').doc('groupA').set({ guideId: 'guide2' }, { merge: true });
+    });
+
+    await expectGuideGroupAFullSequenceSucceeds();
+    // The guide reads ONLY their OWN guides doc — never the foreign one the stale
+    // groups/groupA.guideId points at.
+    await assertFails(guideDb().collection('guides').doc('guide2').get());
+  });
+
+  it('ב: groupA.guideId missing — guide1 full sequence succeeds', async () => {
+    // The default seed already has groupA with no guideId.
+    await expectGuideGroupAFullSequenceSucceeds();
+  });
+
+  it('ג: no canonical mapping + legacy groups/groupA.guideId = guide1 — full sequence succeeds', async () => {
+    await reseed(async (db) => {
+      await db.collection('guides').doc(GUIDE_UID).delete();
+      await db.collection('groups').doc('groupA').set({ guideId: GUIDE_UID }, { merge: true });
+    });
+
+    await expectGuideGroupAFullSequenceSucceeds();
+  });
+
+  it('ד: guide1 is DENIED volunteers / attendance of groupB', async () => {
+    await assertFails(guideDb().collection('volunteers').where('groupId', '==', 'groupB').get());
+    await assertFails(guideDb().collection('attendance').where('groupId', '==', 'groupB').get());
+    await assertFails(guideDb().collection('volunteers').doc('vol2').get());
+    await assertFails(guideDb().collection('attendance').doc('att-other').get());
   });
 });
 

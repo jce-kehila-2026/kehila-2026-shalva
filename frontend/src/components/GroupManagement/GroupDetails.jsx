@@ -205,7 +205,18 @@ function buildWeeklyAttendance(records, groupId, groupName, groupVolunteers, wee
 }
 
 
-const GroupDetails = ({ groupId, onBack }) => {
+// `guideScopedRead` is passed (true) ONLY by the guide dashboard. It selects the
+// READ STRATEGY — guide-scoped (server-side groupId filter, no group-NAME
+// fallback) vs the legacy admin/viewer behaviour that can also fold in records
+// linked only by group name. It is NOT a security control: the Firestore Rules
+// are the guard and would deny an unscoped guide query regardless of this flag.
+//
+// `currentGuideUid` is the SIGNED-IN guide's uid, passed by the guide dashboard.
+// In the guide path the guide's own contact details are read by THIS uid — never
+// by groups/{}.guideId, which may be stale or point at a different guide (the
+// Rules let a guide read only their OWN guides/{uid}). It is ignored on the
+// admin/viewer path.
+const GroupDetails = ({ groupId, onBack, guideScopedRead = false, currentGuideUid = '' }) => {
   // True while the group's data loads.
   const [loading, setLoading] = useState(true);
 
@@ -281,45 +292,90 @@ const GroupDetails = ({ groupId, onBack }) => {
         const groupName = groupData.groupName || groupData.name || '';
         setGroup(groupData);
 
-        // Load the assigned guide (merging the guides + users records).
-        if (groupData.guideId) {
-          const [guideSnap, guideUserSnap] = await Promise.all([
-            getDoc(doc(db, 'guides', groupData.guideId)),
-            getDoc(doc(db, 'users', groupData.guideId)),
-          ]);
+        // Load the assigned guide's contact details (merging guides + users).
+        // This is OPTIONAL metadata: a failure or a missing document must NOT
+        // abort the group / volunteers / attendance load, so it lives in its OWN
+        // try/catch and only ever clears the guide card.
+        //   - GUIDE path (guideScopedRead): the guide IS the current user, so the
+        //     identity is currentGuideUid — we read ONLY their OWN guides/{uid} +
+        //     users/{uid}, never groups/{}.guideId (which may be stale or point at
+        //     another guide; the Rules would deny reading another guide's docs).
+        //     This mirrors the Rules contract where guides/{uid}.groupId wins.
+        //   - ADMIN / VIEWER path: unchanged — groups/{}.guideId selects whose
+        //     contact card to show (legacy behaviour preserved).
+        const guideUid = guideScopedRead ? currentGuideUid : groupData.guideId;
 
-          setGuide({
-            id: groupData.guideId,
-            ...(guideSnap.exists() ? guideSnap.data() : {}),
-            ...(guideUserSnap.exists() ? guideUserSnap.data() : {}),
-          });
+        if (guideUid) {
+          try {
+            const [guideSnap, guideUserSnap] = await Promise.all([
+              getDoc(doc(db, 'guides', guideUid)),
+              getDoc(doc(db, 'users', guideUid)),
+            ]);
+
+            setGuide({
+              id: guideUid,
+              ...(guideSnap.exists() ? guideSnap.data() : {}),
+              ...(guideUserSnap.exists() ? guideUserSnap.data() : {}),
+            });
+          } catch (guideError) {
+            // Metadata only — keep the screen working, just without the details.
+            console.error('שגיאה בטעינת פרטי המדריך (לא חוסם את המסך):', guideError);
+            setGuide(null);
+          }
         } else {
-          // No guide assigned.
+          // No guide to show.
           setGuide(null);
         }
 
-        // Load all volunteers and keep only those that belong to this group
-        // (matched either by group id or by group name).
-        const volunteersSnap = await getDocs(collection(db, 'volunteers'));
-        const volData = volunteersSnap.docs
-          .map((documentSnapshot) => ({
-            id: documentSnapshot.id,
-            ...documentSnapshot.data(),
-          }))
-          .filter(
-            (volunteer) =>
-              volunteer.groupId === groupId ||
-              volunteer.groupName === groupName,
+        // Load this group's volunteers.
+        //   - GUIDE path (guideScopedRead): SCOPED on the server by canonical
+        //     groupId — never the whole collection, never matched by group NAME.
+        //     A keep-only-our-group client filter stays as defense-in-depth; the
+        //     guide read Rules require the groupId scope.
+        //   - ADMIN / VIEWER path: the legacy behaviour, which may also include
+        //     records linked to this group only by group NAME (older data).
+        let volData;
+
+        if (guideScopedRead) {
+          const volunteersSnap = await getDocs(
+            query(collection(db, 'volunteers'), where('groupId', '==', groupId)),
           );
+          volData = volunteersSnap.docs
+            .map((documentSnapshot) => ({ id: documentSnapshot.id, ...documentSnapshot.data() }))
+            .filter((volunteer) => volunteer.groupId === groupId);
+        } else {
+          const volunteersSnap = await getDocs(collection(db, 'volunteers'));
+          volData = volunteersSnap.docs
+            .map((documentSnapshot) => ({ id: documentSnapshot.id, ...documentSnapshot.data() }))
+            .filter(
+              (volunteer) =>
+                volunteer.groupId === groupId ||
+                volunteer.groupName === groupName,
+            );
+        }
 
         setVolunteers(volData);
 
         // This week's attendance summary for the group (present / absent /
         // unmarked across the group's volunteers × 7 days).
+        //   - GUIDE path: SCOPED by canonical groupId + this week's dateKeys, so
+        //     the query satisfies the guide read Rules (a dateKey-only query
+        //     would be denied).
+        //   - ADMIN / VIEWER path: the legacy query by dateKey alone, so
+        //     buildWeeklyAttendance can still fold in records matched by group
+        //     NAME (older data).
         const weekKeys = getThisWeekDayKeys(currentWeekStartKey);
-        const attendanceSnap = await getDocs(
-          query(collection(db, 'attendance'), where('dateKey', 'in', weekKeys)),
-        );
+        const attendanceSnap = guideScopedRead
+          ? await getDocs(
+              query(
+                collection(db, 'attendance'),
+                where('groupId', '==', groupId),
+                where('dateKey', 'in', weekKeys),
+              ),
+            )
+          : await getDocs(
+              query(collection(db, 'attendance'), where('dateKey', 'in', weekKeys)),
+            );
         const attendanceDetails = buildWeeklyAttendance(
           attendanceSnap.docs.map((attendanceDoc) => attendanceDoc.data()),
           groupId,
@@ -349,7 +405,7 @@ const GroupDetails = ({ groupId, onBack }) => {
     };
 
     fetchAllGroupData();
-  }, [currentWeekStartKey, groupId]);
+  }, [currentWeekStartKey, groupId, guideScopedRead, currentGuideUid]);
 
   // While loading, show a placeholder.
   if (loading) {

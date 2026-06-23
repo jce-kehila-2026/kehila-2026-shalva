@@ -36,6 +36,15 @@ service cloud.firestore {
       return isActiveUser() && profile().get('role', '') == role;
     }
 
+    // A "viewer-compatible" reader: an active user who is an explicit 'viewer'
+    // OR has NO role at all. App.jsx maps a missing role to 'viewer', so the
+    // server mirrors that exact contract here. An UNKNOWN role (anything other
+    // than admin / guide / viewer) is NOT viewer-compatible and gets no broad
+    // read. Used to keep viewers' existing full read without granting it to guides.
+    function isViewerCompatible() {
+      return isActiveUser() && profile().get('role', 'viewer') == 'viewer';
+    }
+
     // An active admin.
     function isAdmin() {
       return hasRole('admin');
@@ -46,15 +55,38 @@ service cloud.firestore {
       return hasRole('admin') || hasRole('guide');
     }
 
-    // Helper to check if the signed-in guide is assigned to the given group ID.
-    // Looks up both the guide's mapping document and the group's guideId field.
+    // The guide's CANONICAL group id, taken ONLY from their own mapping document
+    // (guides/{uid}.groupId). '' when the mapping document is missing or has no
+    // groupId. This is the single source of authority for an assigned guide.
+    function guideMappedGroupId() {
+      return exists(/databases/$(database)/documents/guides/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/guides/$(request.auth.uid)).data.get('groupId', '')
+        : '';
+    }
+
+    // True when the guide has a non-empty canonical mapped group.
+    function hasCanonicalGuideGroup() {
+      return guideMappedGroupId() != '';
+    }
+
+    // Is the signed-in guide assigned to groupId? SINGLE source of authority,
+    // mirroring how GuideDashboard resolves the group:
+    //   - when the guide HAS a canonical mapping (guides/{uid}.groupId), ONLY
+    //     that group is allowed — a stale groups/{otherGroup}.guideId grants
+    //     NOTHING extra;
+    //   - ONLY when there is NO canonical mapping do we fall back to the legacy
+    //     link groups/{groupId}.guideId == uid;
+    //   - an empty groupId is never authorized.
+    // The two OR'd assignments can no longer combine into access to two groups.
+    // (Identical get()/exists() calls are cached within one evaluation.)
     function isGuideOfGroup(groupId) {
       return hasRole('guide')
+        && groupId != ''
         && (
-             (exists(/databases/$(database)/documents/guides/$(request.auth.uid))
-              && get(/databases/$(database)/documents/guides/$(request.auth.uid)).data.get('groupId', '') == groupId)
-             || (exists(/databases/$(database)/documents/groups/$(groupId))
-                 && get(/databases/$(database)/documents/groups/$(groupId)).data.get('guideId', '') == request.auth.uid)
+             hasCanonicalGuideGroup()
+               ? guideMappedGroupId() == groupId
+               : (exists(/databases/$(database)/documents/groups/$(groupId))
+                  && get(/databases/$(database)/documents/groups/$(groupId)).data.get('guideId', '') == request.auth.uid)
            );
     }
 
@@ -124,8 +156,19 @@ service cloud.firestore {
     }
 
 
-    // Active community groups — shown on the public home page, so anyone may
-    // read them; only an admin may change them.
+    // Community groups are read by the PUBLIC signed-form page (?sign=1) and the
+    // landing showcase, so read stays public (an existing product decision).
+    //
+    // WARNING: this is a documented PUBLIC exposure of the WHOLE group document.
+    // Besides the showcase fields (name, time, cover) a group doc may also carry
+    // operational fields — e.g. guideId, guideName, description, location,
+    // activityDay, notes, createdAt — and all of them are world-readable here.
+    // Guide read-scoping is intentionally NOT applied: a guide is strictly more
+    // privileged than the anonymous public, so groups cannot be both publicly
+    // readable and guide-restricted. A future option (NOT in 9ג) is to serve the
+    // public pages from a separate publicGroups/ projection holding only the
+    // showcase fields, and then lock this collection down. The sensitive PERSONAL
+    // data (volunteers / attendance) IS guide-scoped below. Only an admin writes.
     match /groups/{groupId} {
       allow read: if true;
       allow write: if isAdmin();
@@ -287,21 +330,34 @@ service cloud.firestore {
       allow read, update, delete: if isAdmin();
     }
 
-    // Volunteers: active users may read (the guide screens read the whole list
-    // and filter client-side). Only an admin may write — guides never edit
-    // volunteers in the app, so this stays admin-only on the server too.
+    // Volunteers carry personal data. Read is GROUP-SCOPED for guides:
+    //   - admin and viewer-compatible users keep full read;
+    //   - a guide may read ONLY volunteers whose canonical groupId is their own
+    //     group, so a volunteer with no canonical groupId is unreadable to a
+    //     guide, and an unscoped guide list (mixing other groups) fails — rules
+    //     are not filters, so the QUERY must constrain groupId to the guide's
+    //     group to succeed.
+    // Only an admin may write — guides never edit volunteers in the app.
     match /volunteers/{id} {
-      allow read: if isActiveUser();
+      allow read: if isAdmin()
+        || isViewerCompatible()
+        || (hasRole('guide') && isGuideOfGroup(resource.data.get('groupId', '')));
       allow write: if isAdmin();
     }
 
-    // Attendance: active users may read (read scoping is intentionally UNCHANGED
-    // here — it is tightened in a later step). Admins manage everything; a guide
-    // may only write attendance for THEIR OWN group, with strict server-side
-    // validation (canonical groupId, real non-Saturday dateKey, typed fields,
-    // immutable identity), not just hidden in the UI.
+    // Attendance: read is GROUP-SCOPED for guides:
+    //   - admin and viewer-compatible users keep full read;
+    //   - a guide may read ONLY attendance whose canonical groupId is their own
+    //     group, so a legacy record without a canonical groupId is unreadable to
+    //     a guide, and a query by dateKey ALONE (no groupId) fails — the query
+    //     MUST also constrain groupId to the guide's group.
+    // Admins manage everything; a guide may only write attendance for THEIR OWN
+    // group, with strict server-side validation (canonical groupId, real
+    // non-Saturday dateKey, typed fields, immutable identity) — unchanged from 9ב.
     match /attendance/{id} {
-      allow read: if isActiveUser();
+      allow read: if isAdmin()
+        || isViewerCompatible()
+        || (hasRole('guide') && isGuideOfGroup(resource.data.get('groupId', '')));
 
       // Create: admin, or a guide creating a strict, canonical own-group record.
       allow create: if isAdmin() || guideAttendanceCreate(id, request.resource.data);
@@ -358,10 +414,16 @@ service cloud.firestore {
       allow delete: if isAdmin() && request.auth.uid != uid;
     }
 
-    // Guide ↔ group mapping: active users read; only an admin writes. (A
-    // disabled user never needs this — the access gate only reads users/{uid}.)
+    // Guide ↔ group mapping. Read is scoped:
+    //   - admin and viewer-compatible users keep full read;
+    //   - a guide may read ONLY their OWN mapping document (guides/{their uid}),
+    //     never the whole guides collection;
+    //   - disabled / unknown-role / anonymous are denied.
+    // Only an admin writes.
     match /guides/{uid} {
-      allow read: if isActiveUser();
+      allow read: if isAdmin()
+        || isViewerCompatible()
+        || (hasRole('guide') && request.auth.uid == uid);
       allow write: if isAdmin();
     }
 

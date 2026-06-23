@@ -135,6 +135,11 @@ const GuideDashboard = ({ user, currentView, setCurrentView }) => {
     groupName: isUnassigned ? '' : rawGroupName,
   };
 
+  // The signed-in guide's EFFECTIVE Auth uid — the single, stable identity
+  // source, using the same fallback the rest of the component uses (the user
+  // prop, then auth.currentUser). Never derived from a Firestore document.
+  const authenticatedGuideUid = user?.uid || auth.currentUser?.uid || '';
+
   // Return to the action menu.
   const backToMenu = () => updateActiveView('menu');
 
@@ -158,7 +163,18 @@ const GuideDashboard = ({ user, currentView, setCurrentView }) => {
   // View: the guide's group details (or "no group").
   if (activeView === 'group') {
     return guideGroup.id ? (
-      <GroupDetails groupId={guideGroup.id} onBack={backToMenu} />
+      // guideScopedRead: force the group-scoped read strategy on the guide path.
+      // currentGuideUid comes from the effective Firebase Auth user (user prop or
+      // auth.currentUser fallback) — never a Firestore-loaded guides document or
+      // state — so the guide's contact card is read by their OWN identity. When it
+      // is empty, GroupDetails stays fail-closed on guide metadata (no fallback to
+      // the group document's guideId).
+      <GroupDetails
+        groupId={guideGroup.id}
+        guideScopedRead
+        currentGuideUid={authenticatedGuideUid}
+        onBack={backToMenu}
+      />
     ) : renderNoGroup();
   }
 
