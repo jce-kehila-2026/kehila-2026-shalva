@@ -1854,3 +1854,72 @@
     display: none;
   }
 }
+
+
+/* ---- Add-event image upload (in the quick "+" modal) ---- */
+
+/* A wrapping grid of image thumbnails already uploaded for the event. */
+.ao-ev-image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+/* One thumbnail tile (fixed height, cropped image, remove button on top). */
+.ao-ev-image-thumb {
+  position: relative;
+  height: 80px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ao-ev-image-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The small round "remove image" button. */
+.ao-ev-image-remove {
+  position: absolute;
+  top: 4px;
+  inset-inline-start: 4px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.9);
+  color: #fff;
+  font-size: 11px;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+/* The dashed "add images" drop-zone-style button. */
+.ao-ev-image-upload {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  border: 2px dashed var(--brand-500);
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--brand-700);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+/* The format/size hint below the upload button. */
+.ao-ev-image-hint {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-soft);
+  font-size: 12px;
+}

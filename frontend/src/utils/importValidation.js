@@ -4,13 +4,12 @@
 //   { ok: true,  value }   — normalized, safe-to-store value
 //   { ok: false, code }    — a stable machine code (caller maps it to Hebrew)
 //
-// The day list and the Saturday rule are NOT duplicated here — they come from
-// the existing activityDays.js single source of truth.
+// The day list is NOT duplicated here — it comes from the existing
+// activityDays.js single source of truth (which now includes Saturday).
 
 import {
   ACTIVITY_DAYS,
   ACTIVITY_DAY_SHORT_LABELS,
-  isLegacySaturdayActivityDay,
 } from './activityDays.js';
 
 // The closed list of activity-time slots (בוקר / צהריים / ערב) — single source.
@@ -22,9 +21,9 @@ import { GROUP_TIMES } from './groupOptions.js';
 // ---------------------------------------------------------------------------
 
 // Normalize an imported activity-day cell to the canonical full form
-// ('ראשון' and 'יום ראשון' → 'יום ראשון'). Saturday (either spelling) is
-// rejected with a dedicated code; an unrecognized value is rejected (never
-// stored raw). Empty is accepted as empty (the field is optional).
+// ('ראשון' and 'יום ראשון' → 'יום ראשון'; 'שבת' / 'יום שבת' → 'יום שבת').
+// An unrecognized value is rejected (never stored raw). Empty is accepted as
+// empty (the field is optional).
 export function normalizeImportedActivityDay(value) {
   // Treat missing as empty (allowed for an optional field).
   if (value === null || value === undefined) {
@@ -36,11 +35,6 @@ export function normalizeImportedActivityDay(value) {
   // Empty cell — allowed.
   if (trimmed === '') {
     return { ok: true, value: '' };
-  }
-
-  // Saturday is never a permitted NEW activity day (full or short form).
-  if (isLegacySaturdayActivityDay(trimmed)) {
-    return { ok: false, code: 'SATURDAY' };
   }
 
   // Already the canonical full form ('יום ראשון').

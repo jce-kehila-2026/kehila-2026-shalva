@@ -19,9 +19,6 @@ import { db } from '../../firebase';
 // Shared display-name helper.
 import { getDisplayName } from '../../utils/people';
 
-// Saturday is not an activity day — used to block attendance on Saturdays.
-import { isSaturdayDateValue } from '../../utils/activityDays';
-
 // Canonical attendance-day key + Hebrew weekday, both resolved in Asia/Jerusalem.
 import { getJerusalemDateKey, getJerusalemWeekdayName } from '../../utils/dateKey';
 
@@ -61,8 +58,19 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
   const [selectedGroupId, setSelectedGroupId] = useState(initialGroupId);
   const [selectedGroupName, setSelectedGroupName] = useState(initialGroupName);
 
-  // The selected group's volunteers.
+  // The selected group's volunteers SCHEDULED for the loaded day (auto-shown).
   const [volunteers, setVolunteers] = useState([]);
+
+  // Every volunteer in the selected group (the pool for the one-time "add a
+  // volunteer for today" picker — including those not scheduled today).
+  const [allGroupVolunteers, setAllGroupVolunteers] = useState([]);
+
+  // Volunteers added manually for THIS day only (a one-time visit on a day that
+  // isn't their fixed day). Their stored `day` is never changed.
+  const [extraVolunteers, setExtraVolunteers] = useState([]);
+
+  // Whether the "add a volunteer for today" picker panel is open.
+  const [isAddPanelOpen, setIsAddPanelOpen] = useState(false);
 
   // Today's already-saved attendance records (at most one per volunteer).
   const [attendanceRecords, setAttendanceRecords] = useState([]);
@@ -110,9 +118,6 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
   // The loaded activity day, resolved in Asia/Jerusalem — the canonical dateKey
   // every record is keyed by (NOT the process/browser timezone).
   const loadedDateKey = useMemo(() => getJerusalemDateKey(loadedInstant), [loadedInstant]);
-
-  // Saturday is not an activity day — marking is blocked (screen stays open).
-  const isSaturday = useMemo(() => isSaturdayDateValue(loadedDateKey), [loadedDateKey]);
 
   // The Hebrew weekday of the loaded day, resolved in Asia/Jerusalem. Drives both
   // the "scheduled today" filter and the heading (never getDay() of local time).
@@ -209,6 +214,7 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
     // No canonical group resolved: clear and stop.
     if (!canonicalGroupId) {
       setVolunteers([]);
+      setAllGroupVolunteers([]);
       setAttendanceRecords([]);
       setLoading(false);
       return;
@@ -241,17 +247,20 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
       // The loaded weekday, resolved in Asia/Jerusalem (never getDay() of local).
       const todayHebrewDay = getJerusalemWeekdayName(loadedInstant);
 
-      // Marking list: volunteers of THIS group by canonical groupId ONLY (never
-      // by group name), scheduled for the loaded weekday.
-      const volunteersData = volunteersSnap.docs
+      // Every volunteer of THIS group by canonical groupId ONLY (never by name).
+      // This is the pool for the one-time "add a volunteer for today" picker.
+      const allVolunteersData = volunteersSnap.docs
         .map((documentSnapshot) => ({ id: documentSnapshot.id, ...documentSnapshot.data() }))
-        .filter((volunteer) => volunteer.groupId === canonicalGroupId)
-        .filter((volunteer) => {
-          if (volunteer.day && volunteer.day.trim() !== '') {
-            return volunteer.day.trim() === todayHebrewDay;
-          }
-          return true;
-        });
+        .filter((volunteer) => volunteer.groupId === canonicalGroupId);
+
+      // The auto-shown marking list: those scheduled for the loaded weekday (a
+      // volunteer with no fixed day is treated as scheduled every day).
+      const scheduledVolunteersData = allVolunteersData.filter((volunteer) => {
+        if (volunteer.day && volunteer.day.trim() !== '') {
+          return volunteer.day.trim() === todayHebrewDay;
+        }
+        return true;
+      });
 
       // Today's saved records for THIS group (by canonical groupId), so an
       // existing record's real document id can be reused on update / delete.
@@ -259,7 +268,8 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
         .map((documentSnapshot) => ({ id: documentSnapshot.id, ...documentSnapshot.data() }))
         .filter((record) => record.groupId === canonicalGroupId);
 
-      setVolunteers(volunteersData);
+      setAllGroupVolunteers(allVolunteersData);
+      setVolunteers(scheduledVolunteersData);
       setAttendanceRecords(attendanceData);
       // Record the successfully-loaded context (group + day).
       loadedContextRef.current = requestContext;
@@ -316,6 +326,9 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
     loadGuardRef.current.invalidate();
     loadedContextRef.current = '';
     setVolunteers([]);
+    setAllGroupVolunteers([]);
+    setExtraVolunteers([]);
+    setIsAddPanelOpen(false);
     setAttendanceRecords([]);
     setMarks({});
     setTouchedVolunteerIds({});
@@ -375,7 +388,45 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
     setMarks(initial);
     setHasEditedMarks(false);
     setTouchedVolunteerIds({});
+
+    // A fresh day/group load starts with no one-time additions and a closed picker.
+    setExtraVolunteers([]);
+    setIsAddPanelOpen(false);
   }, [volunteers]);
+
+  // The full marking list: the scheduled volunteers plus any added for today.
+  const markingVolunteers = useMemo(
+    () => [...volunteers, ...extraVolunteers],
+    [volunteers, extraVolunteers],
+  );
+
+  // Volunteers in the group who are NOT already in the marking list — the pool
+  // offered by the "add a volunteer for today" picker, sorted by name.
+  const addableVolunteers = useMemo(() => {
+    const shownIds = new Set(markingVolunteers.map((volunteer) => volunteer.id));
+
+    return allGroupVolunteers
+      .filter((volunteer) => !shownIds.has(volunteer.id))
+      .sort((first, second) => getVolunteerName(first).localeCompare(getVolunteerName(second), 'he'));
+  }, [allGroupVolunteers, markingVolunteers]);
+
+  // Add one volunteer to TODAY'S list as a one-time visit. Their saved mark (if
+  // any) pre-fills the toggle; it is NOT treated as an edit until actively changed.
+  const handleAddVolunteerForToday = (volunteer) => {
+    setExtraVolunteers((current) => {
+      if (current.some((item) => item.id === volunteer.id)) {
+        return current;
+      }
+      return [...current, volunteer];
+    });
+
+    setMarks((current) => ({
+      ...current,
+      [volunteer.id]: attendanceStateFromRecord(savedByVolunteerRef.current[volunteer.id]),
+    }));
+
+    setIsAddPanelOpen(false);
+  };
 
   // Centralized day-change reset: drop unsaved marks, reset every flag + ref
   // (synchronously where a ref is involved) and reload the new day. Shows at most
@@ -389,6 +440,9 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
     loadGuardRef.current.invalidate();
     loadedContextRef.current = '';
     setVolunteers([]);
+    setAllGroupVolunteers([]);
+    setExtraVolunteers([]);
+    setIsAddPanelOpen(false);
     setAttendanceRecords([]);
     setLoading(true);
 
@@ -466,9 +520,9 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
 
   // Toggle a volunteer's status; clicking the active one clears it.
   const handleStatusSelect = (volunteerId, statusType) => {
-    // No marking while saving / loading / on Saturday, or when the shown data is
-    // for a different group or day than the current context (stale).
-    if (savingRef.current || loading || isSaturday) {
+    // No marking while saving / loading, or when the shown data is for a
+    // different group or day than the current context (stale).
+    if (savingRef.current || loading) {
       return;
     }
     if (loadedContextRef.current !== `${canonicalGroupId}|${loadedDateKey}`) {
@@ -486,8 +540,8 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
   };
 
   const handleMarkAllPresent = () => {
-    // No marking while saving / loading / on Saturday, or on a stale context.
-    if (savingRef.current || loading || isSaturday) {
+    // No marking while saving / loading, or on a stale context.
+    if (savingRef.current || loading) {
       return;
     }
     if (loadedContextRef.current !== `${canonicalGroupId}|${loadedDateKey}`) {
@@ -497,24 +551,24 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
     hasEditedRef.current = true;
     setHasEditedMarks(true);
     const touched = {};
-    volunteers.forEach((volunteer) => {
+    markingVolunteers.forEach((volunteer) => {
       touched[volunteer.id] = true;
     });
     setTouchedVolunteerIds(touched);
     setMarks((prev) => {
       const next = { ...prev };
-      volunteers.forEach((volunteer) => {
+      markingVolunteers.forEach((volunteer) => {
         next[volunteer.id] = 'present';
       });
       return next;
     });
   };
 
-  // Live counts for the summary bar.
+  // Live counts for the summary bar (across the scheduled + one-time list).
   let presentCount = 0;
   let absentCount = 0;
   let unmarkedCount = 0;
-  volunteers.forEach((volunteer) => {
+  markingVolunteers.forEach((volunteer) => {
     const state = marks[volunteer.id] || 'unmarked';
     if (state === 'present') {
       presentCount++;
@@ -524,7 +578,10 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
       unmarkedCount++;
     }
   });
-  const allMarkedPresent = volunteers.length > 0 && presentCount === volunteers.length;
+  const allMarkedPresent = markingVolunteers.length > 0 && presentCount === markingVolunteers.length;
+
+  // Ids of the one-time additions, so their rows can show a small "added" badge.
+  const extraIdSet = new Set(extraVolunteers.map((volunteer) => volunteer.id));
 
   // Perform ONE attendance change as an independent Firestore request.
   const executeOperation = (operation) => {
@@ -545,12 +602,9 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
       return;
     }
 
-    // Fail closed without a canonical group id; never write on Saturday.
+    // Fail closed without a canonical group id.
     if (!canonicalGroupId) {
       alert('שגיאה: לא נמצא מזהה קבוצה קנוני. לא ניתן לשמור נוכחות.');
-      return;
-    }
-    if (isSaturday) {
       return;
     }
     if (!hasEditedMarks) {
@@ -585,7 +639,7 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
     // Plan every operation up front (no writes yet); an identity mismatch aborts
     // the whole save before anything is written.
     const planned = buildAttendanceOperations({
-      volunteers,
+      volunteers: markingVolunteers,
       marks,
       touchedVolunteerIds,
       savedByVolunteer,
@@ -718,22 +772,15 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
           </select>
         )}
 
-        {/* Saturday: not an activity day — the screen stays open, marking is off. */}
-        {!loading && hasGroup && isSaturday && (
-          <p className="att-note att-note-shabbat">
-            שבת אינה יום פעילות — אין סימון נוכחות בשבת. ניתן לצפות במסך, אך הסימון והשמירה אינם זמינים.
-          </p>
-        )}
-
         {/* Loading / empty states. */}
         {loading && <p className="att-note">טוען מתנדבים...</p>}
 
-        {!loading && hasGroup && volunteers.length === 0 && (
+        {!loading && hasGroup && allGroupVolunteers.length === 0 && (
           <p className="att-note">לא נמצאו מתנדבים בקבוצה זו.</p>
         )}
 
         {/* The marking UI, once a group with volunteers is loaded. */}
-        {!loading && volunteers.length > 0 && (
+        {!loading && hasGroup && allGroupVolunteers.length > 0 && (
           <>
             {/* Today banner — the only day this screen marks. */}
             <div className="att-today-banner">
@@ -757,62 +804,113 @@ function AttendanceScreen({ initialGroupId = '', initialGroupName = '', lockGrou
               </div>
             </div>
 
-            <div className="att-bulk-actions">
+            {/* One-time "add a volunteer for today" — for someone visiting on a
+                day that isn't their fixed day. It only affects this day; their
+                stored activity day is never changed. */}
+            <div className="att-add-extra">
               <button
                 type="button"
-                className="att-mark-all-present"
-                onClick={handleMarkAllPresent}
-                disabled={saving || loading || isSaturday || allMarkedPresent}
+                className="att-add-extra-toggle"
+                onClick={() => setIsAddPanelOpen((open) => !open)}
+                disabled={saving || loading || addableVolunteers.length === 0}
+                aria-expanded={isAddPanelOpen}
               >
-                {allMarkedPresent ? 'כולם סומנו כנוכחים' : 'סמן את כולם כנוכחים'}
+                ➕ הוספת מתנדב ליום זה
               </button>
+
+              {addableVolunteers.length === 0 && (
+                <span className="att-add-extra-note">כל מתנדבי הקבוצה כבר מופיעים ברשימה</span>
+              )}
+
+              {/* The pool of group members not already in the list. */}
+              {isAddPanelOpen && addableVolunteers.length > 0 && (
+                <div className="att-add-extra-panel">
+                  {addableVolunteers.map((volunteer) => {
+                    const name = getVolunteerName(volunteer);
+
+                    return (
+                      <button
+                        type="button"
+                        key={volunteer.id}
+                        className="att-add-extra-option"
+                        onClick={() => handleAddVolunteerForToday(volunteer)}
+                      >
+                        <span>{name}</span>
+                        {volunteer.day && <small>{volunteer.day}</small>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
-            {/* One row per volunteer: name on the right, present / absent toggles. */}
-            <ul className="att-list">
-              {volunteers.map((volunteer) => {
-                const name = getVolunteerName(volunteer);
-                const status = marks[volunteer.id] || 'unmarked';
+            {markingVolunteers.length > 0 ? (
+              <>
+                <div className="att-bulk-actions">
+                  <button
+                    type="button"
+                    className="att-mark-all-present"
+                    onClick={handleMarkAllPresent}
+                    disabled={saving || loading || allMarkedPresent}
+                  >
+                    {allMarkedPresent ? 'כולם סומנו כנוכחים' : 'סמן את כולם כנוכחים'}
+                  </button>
+                </div>
 
-                return (
-                  <li key={volunteer.id} className={`att-row att-row--${status}`}>
-                    <div className="volunteer-name-cell">
-                      <span className="att-avatar">{getInitial(name)}</span>
-                      <span className="volunteer-name">{name}</span>
-                    </div>
+                {/* One row per volunteer: name on the right, present / absent toggles. */}
+                <ul className="att-list">
+                  {markingVolunteers.map((volunteer) => {
+                    const name = getVolunteerName(volunteer);
+                    const status = marks[volunteer.id] || 'unmarked';
+                    const isExtra = extraIdSet.has(volunteer.id);
 
-                    <div className="att-cell-actions">
-                      {/* Present — the check mark is drawn in CSS (see stylesheet). */}
-                      <button
-                        type="button"
-                        className={`att-action-toggle present ${status === 'present' ? 'is-active' : ''}`}
-                        onClick={() => handleStatusSelect(volunteer.id, 'present')}
-                        disabled={saving || loading || isSaturday}
-                        aria-pressed={status === 'present'}
-                        aria-label={`סמן ${name} כנוכח`}
-                        title="נוכח"
-                      />
+                    return (
+                      <li key={volunteer.id} className={`att-row att-row--${status}`}>
+                        <div className="volunteer-name-cell">
+                          <span className="att-avatar">{getInitial(name)}</span>
+                          <span className="volunteer-name">{name}</span>
+                          {/* Flag a one-time addition so it reads differently from
+                              the regularly-scheduled volunteers. */}
+                          {isExtra && <span className="att-extra-badge">הוספה חד-פעמית</span>}
+                        </div>
 
-                      {/* Absent — the X is drawn in CSS (see stylesheet). */}
-                      <button
-                        type="button"
-                        className={`att-action-toggle absent ${status === 'absent' ? 'is-active' : ''}`}
-                        onClick={() => handleStatusSelect(volunteer.id, 'absent')}
-                        disabled={saving || loading || isSaturday}
-                        aria-pressed={status === 'absent'}
-                        aria-label={`סמן ${name} כחסר`}
-                        title="חסר"
-                      />
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+                        <div className="att-cell-actions">
+                          {/* Present — the check mark is drawn in CSS (see stylesheet). */}
+                          <button
+                            type="button"
+                            className={`att-action-toggle present ${status === 'present' ? 'is-active' : ''}`}
+                            onClick={() => handleStatusSelect(volunteer.id, 'present')}
+                            disabled={saving || loading}
+                            aria-pressed={status === 'present'}
+                            aria-label={`סמן ${name} כנוכח`}
+                            title="נוכח"
+                          />
 
-            {/* Save. */}
-            <button className="att-save" onClick={handleSaveAttendance} disabled={saving || loading || isSaturday}>
-              {saving ? 'שומר...' : justSaved ? 'נשמרה הנוכחות' : 'שמירת נוכחות'}
-            </button>
+                          {/* Absent — the X is drawn in CSS (see stylesheet). */}
+                          <button
+                            type="button"
+                            className={`att-action-toggle absent ${status === 'absent' ? 'is-active' : ''}`}
+                            onClick={() => handleStatusSelect(volunteer.id, 'absent')}
+                            disabled={saving || loading}
+                            aria-pressed={status === 'absent'}
+                            aria-label={`סמן ${name} כחסר`}
+                            title="חסר"
+                          />
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+
+                {/* Save. */}
+                <button className="att-save" onClick={handleSaveAttendance} disabled={saving || loading}>
+                  {saving ? 'שומר...' : justSaved ? 'נשמרה הנוכחות' : 'שמירת נוכחות'}
+                </button>
+              </>
+            ) : (
+              // No one is scheduled today — the guide can still add a one-time visitor.
+              <p className="att-note">אין מתנדבים משובצים ליום זה. ניתן להוסיף מתנדב חד-פעמי.</p>
+            )}
           </>
         )}
       </div>

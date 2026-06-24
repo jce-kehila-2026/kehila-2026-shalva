@@ -130,28 +130,6 @@ describe('volunteers template → import round-trip', () => {
     expect(readyToWrite[0].payload.birthDate).toBe('2026-07-06');
   });
 
-  it('rejects a Saturday activity day but accepts a Saturday birth date', async () => {
-    // Saturday in the activity-day column → rejected.
-    const sat = await buildAndRead((sheet) => {
-      sheet.getCell('A2').value = 'אבי';
-      sheet.getCell('B2').value = 'כהן';
-      sheet.getCell('J2').value = 'שבת';
-    });
-    const satPre = preflightVolunteerImport(XLSX.utils.sheet_to_json(sat.wb.Sheets[sat.wb.SheetNames[0]]));
-    expect(satPre.valid).toHaveLength(0);
-    expect(satPre.rejected[0].reasons.join(' ')).toMatch(/שבת/);
-
-    // A Saturday calendar BIRTH date (2026-06-27) → accepted.
-    const bday = await buildAndRead((sheet) => {
-      sheet.getCell('A2').value = 'אבי';
-      sheet.getCell('B2').value = 'כהן';
-      sheet.getCell('F2').value = '2026-06-27';
-    });
-    const { valid } = preflightVolunteerImport(XLSX.utils.sheet_to_json(bday.wb.Sheets[bday.wb.SheetNames[0]]));
-    const { readyToWrite } = resolveVolunteerImport(valid, {});
-    expect(readyToWrite[0].payload.birthDate).toBe('2026-06-27');
-  });
-
   it('still imports an OLD file with no זמן פעילות column (activityTime → "")', () => {
     // Header-name based import — an old export simply has no 'זמן פעילות' key.
     const jsonRows = [{ 'שם פרטי *': 'אבי', 'שם משפחה *': 'כהן' }];
@@ -185,11 +163,10 @@ describe('volunteers template → import round-trip', () => {
     expect(dateVal.error).toContain('15-06-1999');
     expect(dateVal.error).not.toContain('15/06/1999');
 
-    // Activity-day dropdown = canonical Sun–Fri (from the shared source), no שבת.
+    // Activity-day dropdown = canonical Sun–Sat (compared to the shared source).
     const dayVal = sheet.getCell('J2').dataValidation;
     expect(dayVal.type).toBe('list');
     expect(dayVal.formulae[0]).toBe(`"${ACTIVITY_DAYS.join(',')}"`);
-    expect(dayVal.formulae[0]).not.toContain('שבת');
 
     // Activity-time dropdown = exactly GROUP_TIMES (no extra/missing value).
     const timeVal = sheet.getCell('K2').dataValidation;
@@ -250,12 +227,11 @@ describe('groups template → import round-trip', () => {
     const sheet = reloaded.getWorksheet('קבוצות');
 
     // Time dropdown = GROUP_TIMES; day dropdown = the SHARED full-form
-    // ACTIVITY_DAYS (Sun–Fri, no שבת) — compared to source, not re-listed.
+    // ACTIVITY_DAYS (Sun–Sat) — compared to source, not re-listed.
     expect(sheet.getCell('B2').dataValidation.formulae[0]).toBe(`"${GROUP_TIMES.join(',')}"`);
     const dayVal = sheet.getCell('F2').dataValidation;
     expect(dayVal.type).toBe('list');
     expect(dayVal.formulae[0]).toBe(`"${ACTIVITY_DAYS.join(',')}"`);
-    expect(dayVal.formulae[0]).not.toContain('שבת');
   });
 
   it('round-trips a valid group row into a normalized plan (ids matched, no excelRow in fields)', async () => {
@@ -303,15 +279,7 @@ describe('groups template → import round-trip', () => {
     expect(blankSkipped).toBe(0);
   });
 
-  it('rejects Saturday but accepts the short day form', async () => {
-    const sat = await buildAndReadGroups((sheet) => {
-      sheet.getCell('A2').value = 'קבוצה א';
-      sheet.getCell('F2').value = 'שבת';
-    });
-    const satPre = preflightGroupImport(XLSX.utils.sheet_to_json(sat.wb.Sheets[sat.wb.SheetNames[0]]));
-    expect(satPre.valid).toHaveLength(0);
-    expect(satPre.rejected[0].reasons.join(' ')).toMatch(/שבת/);
-
+  it('normalizes a short activity day to the full form through the pipeline', async () => {
     const short = await buildAndReadGroups((sheet) => {
       sheet.getCell('A2').value = 'קבוצה א';
       sheet.getCell('F2').value = 'ראשון';
@@ -381,12 +349,12 @@ describe('groups template → import round-trip', () => {
   it('tolerates a BOM header and uses the TRUE row number after a gap', () => {
     const bom = String.fromCharCode(0xFEFF);
     // Hand-edited/older file: BOM on the first header; header r1, valid r2,
-    // blank r3, Saturday r4.
+    // blank r3, an invalid-day row r4.
     const aoa = [
       [bom + 'שם קבוצה *', 'יום פעילות'],
       ['תותים', 'ראשון'],
       [],
-      ['דובדבן', 'שבת'],
+      ['דובדבן', 'שבתון'],
     ];
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     const jsonRows = XLSX.utils.sheet_to_json(ws);
@@ -394,7 +362,7 @@ describe('groups template → import round-trip', () => {
 
     expect(valid.map((r) => r.excelRow)).toEqual([2]);
     expect(valid[0].fields.groupName).toBe('תותים'); // BOM header still mapped
-    expect(rejected.map((r) => r.excelRow)).toEqual([4]); // the Saturday row, not 3
+    expect(rejected.map((r) => r.excelRow)).toEqual([4]); // the invalid-day row, not 3
   });
 
   it('rejects a typed numeric 0 in the volunteers cell (template → SheetJS → pipeline)', async () => {

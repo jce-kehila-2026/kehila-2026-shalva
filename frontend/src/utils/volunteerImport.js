@@ -133,13 +133,10 @@ function dateReason(code) {
   }
 }
 
-function dayReason(code) {
-  switch (code) {
-    case 'SATURDAY':
-      return 'יום פעילות שבת אינו מותר';
-    default:
-      return 'יום פעילות לא מזוהה';
-  }
+function dayReason() {
+  // The only remaining rejection is an unrecognized weekday (Saturday is allowed
+  // now and normalizes like any other day).
+  return 'יום פעילות לא מזוהה';
 }
 
 
@@ -227,13 +224,14 @@ export function prepareVolunteerImportRow(rawRow, { date1904 = false } = {}) {
     errors.push(dateReason(dateResult.code));
   }
 
-  // Activity day — optional, short/full normalized, Saturday/unknown rejected.
+  // Activity day — optional, short/full normalized (Saturday included now); an
+  // unrecognized value is rejected.
   const dayResult = normalizeImportedActivityDay(rawDay);
   let day = '';
   if (dayResult.ok) {
     day = dayResult.value;
   } else {
-    errors.push(dayReason(dayResult.code));
+    errors.push(dayReason());
   }
 
   // Activity time — optional; if present must be a canonical GROUP_TIMES value.

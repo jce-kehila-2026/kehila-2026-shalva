@@ -8,10 +8,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 // Firestore helpers for reading collections and adding an event.
 // serverTimestamp lets the server stamp createdAt/updatedAt (not the browser clock).
-import { addDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
+// setDoc with a pre-generated id lets us upload images to that event's folder
+// BEFORE the document exists.
+import { collection, doc, getDocs, serverTimestamp, setDoc } from 'firebase/firestore';
 
-// Our Firestore database instance.
-import { db } from '../../firebase';
+// Our Firestore database + Storage instances.
+import { db, storage } from '../../firebase';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+
+// An event can be assigned to several groups — read that consistently.
+import { getEventGroups, NO_GROUP } from '../../utils/eventGroups';
 
 // Styles for this screen.
 import './AdminOverview.css';
@@ -27,9 +33,6 @@ import { getDisplayName, parseBirthDate, computeAge } from '../../utils/people';
 
 // Shared attendance helpers (count today's absentees consistently).
 import { normalizeAttendanceStatus, getRecordStatus } from '../../utils/attendance';
-
-// Saturday is not a permitted event date.
-import { isSaturdayDateValue } from '../../utils/activityDays';
 
 // WhatsApp helpers: build a greeting + link so a birthday name opens a chat.
 import { birthdayMessage, buildWhatsAppUrl, hasValidPhone } from '../../utils/whatsapp';
@@ -161,18 +164,41 @@ function attendanceDateKey(value) {
 }
 
 
-// Blank add-event form — reused for the initial state and after a successful save.
+// Blank add-event form — reused for the initial state and after a successful
+// save. `assignedGroups` is a list (an event can belong to several groups);
+// `imageUrls` holds the uploaded event images. These match the fields of the
+// full event manager, so both add-event forms are identical.
 const EMPTY_EVENT_FORM = {
   name: '',
   date: '',
   location: '',
   description: '',
-  assignedGroup: 'ללא שיוך',
+  assignedGroups: [],
   status: 'מתוכנן',
   contactName: '',
   contactPhone: '',
   contactEmail: '',
+  imageUrls: [],
 };
+
+
+// Image upload limits, shared with the full event manager.
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+// Validate one chosen file: an allowed image type, under 5MB. Alerts on reject.
+function isValidEventImage(file) {
+  if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+    window.alert(`הקובץ ${file.name} אינו תמונה מסוג JPG, PNG או WEBP.`);
+    return false;
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    window.alert(`התמונה ${file.name} גדולה מדי (מקסימום 5MB).`);
+    return false;
+  }
+
+  return true;
+}
 
 
 // Event status -> CSS class (used to colour the small status badge).
@@ -293,14 +319,13 @@ function EventDetailsModal({
   const imageUrl = getPrimaryEventImage(eventItem);
   const dateLabel = formatDateOnlyForDisplay(eventItem.date, { fallback: '' });
   const descriptionId = eventItem.description ? 'ao-event-details-description' : undefined;
-  const assignedGroup = eventItem.assignedGroup && eventItem.assignedGroup !== 'ללא שיוך'
-    ? eventItem.assignedGroup
-    : '';
+  // All the event's groups as one label (empty string when it has none).
+  const assignedGroups = getEventGroups(eventItem).join(', ');
   const details = [
     { label: 'תאריך', value: dateLabel },
     { label: 'שעה', value: eventItem.time },
     { label: 'מיקום', value: eventItem.location },
-    { label: 'קבוצה', value: assignedGroup },
+    { label: 'קבוצה', value: assignedGroups },
   ].filter((item) => item.value);
 
   return (
@@ -434,6 +459,13 @@ function AdminOverview({ onNavigate }) {
   const [accReloadToken, setAccReloadToken] = useState(0);
   const [eventForm, setEventForm] = useState(EMPTY_EVENT_FORM);
 
+  // The new event's id, pre-generated when the modal opens so images can be
+  // uploaded to events/<id>/ before the document itself is written.
+  const [currentEventId, setCurrentEventId] = useState('');
+
+  // True while event images are uploading to Storage.
+  const [uploadingEventImages, setUploadingEventImages] = useState(false);
+
   // Stays true while mounted (blocks state updates after unmount) and a
   // synchronous "save in progress" flag (a hard guard against double-submit).
   const isMountedRef = useRef(true);
@@ -504,7 +536,8 @@ function AdminOverview({ onNavigate }) {
         status: computeEventStatus(event),
         location: event.location || '',
         description: event.description || '',
-        assignedGroup: event.assignedGroup || '',
+        // The clean list of groups (handles both new array and old single value).
+        assignedGroups: getEventGroups(event),
         contact: event.contact || null,
         imageUrls: normalizeImageUrls(event.imageUrls),
         time: getEventTime(event),
@@ -701,6 +734,15 @@ function AdminOverview({ onNavigate }) {
     setEventDetailsImageError(false);
   };
 
+  // Open the add-event modal: clear errors, start a fresh form, and pre-generate
+  // the event id so images can upload to that event's folder before saving.
+  const openAddEventModal = () => {
+    setEventError('');
+    setEventForm(EMPTY_EVENT_FORM);
+    setCurrentEventId(doc(collection(db, 'events')).id);
+    setIsAddEventOpen(true);
+  };
+
   // Close the add-event modal and clear any error (used by the cancel button).
   const closeAddEventModal = () => {
     setEventError('');
@@ -714,6 +756,79 @@ function AdminOverview({ onNavigate }) {
     setEventForm((previous) => ({
       ...previous,
       [name]: value,
+    }));
+  };
+
+  // Toggle one group in the event's group list (the checkbox handler).
+  const toggleEventGroup = (groupName) => {
+    setEventForm((previous) => {
+      const isSelected = previous.assignedGroups.includes(groupName);
+
+      const nextGroups = isSelected
+        ? previous.assignedGroups.filter((group) => group !== groupName)
+        : [...previous.assignedGroups, groupName];
+
+      return { ...previous, assignedGroups: nextGroups };
+    });
+  };
+
+  // Upload chosen images to events/<currentEventId>/ and append their URLs.
+  const handleEventImageUpload = async (changeEvent) => {
+    const files = changeEvent.target.files;
+    if (!files || files.length === 0) {
+      return;
+    }
+
+    setUploadingEventImages(true);
+    const uploadedUrls = [...(eventForm.imageUrls || [])];
+
+    try {
+      for (let i = 0; i < files.length; i += 1) {
+        const file = files[i];
+        if (!isValidEventImage(file)) {
+          continue;
+        }
+
+        const extension = (file.name.split('.').pop() || 'jpg').toLowerCase();
+        const storageRef = ref(storage, `events/${currentEventId}/img-${Date.now()}-${i}.${extension}`);
+
+        await uploadBytes(storageRef, file);
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        const url = await getDownloadURL(storageRef);
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        uploadedUrls.push(url);
+      }
+
+      if (!isMountedRef.current) {
+        return;
+      }
+
+      setEventForm((previous) => ({ ...previous, imageUrls: uploadedUrls }));
+    } catch (uploadError) {
+      console.error('Error uploading event images:', uploadError);
+
+      if (isMountedRef.current) {
+        window.alert('אירעה שגיאה בהעלאת התמונות. ודא/י שחוקי ה-Storage נפרסו.');
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setUploadingEventImages(false);
+        changeEvent.target.value = '';
+      }
+    }
+  };
+
+  // Remove one already-uploaded image from the form by its index.
+  const handleRemoveEventImage = (indexToRemove) => {
+    setEventForm((previous) => ({
+      ...previous,
+      imageUrls: (previous.imageUrls || []).filter((_, index) => index !== indexToRemove),
     }));
   };
 
@@ -743,14 +858,8 @@ function AdminOverview({ onNavigate }) {
 
     // Hard guard against a fast double-submit: the ref flips synchronously,
     // before React re-renders the disabled button, so two quick clicks can't
-    // both create an event (each addDoc would create a separate document).
+    // both write the event document twice.
     if (savingEventRef.current) {
-      return;
-    }
-
-    // Saturday is not a permitted event date — re-check before any addDoc/write.
-    if (isSaturdayDateValue(eventForm.date)) {
-      setEventError('לא ניתן לקבוע אירוע ליום שבת.');
       return;
     }
 
@@ -764,27 +873,31 @@ function AdminOverview({ onNavigate }) {
     setEventError('');
     setSavingEvent(true);
 
-    // The event document to save. createdAt/updatedAt are stamped by the
-    // server, not the browser clock, so they stay consistent across devices.
+    // The event document to save. We store the `assignedGroups` array AND a
+    // single `assignedGroup` mirror (first group, or "no group") for any reader
+    // not yet using the array. createdAt/updatedAt are stamped by the server.
     const payload = {
       name: eventForm.name.trim(),
       date: eventForm.date,
       location: eventForm.location.trim(),
       description: eventForm.description.trim(),
-      assignedGroup: eventForm.assignedGroup,
+      assignedGroups: eventForm.assignedGroups,
+      assignedGroup: eventForm.assignedGroups[0] || NO_GROUP,
       status: eventForm.status,
       contact: {
         name: eventForm.contactName.trim(),
         phone: eventForm.contactPhone.trim(),
         email: eventForm.contactEmail.trim(),
       },
+      imageUrls: eventForm.imageUrls || [],
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
 
     try {
-      // Add the event document to the "events" collection.
-      const docRef = await addDoc(collection(db, 'events'), payload);
+      // Write the event using the pre-generated id (so its images already live
+      // under events/<currentEventId>/).
+      await setDoc(doc(db, 'events', currentEventId), payload);
 
       // Bail out if we unmounted while the write was in flight.
       if (!isMountedRef.current) {
@@ -803,15 +916,15 @@ function AdminOverview({ onNavigate }) {
             events: [
               ...current.events,
               {
-                id: docRef.id,
+                id: currentEventId,
                 name: payload.name,
                 date: payload.date,
                 status: computeEventStatus(payload),
                 location: payload.location,
                 description: payload.description,
-                assignedGroup: payload.assignedGroup,
+                assignedGroups: getEventGroups(payload),
                 contact: payload.contact,
-                imageUrls: [],
+                imageUrls: payload.imageUrls,
                 time: '',
               },
             ],
@@ -1171,7 +1284,7 @@ function AdminOverview({ onNavigate }) {
                 <button
                   type="button"
                   className="ao-cal-add"
-                  onClick={() => { setEventError(''); setIsAddEventOpen(true); }}
+                  onClick={openAddEventModal}
                   aria-label="הוספת אירוע"
                   title="הוספת אירוע"
                 >
@@ -1449,13 +1562,6 @@ function AdminOverview({ onNavigate }) {
                   value={eventForm.date}
                   onChange={(date) => {
                     setEventForm((previous) => ({ ...previous, date }));
-                    // Saturday is not a permitted event date: flag it on
-                    // selection; clear only this specific error on Sunday–Friday.
-                    setEventError((previous) =>
-                      isSaturdayDateValue(date)
-                        ? 'לא ניתן לקבוע אירוע ליום שבת.'
-                        : (previous === 'לא ניתן לקבוע אירוע ליום שבת.' ? '' : previous),
-                    );
                   }}
                   label="תאריך"
                   pastYears={3}
@@ -1478,20 +1584,31 @@ function AdminOverview({ onNavigate }) {
                 />
               </div>
 
-              {/* Assigned group. */}
-              <div className="ao-form-group">
-                <label htmlFor="ao-ev-group">קבוצה משויכת:</label>
-                <select
-                  id="ao-ev-group"
-                  name="assignedGroup"
-                  value={eventForm.assignedGroup}
-                  onChange={handleEventFormChange}
-                >
-                  <option value="ללא שיוך">ללא שיוך</option>
-                  {data.groups.map((group) => (
-                    <option key={group.id} value={group.groupName}>{group.groupName}</option>
-                  ))}
-                </select>
+              {/* Assigned groups — a checklist, so an event can belong to one or
+                  several groups (none selected = "no group"). Spans both columns. */}
+              <div className="ao-form-group ao-form-wide">
+                <label>קבוצות משויכות:</label>
+                <div className="event-group-checklist">
+                  {data.groups.length === 0 ? (
+                    <span className="event-group-checklist-empty">אין קבוצות להצגה</span>
+                  ) : (
+                    data.groups.map((group) => (
+                      <label key={group.id} className="event-group-check">
+                        <input
+                          type="checkbox"
+                          checked={eventForm.assignedGroups.includes(group.groupName)}
+                          onChange={() => toggleEventGroup(group.groupName)}
+                        />
+                        <span>{group.groupName}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+                <small className="event-group-hint">
+                  {eventForm.assignedGroups.length > 0
+                    ? `נבחרו: ${eventForm.assignedGroups.join(', ')}`
+                    : 'לא נבחרה קבוצה (ללא שיוך)'}
+                </small>
               </div>
 
               {/* Status. */}
@@ -1570,6 +1687,46 @@ function AdminOverview({ onNavigate }) {
                 />
               </div>
 
+              {/* Event images (spans both columns) — same field as the full
+                  event manager, so both add-event forms match. */}
+              <div className="ao-form-group ao-form-wide">
+                <label>תמונות האירוע:</label>
+
+                {/* Thumbnails of the already-uploaded images, each with a remove (×). */}
+                {eventForm.imageUrls && eventForm.imageUrls.length > 0 && (
+                  <div className="ao-ev-image-grid">
+                    {eventForm.imageUrls.map((url, index) => (
+                      <div className="ao-ev-image-thumb" key={url}>
+                        <img src={url} alt={`תמונה ${index + 1}`} />
+                        <button
+                          type="button"
+                          className="ao-ev-image-remove"
+                          onClick={() => handleRemoveEventImage(index)}
+                          title="הסרת תמונה"
+                          aria-label={`הסרת תמונה ${index + 1}`}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* The upload button (a styled file input). */}
+                <label className="ao-ev-image-upload">
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handleEventImageUpload}
+                    disabled={uploadingEventImages}
+                    hidden
+                  />
+                  <span>🖼️ {uploadingEventImages ? 'מעלה תמונות...' : 'הוספת תמונות מהמכשיר'}</span>
+                </label>
+                <small className="ao-ev-image-hint">JPG / PNG / WEBP · עד ‎5MB לתמונה</small>
+              </div>
+
               {/* Inline error (replaces the old blocking alert). */}
               {eventError && (
                 <div id="ao-event-error" className="ao-form-error ao-form-wide" role="alert">
@@ -1587,7 +1744,7 @@ function AdminOverview({ onNavigate }) {
                 >
                   ביטול
                 </button>
-                <button type="submit" className="ao-btn-success" disabled={savingEvent}>
+                <button type="submit" className="ao-btn-success" disabled={savingEvent || uploadingEventImages}>
                   {savingEvent ? 'שומר...' : 'הוסף אירוע'}
                 </button>
               </div>

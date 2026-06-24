@@ -1,12 +1,12 @@
 // Shared activity-day constants + selected-value validation.
 //
-// Saturday (שבת) is NOT a permitted activity / scheduled day. These helpers
-// validate a USER-SELECTED value — a chosen weekday, or a chosen calendar date.
-// They contain NO current-time / "is it Saturday now" logic; nothing here reads
-// the clock.
+// Saturday (שבת) is now a permitted activity / scheduled day, like any other.
+// These helpers validate a USER-SELECTED value — a chosen weekday, or a chosen
+// calendar date. They contain NO current-time / "is it Saturday now" logic;
+// nothing here reads the clock.
 
-// The six allowed activity days, Sunday → Friday (full Hebrew form). This is the
-// single source of truth — selectors and templates should reference it.
+// The seven allowed activity days, Sunday → Saturday (full Hebrew form). This is
+// the single source of truth — selectors and templates should reference it.
 export const ACTIVITY_DAYS = [
   'יום ראשון',
   'יום שני',
@@ -14,6 +14,7 @@ export const ACTIVITY_DAYS = [
   'יום רביעי',
   'יום חמישי',
   'יום שישי',
+  'יום שבת',
 ];
 
 // Short labels (e.g. 'ראשון'), DERIVED from the full labels by dropping the
@@ -22,27 +23,10 @@ export const ACTIVITY_DAY_SHORT_LABELS = ACTIVITY_DAYS.map(
   (day) => day.replace(/^יום\s+/, ''),
 );
 
-// The legacy Saturday value, kept ONLY so existing records can still be shown
-// (never offered as a new choice).
-export const LEGACY_SATURDAY_ACTIVITY_DAY = 'יום שבת';
 
-
-// True only for one of the six exact allowed full values.
+// True only for one of the seven exact allowed full values.
 export function isAllowedActivityDay(value) {
   return typeof value === 'string' && ACTIVITY_DAYS.includes(value);
-}
-
-
-// True for an existing Saturday value in either stored format — the full
-// 'יום שבת' or the short 'שבת' — tolerating surrounding whitespace. Never true
-// for a Sunday–Friday value.
-export function isLegacySaturdayActivityDay(value) {
-  if (typeof value !== 'string') {
-    return false;
-  }
-
-  const trimmed = value.trim();
-  return trimmed === 'יום שבת' || trimmed === 'שבת';
 }
 
 

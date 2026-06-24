@@ -27,15 +27,9 @@ describe('normalizeImportedActivityDay', () => {
     });
   });
 
-  it('rejects Saturday in both spellings with a dedicated code', () => {
-    expect(normalizeImportedActivityDay('שבת')).toEqual({ ok: false, code: 'SATURDAY' });
-    expect(normalizeImportedActivityDay('יום שבת')).toEqual({ ok: false, code: 'SATURDAY' });
-  });
-
   it('tolerates surrounding whitespace', () => {
     expect(normalizeImportedActivityDay('  ראשון  ')).toEqual({ ok: true, value: 'יום ראשון' });
     expect(normalizeImportedActivityDay('\tיום שישי\n')).toEqual({ ok: true, value: 'יום שישי' });
-    expect(normalizeImportedActivityDay('  שבת ')).toEqual({ ok: false, code: 'SATURDAY' });
   });
 
   it('accepts an empty value as empty (optional field)', () => {

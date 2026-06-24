@@ -462,3 +462,82 @@
     font-size: 23px;
   }
 }
+
+
+/* ---- One-time "add a volunteer for today" picker ---- */
+
+/* Wrapper around the toggle + the (collapsible) pool panel. */
+.att-add-extra {
+  margin: 4px 0 12px;
+}
+
+/* The toggle button that opens the pool of off-schedule group members. */
+.att-add-extra-toggle {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px dashed var(--brand-500, #6c5ce7);
+  border-radius: 12px;
+  background: var(--surface-2, #faf9ff);
+  color: var(--brand-700, #4b3fb3);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.att-add-extra-toggle:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Small note shown when everyone is already on the list. */
+.att-add-extra-note {
+  display: block;
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--text-soft, #6b7280);
+}
+
+/* The pool panel: wrapping chips of addable volunteers. */
+.att-add-extra-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--border, #eceaf3);
+  border-radius: 12px;
+  background: var(--bg, #fff);
+}
+
+/* One addable volunteer — name + their fixed day below it. */
+.att-add-extra-option {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 7px 12px;
+  border: 1px solid var(--border, #eceaf3);
+  border-radius: 999px;
+  background: var(--surface-2, #faf9ff);
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.att-add-extra-option small {
+  color: var(--brand-600, #5a4fcf);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+/* "One-time addition" badge on a volunteer added for this day only. */
+.att-extra-badge {
+  margin-inline-start: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--brand-50, #f1eeff);
+  color: var(--brand-700, #4b3fb3);
+  font-size: 10.5px;
+  font-weight: 700;
+}

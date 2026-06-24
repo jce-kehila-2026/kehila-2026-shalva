@@ -867,3 +867,62 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+/* ---- Assigned-groups checklist (an event can belong to several groups) ---- */
+
+/* A bordered, scrollable box holding the group checkboxes, laid out as wrapping
+   chips so many groups stay compact. */
+.event-group-checklist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-height: 160px;
+  overflow-y: auto;
+  padding: 10px;
+  border: 1px solid var(--border, #eceaf3);
+  border-radius: 12px;
+  background: var(--surface-2, #faf9ff);
+}
+
+/* One group choice — a checkbox + its name, styled like a selectable chip. */
+.event-group-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--border, #eceaf3);
+  border-radius: 999px;
+  background: var(--bg, #fff);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+
+/* Tint the chip when its group is chosen, so the selection reads at a glance. */
+.event-group-check:has(input:checked) {
+  border-color: var(--brand-500, #6c5ce7);
+  background: var(--brand-50, #f1eeff);
+  color: var(--brand-700, #4b3fb3);
+}
+
+.event-group-check input {
+  margin: 0;
+  cursor: pointer;
+}
+
+/* Empty-state note when there are no groups to choose from. */
+.event-group-checklist-empty {
+  font-size: 13px;
+  color: var(--text-soft, #6b7280);
+}
+
+/* The small summary line under the checklist (which groups are selected). */
+.event-group-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-soft, #6b7280);
+}

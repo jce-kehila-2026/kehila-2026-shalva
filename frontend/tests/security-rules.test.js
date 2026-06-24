@@ -392,8 +392,8 @@ describe('guide attendance — strict validation (9ב)', () => {
     await assertSucceeds(guideDb().collection('attendance').doc('att-own').delete());
   });
 
-  it('DENIES a guide deleting a Saturday record', async () => {
-    await assertFails(guideDb().collection('attendance').doc('att-sat').delete());
+  it('ALLOWS a guide deleting a Saturday own-group record (Saturday is valid now)', async () => {
+    await assertSucceeds(guideDb().collection('attendance').doc('att-sat').delete());
   });
 
   it('DENIES a guide deleting a record with a missing dateKey', async () => {
@@ -489,9 +489,9 @@ describe('guide attendance — strict validation (9ב)', () => {
     await assertFails(guideDb().collection('attendance').doc(canonId(data)).set(data));
   });
 
-  it('DENIES a Saturday dateKey (2026-06-20)', async () => {
+  it('ALLOWS a Saturday dateKey (2026-06-20) — Saturday is a regular activity day', async () => {
     const data = guideAtt({ dateKey: '2026-06-20' });
-    await assertFails(guideDb().collection('attendance').doc(canonId(data)).set(data));
+    await assertSucceeds(guideDb().collection('attendance').doc(canonId(data)).set(data));
   });
 
   // ---- denied: name mismatches ----

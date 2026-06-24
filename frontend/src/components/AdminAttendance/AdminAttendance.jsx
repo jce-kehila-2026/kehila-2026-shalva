@@ -4,14 +4,18 @@
 // React hooks for state, effects and derived values.
 import { useEffect, useMemo, useState } from 'react';
 
-// Firestore helpers for reading the collections.
-import { collection, getDocs } from 'firebase/firestore';
+// Firestore helpers: read the collections, and write/delete a one-time cell mark.
+import { collection, deleteDoc, doc, getDocs, setDoc } from 'firebase/firestore';
 
 // Our Firestore database instance.
 import { db } from '../../firebase';
 
 // Shared attendance normalization (one definition across all screens).
 import { normalizeAttendanceStatus, getRecordStatus } from '../../utils/attendance';
+
+// Canonical attendance document id (groupId_dateKey_volunteerId), reused so a
+// one-time admin mark uses the same id shape as the guide flow.
+import { buildAttendanceId } from '../../utils/dateKey';
 
 // Display-only date formatter: a 'YYYY-MM-DD' string -> 'DD-MM-YYYY'.
 import { formatDateOnlyForDisplay } from '../../utils/dateDisplay';
@@ -41,10 +45,11 @@ function getStartOfWeek(date) {
 }
 
 
-// Generate the attendance days of the week (Sunday-Friday).
+// Generate the attendance days of the week (Sunday-Saturday). Saturday is a
+// regular activity day now, so the week shows all seven days.
 function getWeekDays(sunday) {
   const days = [];
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 7; i++) {
     const d = new Date(sunday);
     d.setDate(sunday.getDate() + i);
     days.push(d);
@@ -63,15 +68,24 @@ function getDayKey(date) {
 }
 
 
+// Build a local Date at noon from a 'YYYY-MM-DD' key (noon avoids any DST edge).
+// Used as the `date` timestamp on a one-time cell write; `dateKey` stays the
+// source of truth for which day the record belongs to.
+function dateFromDayKey(dayKey) {
+  const [year, month, day] = String(dayKey).split('-').map(Number);
+  return new Date(year, month - 1, day, 12, 0, 0);
+}
+
+
 // Formats a Sunday date into a DD-MM-YYYY range string (e.g.
 // "07-06-2026 – 13-06-2026"). The two endpoints are turned into canonical
 // 'YYYY-MM-DD' keys via getDayKey (no new Date('YYYY-MM-DD')) and only the
 // DISPLAY is formatted — the dateKeys driving grouping/filtering are untouched.
 function getWeekRangeLabel(sunday) {
-  const friday = new Date(sunday);
-  friday.setDate(sunday.getDate() + 5);
+  const saturday = new Date(sunday);
+  saturday.setDate(sunday.getDate() + 6);
 
-  return `${formatDateOnlyForDisplay(getDayKey(sunday))} – ${formatDateOnlyForDisplay(getDayKey(friday))}`;
+  return `${formatDateOnlyForDisplay(getDayKey(sunday))} – ${formatDateOnlyForDisplay(getDayKey(saturday))}`;
 }
 
 
@@ -98,6 +112,12 @@ function AdminAttendance({ registerBack }) {
 
   // The currently selected group to view attendance for.
   const [selectedGroup, setSelectedGroup] = useState(null);
+
+  // The cell whose edit menu is open: `${volunteerId}|${dateKey}` (null = none).
+  const [openCellKey, setOpenCellKey] = useState(null);
+
+  // The cell currently being written, so its menu can show a saving state.
+  const [savingCellKey, setSavingCellKey] = useState(null);
 
   // Dashboard back button: the weekly table returns to the group list first.
   useEffect(() => {
@@ -195,6 +215,9 @@ function AdminAttendance({ registerBack }) {
         const people = groupVolunteers
           .map((vol) => {
             const weeklyStatus = {};
+            // The latest record per day (or null) — kept so a cell edit can reuse
+            // its real document id instead of creating a duplicate.
+            const weeklyRecords = {};
             weekDaysKeys.forEach((dKey, index) => {
               const dayObj = weekDays[index];
               const dayName = HEBREW_WEEKDAYS[dayObj.getDay()];
@@ -213,11 +236,21 @@ function AdminAttendance({ registerBack }) {
                 });
                 const norm = normalizeAttendanceStatus(getRecordStatus(latestRec));
                 weeklyStatus[dKey] = norm === 'present' ? 'present' : norm === 'absent' ? 'absent' : 'unmarked';
+                weeklyRecords[dKey] = latestRec;
               } else {
                 weeklyStatus[dKey] = isScheduledDay ? 'unmarked' : 'not-scheduled';
+                weeklyRecords[dKey] = null;
               }
             });
-            return { id: vol.id, name: getName(vol), day: vol.day || '', weeklyStatus };
+            return {
+              id: vol.id,
+              name: getName(vol),
+              // The canonical name field, written onto a one-time record.
+              volunteerName: vol.name || getName(vol),
+              day: vol.day || '',
+              weeklyStatus,
+              weeklyRecords,
+            };
           })
           .sort((a, b) => a.name.localeCompare(b.name, 'he'));
 
@@ -253,6 +286,66 @@ function AdminAttendance({ registerBack }) {
     return groupRows.find((r) => r.id === selectedGroup.id);
   }, [selectedGroup, groupRows]);
 
+  // Write (or clear) a single attendance cell — this is how an admin records a
+  // one-time visit on a day that isn't the volunteer's fixed day. `choice` is
+  // 'present' | 'absent' | 'clear'. We reuse an existing record's real id (so an
+  // edit never creates a duplicate) and update local state in place.
+  const handleCellChoice = async (person, dayKey, choice) => {
+    if (!activeSelectedGroup) {
+      return;
+    }
+
+    const cellKey = `${person.id}|${dayKey}`;
+    const existingRecord = person.weeklyRecords[dayKey];
+
+    // Nothing to do: "clear" on an already-empty cell.
+    if (choice === 'clear' && !existingRecord) {
+      setOpenCellKey(null);
+      return;
+    }
+
+    setSavingCellKey(cellKey);
+
+    try {
+      if (choice === 'clear') {
+        // Remove the existing record (by its real id) and drop it from state.
+        await deleteDoc(doc(db, 'attendance', existingRecord.id));
+        setAttendance((current) => current.filter((record) => record.id !== existingRecord.id));
+      } else {
+        // Reuse the existing id when editing; otherwise the canonical id.
+        const attendanceId = existingRecord
+          ? existingRecord.id
+          : buildAttendanceId(activeSelectedGroup.id, dayKey, person.id);
+
+        // The full, well-typed record (same 8 fields the guide flow writes).
+        const payload = {
+          groupId: activeSelectedGroup.id,
+          group: activeSelectedGroup.groupName,
+          groupName: activeSelectedGroup.groupName,
+          date: dateFromDayKey(dayKey),
+          dateKey: dayKey,
+          status: choice === 'present',
+          volunteerId: person.id,
+          volunteerName: person.volunteerName,
+        };
+
+        await setDoc(doc(db, 'attendance', attendanceId), payload);
+
+        // Replace any record with this id, then add the new one.
+        setAttendance((current) => [
+          ...current.filter((record) => record.id !== attendanceId),
+          { id: attendanceId, ...payload },
+        ]);
+      }
+    } catch (error) {
+      console.error('שגיאה בשמירת נוכחות חד-פעמית:', error);
+      window.alert('אירעה שגיאה בשמירת הנוכחות. נסו שוב.');
+    } finally {
+      setSavingCellKey(null);
+      setOpenCellKey(null);
+    }
+  };
+
   // Apply the search filter.
   const visibleGroups = useMemo(() => {
     const text = search.trim().toLowerCase();
@@ -285,17 +378,12 @@ function AdminAttendance({ registerBack }) {
 
   // View 2: Dedicated Weekly Attendance Table Review for Selected Group
   if (activeSelectedGroup) {
-    let presentCount = 0;
-    let absentCount = 0;
-    let unmarkedCount = 0;
-
-    activeSelectedGroup.people.forEach((person) => {
-      Object.values(person.weeklyStatus).forEach((status) => {
-        if (status === 'present') presentCount++;
-        else if (status === 'absent') absentCount++;
-        else unmarkedCount++;
-      });
-    });
+    // Reuse the totals already computed per group, so this view and the list
+    // count identically. "Unmarked" counts only days the volunteer is scheduled
+    // for — days they're NOT scheduled ('not-scheduled') are never counted.
+    const presentCount = activeSelectedGroup.totalPresent;
+    const absentCount = activeSelectedGroup.totalAbsent;
+    const unmarkedCount = activeSelectedGroup.totalUnmarked;
     const volunteerCount = activeSelectedGroup.people.length;
 
     return (
@@ -392,18 +480,44 @@ function AdminAttendance({ registerBack }) {
                     </div>
                     {weekDaysKeys.map((dKey) => {
                       const status = person.weeklyStatus[dKey];
+                      const cellKey = `${person.id}|${dKey}`;
+                      const isMenuOpen = openCellKey === cellKey;
+                      const isSavingCell = savingCellKey === cellKey;
+
                       return (
-                        <div className="adm-week-cell" key={dKey}>
-                          {status === 'not-scheduled' ? (
-                            <span className="adm-week-not-scheduled" title={getStatusLabel(status)}>
-                              —
-                            </span>
-                          ) : (
-                            <span
-                              className={`adm-week-dot is-${status}`}
-                              title={getStatusLabel(status)}
-                              aria-label={getStatusLabel(status)}
-                            />
+                        <div className={`adm-week-cell ${isMenuOpen ? 'is-editing' : ''}`} key={dKey}>
+                          {/* The cell is a button: tapping it opens a tiny editor
+                              so an admin can record a one-time visit (or fix a
+                              mark) on any day — including days the volunteer
+                              isn't normally scheduled. */}
+                          <button
+                            type="button"
+                            className="adm-week-cell-btn"
+                            onClick={() => setOpenCellKey(isMenuOpen ? null : cellKey)}
+                            title={getStatusLabel(status)}
+                            aria-label={`${person.name} — ${getStatusLabel(status)}. עריכת נוכחות`}
+                            disabled={isSavingCell}
+                          >
+                            {status === 'not-scheduled' ? (
+                              <span className="adm-week-not-scheduled">—</span>
+                            ) : (
+                              <span className={`adm-week-dot is-${status}`} />
+                            )}
+                          </button>
+
+                          {/* The editor: present / absent / clear. */}
+                          {isMenuOpen && (
+                            <div className="adm-week-cell-menu" role="menu">
+                              <button type="button" className="is-present" onClick={() => handleCellChoice(person, dKey, 'present')} disabled={isSavingCell}>
+                                נוכח
+                              </button>
+                              <button type="button" className="is-absent" onClick={() => handleCellChoice(person, dKey, 'absent')} disabled={isSavingCell}>
+                                חסר
+                              </button>
+                              <button type="button" className="is-clear" onClick={() => handleCellChoice(person, dKey, 'clear')} disabled={isSavingCell}>
+                                ניקוי
+                              </button>
+                            </div>
                           )}
                         </div>
                       );
@@ -423,6 +537,12 @@ function AdminAttendance({ registerBack }) {
   }
 
   // View 1: Group Selection List View
+
+  // Groups that have at least one absence this week, and the total number of
+  // absences — used to surface a shortage at the top, where it can't be missed.
+  const groupsWithAbsence = visibleGroups.filter((group) => group.totalAbsent > 0);
+  const totalAbsenceCount = groupsWithAbsence.reduce((sum, group) => sum + group.totalAbsent, 0);
+
   return (
     <section className="adm-att" dir="rtl" aria-label="מעקב נוכחות">
 
@@ -432,6 +552,17 @@ function AdminAttendance({ registerBack }) {
         <h1 className="adm-att-title">מעקב נוכחות</h1>
         <p className="adm-att-subtitle">בחר קבוצה להצגת טבלת נוכחות שבועית מלאה.</p>
       </div>
+
+      {/* Shortage alert — a loud, hard-to-miss banner when any group has a
+          missing volunteer this week. Hidden entirely when attendance is full. */}
+      {!loading && groupsWithAbsence.length > 0 && (
+        <div className="adm-att-shortage-banner" role="status">
+          <span className="adm-att-shortage-icon" aria-hidden="true">⚠</span>
+          <span className="adm-att-shortage-text">
+            חוסר בנוכחות: {totalAbsenceCount} חסרים ב־{groupsWithAbsence.length} קבוצות השבוע
+          </span>
+        </div>
+      )}
 
       {/* Warning shown when the data failed to load. */}
       {hadError && (
@@ -494,7 +625,10 @@ function AdminAttendance({ registerBack }) {
                     <td className="adm-att-cell-guide">{group.guideName}</td>
                     <td className="adm-att-cell-num">{group.total}</td>
                     <td className="adm-att-cell-num is-present">{group.totalPresent}</td>
-                    <td className="adm-att-cell-num is-absent">{group.totalAbsent}</td>
+                    <td className={`adm-att-cell-num is-absent ${group.totalAbsent > 0 ? 'is-flagged' : ''}`}>
+                      {group.totalAbsent > 0 && <span className="adm-att-absent-flag" aria-hidden="true">⚠</span>}
+                      {group.totalAbsent}
+                    </td>
                     <td className="adm-att-cell-num is-unmarked">{group.totalUnmarked}</td>
                   </tr>
                 ))}
@@ -519,10 +653,13 @@ function AdminAttendance({ registerBack }) {
                   <span className="adm-att-group-guide">מדריך/ה: {group.guideName}</span>
                 </div>
 
-                {/* This week's attendance breakdown for the group. */}
+                {/* This week's attendance breakdown for the group. The absence
+                    chip is flagged with a ⚠ when there's a shortage. */}
                 <div className="adm-att-group-stats">
                   <span className="adm-att-stat-chip is-present">{group.totalPresent} נוכחים</span>
-                  <span className="adm-att-stat-chip is-absent">{group.totalAbsent} חסרים</span>
+                  <span className={`adm-att-stat-chip is-absent ${group.totalAbsent > 0 ? 'is-flagged' : ''}`}>
+                    {group.totalAbsent > 0 && '⚠ '}{group.totalAbsent} חסרים
+                  </span>
                   <span className="adm-att-stat-chip is-unmarked">{group.totalUnmarked} לא סומנו</span>
                 </div>
               </button>

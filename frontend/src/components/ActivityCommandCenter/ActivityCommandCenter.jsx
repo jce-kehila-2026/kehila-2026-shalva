@@ -30,6 +30,9 @@ import WhatsAppButton from '../shared/WhatsAppButton/WhatsAppButton';
 // Shared attendance status normalisation (tolerates the older Hebrew strings).
 import { normalizeAttendanceStatus, getRecordStatus } from '../../utils/attendance';
 
+// An event can belong to several groups — read/format that consistently.
+import { getEventGroups, formatEventGroups } from '../../utils/eventGroups';
+
 // Styles for this screen.
 import './ActivityCommandCenter.css';
 
@@ -294,8 +297,10 @@ function ActivityCommandCenter({ groupFilter = null, onBack, leadingCard = null,
     const wantedName = normalize(groupFilter.name);
 
     // Items reference their group by id or by name across the data model.
+    // For events that means ALL of their assigned groups (getEventGroups folds
+    // the new array + the legacy single value); other items have none.
     const itemIds = [item.groupId].map(normalize).filter(Boolean);
-    const itemNames = [item.groupName, item.group, item.assignedGroup].map(normalize).filter(Boolean);
+    const itemNames = [item.groupName, item.group, ...getEventGroups(item)].map(normalize).filter(Boolean);
 
     return (
       (wantedId !== '' && itemIds.includes(wantedId))
@@ -326,14 +331,17 @@ function ActivityCommandCenter({ groupFilter = null, onBack, leadingCard = null,
   // Build today's + tomorrow's events, enriched with their group's guide + time
   // and sorted by time of day (a chronological ops board).
   const upcoming = useMemo(() => {
-    // Enrich one event with its group's guide name and meeting time.
+    // Enrich one event with its group's guide name and meeting time. An event
+    // may have several groups: we show all of them, but read the guide/time from
+    // the FIRST one (a single card can only show one guide + time).
     const decorate = (event) => {
-      const assignedGroup = event.assignedGroup || NO_GROUP;
-      const group = groupByName.get(assignedGroup) || null;
+      const groups = getEventGroups(event);
+      const primaryGroup = groups[0] || NO_GROUP;
+      const group = groupByName.get(primaryGroup) || null;
 
       return {
         ...event,
-        assignedGroup,
+        groupsLabel: formatEventGroups(event),
         guideName: group?.guideName || '',
         time: group?.time || '',
       };
@@ -467,7 +475,7 @@ function ActivityCommandCenter({ groupFilter = null, onBack, leadingCard = null,
               {formatDateOnlyForDisplay(event.date, { fallback: 'ללא תאריך' })}{event.time ? ` · ${event.time}` : ''}
             </span>
             <span className="acc-event-sub">
-              {event.assignedGroup}{event.guideName ? ` · מדריך: ${event.guideName}` : ''}
+              {event.groupsLabel}{event.guideName ? ` · מדריך: ${event.guideName}` : ''}
             </span>
           </span>
 

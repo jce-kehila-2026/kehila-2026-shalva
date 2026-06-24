@@ -94,24 +94,22 @@ service cloud.firestore {
            );
     }
 
-    // A strict 'YYYY-MM-DD' that is a REAL Gregorian date and NOT a Saturday.
-    // The parts are parsed from the string and round-tripped through
-    // timestamp.date(...): an impossible date (e.g. 2026-02-30) rolls over so a
-    // component no longer matches and is rejected. dayOfWeek() of that calendar
-    // date is timezone-independent, so a Saturday key is rejected here too
-    // (Firestore Rules dayOfWeek: 1=Mon .. 7=Sun, so Saturday == 6).
-    function isRealNonSaturdayDateKey(dateKey) {
+    // A strict 'YYYY-MM-DD' that is a REAL Gregorian date. The parts are parsed
+    // from the string and round-tripped through timestamp.date(...): an
+    // impossible date (e.g. 2026-02-30) rolls over so a component no longer
+    // matches and is rejected. Saturday is a regular activity day, so the
+    // weekday is NOT restricted here.
+    function isRealDateKey(dateKey) {
       return dateKey is string
         && dateKey.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && timestamp.date(int(dateKey[0:4]), int(dateKey[5:7]), int(dateKey[8:10])).year() == int(dateKey[0:4])
         && timestamp.date(int(dateKey[0:4]), int(dateKey[5:7]), int(dateKey[8:10])).month() == int(dateKey[5:7])
-        && timestamp.date(int(dateKey[0:4]), int(dateKey[5:7]), int(dateKey[8:10])).day() == int(dateKey[8:10])
-        && timestamp.date(int(dateKey[0:4]), int(dateKey[5:7]), int(dateKey[8:10])).dayOfWeek() != 6;
+        && timestamp.date(int(dateKey[0:4]), int(dateKey[5:7]), int(dateKey[8:10])).day() == int(dateKey[8:10]);
     }
 
     // A complete, well-typed attendance payload: exactly the eight known fields,
     // non-empty strings of the right type, a boolean status, a timestamp date,
-    // and a real non-Saturday dateKey. The group's name fields must match the
+    // and a real dateKey. The group's name fields must match the
     // canonical group document, the volunteer must exist and belong to the same
     // group BY groupId ONLY (no name fallback), and volunteerName must match the
     // volunteer document's canonical 'name'. (Identical get()/exists() calls are
@@ -126,7 +124,7 @@ service cloud.firestore {
         && data.volunteerName is string && data.volunteerName.size() > 0
         && data.status is bool
         && data.date is timestamp
-        && isRealNonSaturdayDateKey(data.dateKey)
+        && isRealDateKey(data.dateKey)
         && exists(/databases/$(database)/documents/groups/$(data.groupId))
         && get(/databases/$(database)/documents/groups/$(data.groupId)).data.get('groupName', '') == data.group
         && get(/databases/$(database)/documents/groups/$(data.groupId)).data.get('groupName', '') == data.groupName
@@ -356,7 +354,7 @@ service cloud.firestore {
     //     MUST also constrain groupId to the guide's group.
     // Admins manage everything; a guide may only write attendance for THEIR OWN
     // group, with strict server-side validation (canonical groupId, real
-    // non-Saturday dateKey, typed fields, immutable identity) — unchanged from 9ב.
+    // dateKey, typed fields, immutable identity).
     match /attendance/{id} {
       allow read: if isAdmin()
         || (hasRole('guide') && isGuideOfGroup(resource.data.get('groupId', '')));
@@ -369,13 +367,13 @@ service cloud.firestore {
       allow update: if isAdmin()
         || guideAttendanceUpdate(request.resource.data, resource.data);
 
-      // Delete: admin, or a guide removing an own-group record with a real,
-      // non-Saturday dateKey, whose volunteer also belongs to that group. No
-      // cross-group delete; a Saturday / missing / malformed dateKey record can
-      // only be removed by an admin (guides never touch it).
+      // Delete: admin, or a guide removing an own-group record with a real
+      // dateKey, whose volunteer also belongs to that group. No cross-group
+      // delete; a missing / malformed dateKey record can only be removed by an
+      // admin (guides never touch it).
       allow delete: if isAdmin()
         || (hasRole('guide')
-            && isRealNonSaturdayDateKey(resource.data.get('dateKey', ''))
+            && isRealDateKey(resource.data.get('dateKey', ''))
             && isGuideOfGroup(resource.data.get('groupId', ''))
             && exists(/databases/$(database)/documents/volunteers/$(resource.data.get('volunteerId', '')))
             && get(/databases/$(database)/documents/volunteers/$(resource.data.get('volunteerId', ''))).data.get('groupId', '') == resource.data.get('groupId', ''));

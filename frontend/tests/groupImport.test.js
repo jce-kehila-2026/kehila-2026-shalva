@@ -127,13 +127,9 @@ describe('prepareGroupImportRow', () => {
     expect(prepareGroupImportRow(gRow({ 'זמן פעילות': 'מתישהו' })).ok).toBe(false);
   });
 
-  it('normalizes a short activity day to the full form, rejects Saturday', () => {
+  it('normalizes a short activity day to the full form', () => {
     expect(prepareGroupImportRow(gRow({ 'יום פעילות': 'ראשון' })).fields.activityDay).toBe('יום ראשון');
     expect(prepareGroupImportRow(gRow({ 'יום פעילות': '' })).fields.activityDay).toBe('');
-
-    const sat = prepareGroupImportRow(gRow({ 'יום פעילות': 'שבת' }));
-    expect(sat.ok).toBe(false);
-    expect(sat.errors.join(' ')).toMatch(/שבת/);
   });
 
   it('trims location and notes', () => {
@@ -180,9 +176,9 @@ describe('prepareGroupImportRow', () => {
 describe('preflightGroupImport', () => {
   it('separates valid / rejected / blank with Excel row numbers', () => {
     const rows = [
-      gRow({ 'שם קבוצה *': 'תותים' }),                 // row 2 — valid
-      { 'שם קבוצה *': 'דובדבן', 'יום פעילות': 'שבת' },  // row 3 — rejected (Saturday)
-      {},                                              // row 4 — blank
+      gRow({ 'שם קבוצה *': 'תותים' }),                    // row 2 — valid
+      { 'שם קבוצה *': 'דובדבן', 'יום פעילות': 'מחרתיים' }, // row 3 — rejected (bad day)
+      {},                                                 // row 4 — blank
     ];
     const { valid, rejected, blankSkipped } = preflightGroupImport(rows);
 
@@ -393,16 +389,16 @@ describe('resolveGroupImport — ready item shape', () => {
 // the valid rows. The valid + rejected rows are fed through the real pipeline
 // (preflight → resolve) so the `identities` carry every non-blank row.
 describe('resolveGroupImport — reuse vs preflight-rejected rows', () => {
-  it('rejects a valid row whose guide is reused by a Saturday (rejected) row', () => {
+  it('rejects a valid row whose guide is reused by a bad-day (rejected) row', () => {
     const jsonRows = [
-      { 'שם קבוצה *': 'תותים', 'מדריך אחראי': 'דנה כהן' },                         // row 2 — valid
-      { 'שם קבוצה *': 'דובדבן', 'מדריך אחראי': 'דנה כהן', 'יום פעילות': 'שבת' },     // row 3 — rejected (Saturday)
+      { 'שם קבוצה *': 'תותים', 'מדריך אחראי': 'דנה כהן' },                              // row 2 — valid
+      { 'שם קבוצה *': 'דובדבן', 'מדריך אחראי': 'דנה כהן', 'יום פעילות': 'מחרתיים' },      // row 3 — rejected (bad day)
     ];
     const { valid, rejected, identities } = preflightGroupImport(jsonRows);
 
-    // The Saturday row stays rejected by preflight, for the Saturday reason.
+    // The bad-day row stays rejected by preflight, for the unrecognized-day reason.
     expect(rejected.map((r) => r.excelRow)).toEqual([3]);
-    expect(rejected[0].reasons.join(' ')).toMatch(/שבת/);
+    expect(rejected[0].reasons.join(' ')).toMatch(/יום פעילות/);
 
     // The valid row must NOT become ready — its guide is reused by the rejected row.
     const result = resolveGroupImport(valid, {

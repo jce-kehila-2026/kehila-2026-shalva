@@ -165,11 +165,6 @@ describe('prepareVolunteerImportRow — activity day', () => {
     expect(prepareVolunteerImportRow(row({ 'יום פעילות': 'ראשון' })).fields.day).toBe('יום ראשון');
   });
 
-  it('rejects a Saturday activity day (both spellings)', () => {
-    expect(prepareVolunteerImportRow(row({ 'יום פעילות': 'שבת' })).ok).toBe(false);
-    expect(prepareVolunteerImportRow(row({ 'יום פעילות': 'יום שבת' })).ok).toBe(false);
-  });
-
   it('accepts an empty day', () => {
     expect(prepareVolunteerImportRow(row({ 'יום פעילות': '' })).fields.day).toBe('');
   });
@@ -247,8 +242,8 @@ describe('prepareVolunteerImportRow — ID number', () => {
 describe('preflightVolunteerImport', () => {
   it('separates valid, rejected and blank rows with Excel row numbers', () => {
     const rows = [
-      row({ 'טלפון': '0501234567' }),                 // excel row 2 — valid
-      { 'שם פרטי *': 'בת', 'יום פעילות': 'שבת' },      // excel row 3 — rejected (Saturday)
+      row({ 'טלפון': '0501234567' }),                  // excel row 2 — valid
+      { 'שם פרטי *': 'בת', 'יום פעילות': 'מחרתיים' },   // excel row 3 — rejected (bad day)
       {},                                              // excel row 4 — blank
       row({ 'תעודת זהות': 999999999 }),               // excel row 5 — rejected (numeric ID)
     ];
@@ -261,7 +256,7 @@ describe('preflightVolunteerImport', () => {
     expect(blankSkipped).toBe(1);
 
     expect(rejected.map((r) => r.excelRow)).toEqual([3, 5]);
-    expect(rejected[0].reasons.join(' ')).toMatch(/שבת/);
+    expect(rejected[0].reasons.join(' ')).toMatch(/יום פעילות/);
   });
 
   it('keeps a corrupted row out of the write list entirely', () => {
@@ -282,12 +277,12 @@ describe('preflightVolunteerImport', () => {
   });
 
   it('uses the TRUE Excel row number from a real worksheet (gap-aware)', () => {
-    // Header row 1, valid row 2, EMPTY row 3, bad row 4 (Saturday).
+    // Header row 1, valid row 2, EMPTY row 3, bad row 4 (invalid day).
     const aoa = [
       ['שם פרטי *', 'שם משפחה *', 'יום פעילות'],
       ['אבי', 'כהן', 'ראשון'],
       [],
-      ['גד', 'מזרחי', 'שבת'],
+      ['גד', 'מזרחי', 'מחרתיים'],
     ];
     const worksheet = XLSX.utils.aoa_to_sheet(aoa);
     const jsonRows = XLSX.utils.sheet_to_json(worksheet);
@@ -637,14 +632,14 @@ describe('resolveVolunteerImport', () => {
   });
 
   // ----- cross-row dedupe vs preflight-REJECTED rows (allRowIdentities) -----
-  it('rejects a valid row that shares an ID with a preflight-rejected (Saturday) row', () => {
+  it('rejects a valid row that shares an ID with a preflight-rejected (bad-day) row', () => {
     const jsonRows = [
       { 'שם פרטי *': 'אבי', 'שם משפחה *': 'כהן', 'תעודת זהות': '012345678' },
-      { 'שם פרטי *': 'דנה', 'שם משפחה *': 'לוי', 'תעודת זהות': '012345678', 'יום פעילות': 'שבת' },
+      { 'שם פרטי *': 'דנה', 'שם משפחה *': 'לוי', 'תעודת זהות': '012345678', 'יום פעילות': 'מחרתיים' },
     ];
     const { valid, rejected: preflightRejected, identities } = preflightVolunteerImport(jsonRows);
 
-    // The Saturday row's own error is preserved by preflight.
+    // The bad-day row's own error is preserved by preflight.
     expect(preflightRejected.map((r) => r.excelRow)).toEqual([3]);
 
     const { readyToWrite, rejected } = resolveVolunteerImport(valid, { allRowIdentities: identities });
@@ -669,7 +664,7 @@ describe('resolveVolunteerImport', () => {
   it('does not write a row whose name+birthDate matches a row rejected for another reason', () => {
     const jsonRows = [
       { 'שם פרטי *': 'אבי', 'שם משפחה *': 'כהן', 'תאריך לידה': '2000-01-01' },
-      { 'שם פרטי *': 'אבי', 'שם משפחה *': 'כהן', 'תאריך לידה': '2000-01-01', 'יום פעילות': 'שבת' },
+      { 'שם פרטי *': 'אבי', 'שם משפחה *': 'כהן', 'תאריך לידה': '2000-01-01', 'יום פעילות': 'מחרתיים' },
     ];
     const { valid, identities } = preflightVolunteerImport(jsonRows);
     const { readyToWrite } = resolveVolunteerImport(valid, { allRowIdentities: identities });

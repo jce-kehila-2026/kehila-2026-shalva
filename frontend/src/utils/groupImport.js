@@ -316,14 +316,12 @@ export function prepareGroupImportRow(rawRow) {
     errors.push('זמן פעילות לא מזוהה — יש לבחור ערך מהרשימה (בוקר / צהריים / ערב)');
   }
 
-  // Activity day — optional; short/full normalized to the canonical full form,
-  // Saturday and unknown rejected.
+  // Activity day — optional; short/full normalized to the canonical full form
+  // (Saturday included now); an unknown value is rejected.
   const dayResult = normalizeImportedActivityDay(rawDay);
   let activityDay = '';
   if (dayResult.ok) {
     activityDay = dayResult.value;
-  } else if (dayResult.code === 'SATURDAY') {
-    errors.push('יום פעילות שבת אינו מותר');
   } else {
     errors.push('יום פעילות לא מזוהה');
   }

@@ -8,6 +8,9 @@ import { computeEventStatus } from '../../utils/eventStatus'
 // Shared date formatter: render date-only event dates as DD-MM-YYYY.
 import { formatDateOnlyForDisplay } from '../../utils/dateDisplay'
 
+// An event can belong to several groups — format them all consistently.
+import { formatEventGroups } from '../../utils/eventGroups'
+
 // Default text for missing event fields.
 const FALLBACK = 'לא צוין'
 
@@ -66,8 +69,9 @@ export default function EventDetails({ event = null, onBack }) {
   // הסתיים; בוטל is a manual override), matching the other screens.
   const status = event ? computeEventStatus(event) : FALLBACK
 
-  // Support both the new field name and older group field name.
-  const group = event?.assignedGroup || event?.group || FALLBACK
+  // All the event's groups (handles the new array + the legacy single value),
+  // falling back to the older `group` field, then a dash.
+  const group = formatEventGroups(event, { fallback: event?.group || FALLBACK })
 
   // Contact is handled separately because it is an object.
   const contact = event?.contact

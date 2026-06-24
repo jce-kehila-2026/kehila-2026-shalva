@@ -46,6 +46,41 @@
   font-weight: 600;
 }
 
+/* Shortage banner — a clear red alert at the top of the list when any group is
+   missing a volunteer this week. The pulse draws the eye without being noisy. */
+.adm-att-shortage-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 13px 18px;
+  border: 1px solid #fca5b5;
+  border-inline-start: 5px solid #e11d48;
+  border-radius: var(--radius);
+  background: rgba(225, 29, 72, 0.08);
+  color: #9f1239;
+  font-weight: 800;
+  font-size: 15px;
+}
+
+.adm-att-shortage-icon {
+  font-size: 20px;
+  line-height: 1;
+  animation: adm-att-shortage-pulse 1.8s ease-in-out infinite;
+}
+
+/* A gentle pulse on the warning icon only (respects reduced-motion below). */
+@keyframes adm-att-shortage-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.18); opacity: 0.75; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .adm-att-shortage-icon {
+    animation: none;
+  }
+}
+
 /* ---------- Filters ---------- */
 .adm-att-filters {
   display: flex;
@@ -190,14 +225,24 @@
   color: #be123c;
 }
 
+/* When the group actually has a shortage, the absence chip is filled in solid
+   red so it reads as an alert, not just another stat. */
+.adm-att-stat-chip.is-absent.is-flagged {
+  background: #e11d48;
+  color: #fff;
+  font-weight: 800;
+}
+
 .adm-att-stat-chip.is-unmarked {
   background: var(--surface-2);
   color: var(--text-soft);
 }
 
-/* Groups with absences this week get a subtle red accent in the compact grid. */
+/* Groups with absences this week stand out clearly: a thick red start-edge and
+   a faint red wash, so a shortage is obvious at a glance (not just a thin line). */
 .adm-att-group-card.has-absence {
-  border-inline-start: 3px solid #fb7185;
+  border-inline-start: 5px solid #e11d48;
+  background: rgba(225, 29, 72, 0.05);
 }
 
 
@@ -301,10 +346,28 @@
   color: var(--text-soft);
 }
 
-/* Same red "has absence" accent as the cards, on the row's start (right) edge.
-   box-shadow is used so it never shifts the column alignment. */
+/* A flagged absence count (> 0): bolder, with a small ⚠ before the number. */
+.adm-att-cell-num.is-absent.is-flagged {
+  font-weight: 800;
+}
+
+.adm-att-absent-flag {
+  margin-inline-end: 4px;
+  font-size: 13px;
+}
+
+/* "Has absence" rows are tinted across the whole row and carry a bold red
+   start-edge bar, so a group with a shortage clearly stands out in the table. */
+.adm-att-row.has-absence {
+  background: rgba(225, 29, 72, 0.05);
+}
+
+.adm-att-row.has-absence:hover {
+  background: rgba(225, 29, 72, 0.09);
+}
+
 .adm-att-row.has-absence td:first-child {
-  box-shadow: inset -3px 0 0 #fb7185;
+  box-shadow: inset -5px 0 0 #e11d48;
 }
 
 /* ---------- Weekly Review View ---------- */
@@ -499,7 +562,7 @@
   /* Day columns are wide enough for a full DD-MM-YYYY header; the board
      (.adm-week-board, overflow:auto) scrolls horizontally on narrow screens so
      the page itself never overflows. */
-  grid-template-columns: minmax(150px, 1.3fr) repeat(6, minmax(82px, 1fr));
+  grid-template-columns: minmax(150px, 1.3fr) repeat(7, minmax(82px, 1fr));
   min-width: 0;
 }
 
@@ -575,9 +638,82 @@
 }
 
 .adm-week-cell {
+  position: relative;
   display: grid;
   place-items: center;
   padding: 6px 4px;
+}
+
+/* The whole cell is a button now, so an admin can edit a single day's mark. */
+.adm-week-cell-btn {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  padding: 2px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.adm-week-cell-btn:hover {
+  background: var(--surface-2);
+}
+
+.adm-week-cell-btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* Keep the open cell above its neighbours so the popover isn't clipped. */
+.adm-week-cell.is-editing {
+  z-index: 5;
+}
+
+/* The little present / absent / clear popover anchored to the cell. */
+.adm-week-cell-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18);
+}
+
+.adm-week-cell-menu button {
+  padding: 6px 18px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.adm-week-cell-menu button:hover {
+  background: var(--surface-2);
+}
+
+.adm-week-cell-menu button.is-present {
+  color: #166534;
+}
+
+.adm-week-cell-menu button.is-absent {
+  color: #be123c;
+}
+
+.adm-week-cell-menu button.is-clear {
+  color: var(--text-soft);
 }
 
 .adm-week-dot {
@@ -903,11 +1039,11 @@
   }
 
   .adm-week-grid {
-    /* Six day columns now (Sunday–Friday, no Saturday). With the per-day date
-       hidden on mobile (rule below), each column only needs room for a single
-       status dot, so they share the width evenly (minmax(0, 1fr)) and the whole
-       week fits edge-to-edge — no more sideways scrolling on the phone. */
-    grid-template-columns: minmax(78px, 1.2fr) repeat(6, minmax(0, 1fr));
+    /* Seven day columns (Sunday–Saturday). With the per-day date hidden on
+       mobile (rule below), each column only needs room for a single status dot,
+       so they share the width evenly (minmax(0, 1fr)) and the whole week fits
+       edge-to-edge — no more sideways scrolling on the phone. */
+    grid-template-columns: minmax(78px, 1.2fr) repeat(7, minmax(0, 1fr));
   }
 
   .adm-week-person-head,

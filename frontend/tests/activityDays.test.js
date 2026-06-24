@@ -4,9 +4,7 @@ import { describe, it, expect } from 'vitest';
 import {
   ACTIVITY_DAYS,
   ACTIVITY_DAY_SHORT_LABELS,
-  LEGACY_SATURDAY_ACTIVITY_DAY,
   isAllowedActivityDay,
-  isLegacySaturdayActivityDay,
   isSaturdayDateValue,
 } from '../src/utils/activityDays.js';
 
@@ -18,7 +16,7 @@ const KNOWN_SUNDAY = '2026-06-21';
 
 
 describe('ACTIVITY_DAYS', () => {
-  it('contains exactly six values, ordered Sunday → Friday', () => {
+  it('contains exactly seven values, ordered Sunday → Saturday', () => {
     expect(ACTIVITY_DAYS).toEqual([
       'יום ראשון',
       'יום שני',
@@ -26,12 +24,12 @@ describe('ACTIVITY_DAYS', () => {
       'יום רביעי',
       'יום חמישי',
       'יום שישי',
+      'יום שבת',
     ]);
   });
 
-  it('contains neither full nor short Saturday', () => {
-    expect(ACTIVITY_DAYS).not.toContain('יום שבת');
-    expect(ACTIVITY_DAYS).not.toContain('שבת');
+  it('includes Saturday (now a regular activity day)', () => {
+    expect(ACTIVITY_DAYS).toContain('יום שבת');
   });
 
   it('has no duplicates', () => {
@@ -41,7 +39,7 @@ describe('ACTIVITY_DAYS', () => {
 
 
 describe('ACTIVITY_DAY_SHORT_LABELS', () => {
-  it('contains exactly the matching six short labels', () => {
+  it('contains exactly the matching seven short labels', () => {
     expect(ACTIVITY_DAY_SHORT_LABELS).toEqual([
       'ראשון',
       'שני',
@@ -49,6 +47,7 @@ describe('ACTIVITY_DAY_SHORT_LABELS', () => {
       'רביעי',
       'חמישי',
       'שישי',
+      'שבת',
     ]);
   });
 
@@ -58,61 +57,23 @@ describe('ACTIVITY_DAY_SHORT_LABELS', () => {
     );
   });
 
-  it('contains no Saturday', () => {
-    expect(ACTIVITY_DAY_SHORT_LABELS).not.toContain('שבת');
-  });
-});
-
-
-describe('LEGACY_SATURDAY_ACTIVITY_DAY', () => {
-  it('is the full Saturday value', () => {
-    expect(LEGACY_SATURDAY_ACTIVITY_DAY).toBe('יום שבת');
+  it('includes the short Saturday label', () => {
+    expect(ACTIVITY_DAY_SHORT_LABELS).toContain('שבת');
   });
 });
 
 
 describe('isAllowedActivityDay', () => {
-  it('is true for every allowed full value', () => {
+  it('is true for every allowed full value (Saturday included)', () => {
     for (const day of ACTIVITY_DAYS) {
       expect(isAllowedActivityDay(day)).toBe(true);
     }
-  });
-
-  it('is false for Saturday formats', () => {
-    expect(isAllowedActivityDay('יום שבת')).toBe(false);
-    expect(isAllowedActivityDay('שבת')).toBe(false);
   });
 
   it('is false for empty, malformed, null, undefined, arrays, objects, and numbers', () => {
     const invalid = ['', '   ', 'ראשון', 'Sunday', null, undefined, 0, 5, NaN, [], {}, ['יום ראשון']];
     for (const value of invalid) {
       expect(isAllowedActivityDay(value)).toBe(false);
-    }
-  });
-});
-
-
-describe('isLegacySaturdayActivityDay', () => {
-  it('is true for both Saturday formats', () => {
-    expect(isLegacySaturdayActivityDay('יום שבת')).toBe(true);
-    expect(isLegacySaturdayActivityDay('שבת')).toBe(true);
-  });
-
-  it('tolerates surrounding whitespace', () => {
-    expect(isLegacySaturdayActivityDay('  יום שבת  ')).toBe(true);
-    expect(isLegacySaturdayActivityDay('\tשבת\n')).toBe(true);
-  });
-
-  it('is false for every allowed weekday (full and short)', () => {
-    for (const day of [...ACTIVITY_DAYS, ...ACTIVITY_DAY_SHORT_LABELS]) {
-      expect(isLegacySaturdayActivityDay(day)).toBe(false);
-    }
-  });
-
-  it('is false for invalid values', () => {
-    const invalid = ['', '   ', 'שבתון', 'saturday', null, undefined, 0, [], {}];
-    for (const value of invalid) {
-      expect(isLegacySaturdayActivityDay(value)).toBe(false);
     }
   });
 });

@@ -22,8 +22,9 @@ import {
 import { db, storage } from '../../firebase'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 
-// Saturday is not a permitted event date.
-import { isSaturdayDateValue } from '../../utils/activityDays'
+// An event can be assigned to several groups — these read/write/format that
+// (and tolerate the legacy single-group documents).
+import { getEventGroups, eventMatchesGroupName, formatEventGroups, NO_GROUP } from '../../utils/eventGroups'
 
 // Date picker used for the event date field.
 import BirthDatePicker from '../shared/BirthDatePicker/BirthDatePicker'
@@ -44,8 +45,7 @@ import SearchFilters from '../shared/SearchFilters/SearchFilters'
 // Firestore collection used for storing and reading events.
 const EVENTS_COLLECTION_NAME = 'events'
 
-// Fallback label for events that are not linked to any group.
-const NO_GROUP = 'ללא שיוך'
+// (The "no group" label lives in utils/eventGroups as NO_GROUP.)
 
 // Static status options used in the event form.
 const STATUSES = [
@@ -56,12 +56,14 @@ const STATUSES = [
 ]
 
 // Default form state used when adding a new event or clearing the form.
+// `assignedGroups` is a list — an event can belong to several groups (empty
+// means "no group").
 const EMPTY_FORM = {
   name: '',
   date: '',
   location: '',
   description: '',
-  assignedGroup: NO_GROUP,
+  assignedGroups: [],
   status: STATUSES[0],
   contactName: '',
   contactPhone: '',
@@ -109,14 +111,15 @@ function statusClass(status) {
 }
 
 
-// Turn a Firestore event into form fields (used when editing).
+// Turn a Firestore event into form fields (used when editing). getEventGroups
+// folds both the new array and the legacy single value into one list.
 function createFormFromEvent(event) {
   return {
     name: event.name || '',
     date: event.date || '',
     location: event.location || '',
     description: event.description || '',
-    assignedGroup: event.assignedGroup || NO_GROUP,
+    assignedGroups: getEventGroups(event),
     status: event.status || STATUSES[0],
     contactName: event.contact?.name || '',
     contactPhone: event.contact?.phone || '',
@@ -127,13 +130,17 @@ function createFormFromEvent(event) {
 
 
 // Turn form fields into the event structure saved in Firestore (text trimmed).
+// We store the `assignedGroups` array AND a single `assignedGroup` mirror (the
+// first group, or "no group"), so any screen not yet reading the array still
+// shows something sensible.
 function createEventFromForm(form) {
   return {
     name: form.name.trim(),
     date: form.date,
     location: form.location.trim(),
     description: form.description.trim(),
-    assignedGroup: form.assignedGroup,
+    assignedGroups: form.assignedGroups,
+    assignedGroup: form.assignedGroups[0] || NO_GROUP,
     status: form.status,
     contact: {
       name: form.contactName.trim(),
@@ -155,7 +162,8 @@ function normalizeEvent(documentSnapshot) {
     date: data.date || '',
     location: data.location || '',
     description: data.description || '',
-    assignedGroup: data.assignedGroup || 'ללא שיוך',
+    // The clean list of groups (handles both the new array and old single value).
+    assignedGroups: getEventGroups(data),
     status: data.status || 'מתוכנן',
     contact: data.contact || {},
     imageUrls: data.imageUrls || [],
@@ -205,7 +213,8 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
   const [searchTerm, setSearchTerm] = useState('')
 
   // Structured "advanced filters" (empty string means "don't filter").
-  const [filters, setFilters] = useState({ status: '', assignedGroup: '' })
+  // dateFrom / dateTo bound the event date to a range.
+  const [filters, setFilters] = useState({ status: '', assignedGroup: '', dateFrom: '', dateTo: '' })
 
   // Update one filter by name (handed to the shared SearchFilters component).
   const updateFilter = (name, value) => {
@@ -214,7 +223,7 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
 
   // Reset every structured filter.
   const clearFilters = () => {
-    setFilters({ status: '', assignedGroup: '' })
+    setFilters({ status: '', assignedGroup: '', dateFrom: '', dateTo: '' })
   }
 
   // Whether the add/edit form is open. The list always shows first; the form
@@ -254,8 +263,6 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
     setForm(EMPTY_FORM)
     setEditingEventId(null)
     setCurrentEventId(doc(collection(db, EVENTS_COLLECTION_NAME)).id)
-    // Start with a clean Saturday error so a previous attempt doesn't linger.
-    setDateError('')
     setShowForm(true)
   }
 
@@ -263,9 +270,6 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
-
-  // Inline error shown when the chosen event date falls on a Saturday.
-  const [dateError, setDateError] = useState('')
 
   // Group names loaded from Firestore so the dropdown stays up to date.
   const [groupOptions, setGroupOptions] = useState([])
@@ -366,9 +370,32 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
         return false
       }
 
-      // Advanced filter — assigned group.
-      if (filters.assignedGroup && event.assignedGroup !== filters.assignedGroup) {
-        return false
+      // Advanced filter — assigned group. "No group" matches events with none;
+      // any real group matches when it's one of the event's groups.
+      if (filters.assignedGroup) {
+        const matchesGroup = filters.assignedGroup === NO_GROUP
+          ? getEventGroups(event).length === 0
+          : eventMatchesGroupName(event, filters.assignedGroup)
+
+        if (!matchesGroup) {
+          return false
+        }
+      }
+
+      // Advanced filter — date range. Event dates are 'YYYY-MM-DD', which sort
+      // correctly as plain strings, so a string compare bounds the range. An
+      // undated event can't fall inside a range, so it's excluded once a bound
+      // is set.
+      if (filters.dateFrom || filters.dateTo) {
+        if (!event.date) {
+          return false
+        }
+        if (filters.dateFrom && event.date < filters.dateFrom) {
+          return false
+        }
+        if (filters.dateTo && event.date > filters.dateTo) {
+          return false
+        }
       }
 
       // Free-text search — across every text column of the event.
@@ -376,7 +403,8 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
         const searchableText = [
           event.name,
           event.location,
-          event.assignedGroup,
+          // All the event's groups, so a search by group name still works.
+          getEventGroups(event).join(' '),
           event.status,
           event.date,
           event.description,
@@ -394,7 +422,7 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
     })
   }, [events, searchTerm, filters])
 
-  // The advanced-panel fields: filter by status and by assigned group.
+  // The advanced-panel fields: filter by status, assigned group and date range.
   const eventFilterFields = [
     {
       name: 'status',
@@ -410,19 +438,25 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
       placeholder: 'כל הקבוצות',
       options: [...groupOptions, NO_GROUP],
     },
+    {
+      name: 'dateFrom',
+      label: 'מתאריך',
+      type: 'date',
+    },
+    {
+      name: 'dateTo',
+      label: 'עד תאריך',
+      type: 'date',
+    },
   ]
 
-  // Dropdown options: live groups + "no group", plus the currently selected
-  // value (so editing an old event keeps its group even if it's gone now).
+  // Checkbox options for the form: the live groups, plus any group already on
+  // the event that no longer exists (so editing an old event keeps it visible).
   const selectableGroups = useMemo(() => {
-    const base = [...groupOptions, NO_GROUP]
-    const withCurrent =
-      form.assignedGroup && !base.includes(form.assignedGroup)
-        ? [form.assignedGroup, ...base]
-        : base
+    const extras = form.assignedGroups.filter((group) => !groupOptions.includes(group))
 
-    return [...new Set(withCurrent)]
-  }, [groupOptions, form.assignedGroup])
+    return [...new Set([...extras, ...groupOptions])]
+  }, [groupOptions, form.assignedGroups])
 
   // Update one form field by its input name.
   const handleChange = (event) => {
@@ -432,6 +466,19 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
       ...currentForm,
       [name]: value,
     }))
+  }
+
+  // Toggle one group in the event's group list (the checkbox handler).
+  const toggleAssignedGroup = (groupName) => {
+    setForm((currentForm) => {
+      const isSelected = currentForm.assignedGroups.includes(groupName)
+
+      const nextGroups = isSelected
+        ? currentForm.assignedGroups.filter((group) => group !== groupName)
+        : [...currentForm.assignedGroups, groupName]
+
+      return { ...currentForm, assignedGroups: nextGroups }
+    })
   }
 
   // Handle uploading multiple event images to Firebase Storage.
@@ -495,13 +542,6 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
   const handleSubmit = async (event) => {
     // Don't let the form reload the page.
     event.preventDefault()
-
-    // Saturday is not a permitted event date — re-check before any write
-    // (uploadBytes / addDoc / setDoc / updateDoc), independent of the input guard.
-    if (isSaturdayDateValue(form.date)) {
-      setDateError('לא ניתן לקבוע אירוע ליום שבת.')
-      return
-    }
 
     // Name, date and location are required.
     const isMissingRequiredField =
@@ -570,9 +610,6 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
     setCurrentEventId(eventToEdit.id)
     setForm(createFormFromEvent(eventToEdit))
 
-    // No stale Saturday error from a previous form session.
-    setDateError('')
-
     // Open the form pre-filled with this event.
     setShowForm(true)
 
@@ -620,8 +657,6 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
     setForm(EMPTY_FORM)
     setEditingEventId(null)
     setCurrentEventId('')
-    // Clear the Saturday error along with the form.
-    setDateError('')
   }
 
   // Open the full details view for an event (or notify it's not wired yet).
@@ -722,7 +757,7 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
                   </div>
                   <div className="event-card-row">
                     <dt>קבוצה</dt>
-                    <dd>{eventItem.assignedGroup || '—'}</dd>
+                    <dd>{formatEventGroups(eventItem, { fallback: '—' })}</dd>
                   </div>
                 </dl>
 
@@ -837,16 +872,11 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
                     value={form.date}
                     onChange={(date) => {
                       setForm((currentForm) => ({ ...currentForm, date }))
-                      // Keep the value visible, but flag a Saturday selection.
-                      setDateError(isSaturdayDateValue(date) ? 'לא ניתן לקבוע אירוע ליום שבת.' : '')
                     }}
                     label="תאריך"
                     pastYears={3}
                     futureYears={6}
                   />
-                  {dateError && (
-                    <div className="event-management-error">{dateError}</div>
-                  )}
                 </div>
 
                 {/* Location. */}
@@ -862,21 +892,32 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
                   />
                 </div>
 
-                {/* Assigned group dropdown. */}
-                <div className="form-group">
-                  <label>שיוך קבוצה</label>
-                  <select
-                    className="styled-input full-width-input"
-                    name="assignedGroup"
-                    value={form.assignedGroup}
-                    onChange={handleChange}
-                  >
-                    {selectableGroups.map((group) => (
-                      <option key={group} value={group}>
-                        {group}
-                      </option>
-                    ))}
-                  </select>
+                {/* Assigned groups — a checklist, so an event can belong to one
+                    OR several groups (none selected = "no group"). Spans both
+                    columns to give the list room. */}
+                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                  <label>שיוך קבוצות</label>
+                  <div className="event-group-checklist">
+                    {selectableGroups.length === 0 ? (
+                      <span className="event-group-checklist-empty">אין קבוצות להצגה</span>
+                    ) : (
+                      selectableGroups.map((group) => (
+                        <label key={group} className="event-group-check">
+                          <input
+                            type="checkbox"
+                            checked={form.assignedGroups.includes(group)}
+                            onChange={() => toggleAssignedGroup(group)}
+                          />
+                          <span>{group}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                  <small className="event-group-hint">
+                    {form.assignedGroups.length > 0
+                      ? `נבחרו: ${form.assignedGroups.join(', ')}`
+                      : 'לא נבחרה קבוצה (ללא שיוך)'}
+                  </small>
                 </div>
 
                 {/* Status dropdown. */}
@@ -1174,7 +1215,7 @@ export default function EventManagement({ onOpenEventDetails, readOnly = false, 
               </div>
               <div className="event-details-row">
                 <dt>קבוצה משויכת</dt>
-                <dd>{viewingDetailsEvent.assignedGroup || '—'}</dd>
+                <dd>{formatEventGroups(viewingDetailsEvent, { fallback: '—' })}</dd>
               </div>
               <div className="event-details-row">
                 <dt>איש קשר</dt>

@@ -43,7 +43,7 @@ function SearchFilters({
   searchPlaceholder = '🔍 חיפוש חופשי...',
 
   // The structured filter fields shown inside the advanced panel.
-  // Each field: { name, label, type: 'select' | 'text' | 'number', options?, placeholder? }
+  // Each field: { name, label, type: 'select' | 'text' | 'number' | 'date', options?, placeholder? }
   fields = [],
 
   // The current values of those structured filters, keyed by field name.
@@ -86,6 +86,19 @@ function SearchFilters({
             </option>
           ))}
         </select>
+      );
+    }
+
+    // A calendar date field (e.g. an event date range: "from" / "to").
+    if (field.type === 'date') {
+      return (
+        <input
+          id={`sf-${field.name}`}
+          className="sf-control"
+          type="date"
+          value={values[field.name] ?? ''}
+          onChange={(event) => onChange(field.name, event.target.value)}
+        />
       );
     }
 

@@ -29,6 +29,9 @@ import { formatDateOnlyForDisplay } from '../../utils/dateDisplay';
 // Shared attendance normalization (so charts match the reports screen).
 import { normalizeAttendanceStatus, getRecordStatus } from '../../utils/attendance';
 
+// An event can belong to several groups — read/format that consistently.
+import { getEventGroups, formatEventGroups } from '../../utils/eventGroups';
+
 
 // Short Hebrew month labels for the "events per month" bar chart.
 const MONTHS_SHORT = ['ינו', 'פבר', 'מרץ', 'אפר', 'מאי', 'יונ', 'יול', 'אוג', 'ספט', 'אוק', 'נוב', 'דצמ'];
@@ -783,18 +786,22 @@ function Charts() {
     }
   });
   data.events.forEach((event) => {
-    if (event.assignedGroup) {
-      distinctGroups.add(event.assignedGroup);
-    }
+    // Count each of the event's groups (handles the new array + legacy single).
+    getEventGroups(event).forEach((groupName) => distinctGroups.add(groupName));
   });
 
   // ----- Detail data for the KPI popups -----
 
-  // Scoped events per group (for the groups + events popups).
+  // Scoped events per group (for the groups + events popups). A multi-group
+  // event counts once under each of its groups; an ungrouped one under "no group".
   const eventsPerGroup = {};
   scopedEvents.forEach((event) => {
-    const groupName = event.assignedGroup || 'ללא שיוך';
-    eventsPerGroup[groupName] = (eventsPerGroup[groupName] || 0) + 1;
+    const groups = getEventGroups(event);
+    const groupNames = groups.length > 0 ? groups : ['ללא שיוך'];
+
+    groupNames.forEach((groupName) => {
+      eventsPerGroup[groupName] = (eventsPerGroup[groupName] || 0) + 1;
+    });
   });
 
   // One row per group with its volunteer + (scoped) event counts, busiest first.
@@ -1049,7 +1056,7 @@ function Charts() {
                       <span className="chart-drill-name">{event.name || 'אירוע ללא שם'}</span>
                       <span className="chart-drill-meta">
                         {formatDateOnlyForDisplay(event.date, { fallback: '' })}
-                        {event.assignedGroup ? ` · ${event.assignedGroup}` : ''}
+                        {getEventGroups(event).length > 0 ? ` · ${formatEventGroups(event)}` : ''}
                       </span>
                     </li>
                   ))}
