@@ -292,6 +292,43 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
     return map;
   }, [medicalForms]);
 
+  // Build a WhatsApp "send a form/upload link" href for the volunteer currently
+  // being edited. `kind` is 'sign' | 'police' | 'medical'. The volunteer's id is
+  // used as the link's rid, so whatever they upload is matched back to THIS
+  // volunteer (the document maps keyed above use registrantId === volunteer.id).
+  // Name + phone come from the open form, so a just-typed value is respected.
+  const buildVolunteerFormHref = (kind) => {
+    if (!editingVolunteer) {
+      return '#';
+    }
+
+    const displayName = formData.name.trim() || getVolunteerName(editingVolunteer);
+    const encodedName = encodeURIComponent(displayName);
+    const base = `${window.location.origin}${window.location.pathname}`;
+
+    // The signature form has its own route; police/medical share the upload form.
+    const link = kind === 'sign'
+      ? `${base}?sign=1&rid=${editingVolunteer.id}&name=${encodedName}`
+      : `${base}?uploadDoc=1&type=${kind}&rid=${editingVolunteer.id}&name=${encodedName}`;
+
+    // The action text for each form type.
+    const action = kind === 'sign'
+      ? 'למלא ולחתום על טופס המתנדב/ת'
+      : kind === 'police'
+        ? 'למלא ולהעלות את הטופס המשטרתי'
+        : 'למלא ולהעלות את הטופס הרפואי';
+
+    const message = `שלום ${displayName},\nנא ${action} בעמותת שלווה בקישור:\n${link}`;
+
+    // Normalise an Israeli 0xx number to 972xx so the chat opens with the contact.
+    let digits = String(formData.phone || editingVolunteer.phone || '').replace(/\D/g, '');
+    if (digits.startsWith('0')) {
+      digits = `972${digits.slice(1)}`;
+    }
+
+    return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
+  };
+
   // Attach a scanned / photographed signed form to the volunteer being edited.
   // Stored inline as a data URL (kept small — Firestore documents cap at ~1MB).
   const handleSignedFormUpload = (event) => {
@@ -1265,6 +1302,48 @@ const VolunteersManagement = ({ initialGroup = null, onBack, registerBack }) => 
                     </div>
                   )}
                 </div>
+
+                {/* Send the volunteer a link to complete their forms. Shown only
+                    when editing an EXISTING volunteer — the link carries the
+                    volunteer's id, so a document they upload is matched straight
+                    back to their card. Each button opens WhatsApp pre-filled. */}
+                {editingVolunteer && (
+                  <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                    <label>שליחת קישורים להשלמת מסמכים:</label>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      <a
+                        className="btn btn-outline"
+                        style={{ flex: '1 1 140px', textAlign: 'center', textDecoration: 'none' }}
+                        href={buildVolunteerFormHref('sign')}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        📝 טופס לחתימה
+                      </a>
+                      <a
+                        className="btn btn-outline"
+                        style={{ flex: '1 1 140px', textAlign: 'center', textDecoration: 'none' }}
+                        href={buildVolunteerFormHref('police')}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        🛡️ טופס משטרתי
+                      </a>
+                      <a
+                        className="btn btn-outline"
+                        style={{ flex: '1 1 140px', textAlign: 'center', textDecoration: 'none' }}
+                        href={buildVolunteerFormHref('medical')}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        🩺 טופס רפואי
+                      </a>
+                    </div>
+                    <small className="mgmt-muted" style={{ display: 'block', marginTop: '6px' }}>
+                      הקישור נשלח בוואטסאפ למספר של המתנדב/ת. המסמך שיועלה יופיע אוטומטית בכרטיס שלו/ה.
+                    </small>
+                  </div>
+                )}
 
               </div>
 
