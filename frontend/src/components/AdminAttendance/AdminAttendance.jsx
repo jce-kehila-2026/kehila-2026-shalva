@@ -125,6 +125,7 @@ function AdminAttendance({ registerBack }) {
     registerBack(() => {
       if (selectedGroup) {
         setSelectedGroup(null);
+        setCurrentWeekStart(getStartOfWeek(new Date()));
         return true;
       }
       return false;
@@ -396,7 +397,10 @@ function AdminAttendance({ registerBack }) {
               <p>מדריך/ה: {activeSelectedGroup.guideName}</p>
             </div>
 
-            <button type="button" className="adm-att-back-btn" onClick={() => setSelectedGroup(null)}>
+            <button type="button" className="adm-att-back-btn" onClick={() => {
+              setSelectedGroup(null);
+              setCurrentWeekStart(getStartOfWeek(new Date()));
+            }}>
               חזרה לרשימה
             </button>
           </header>
@@ -468,7 +472,7 @@ function AdminAttendance({ registerBack }) {
 
             <div className="adm-week-body">
               {activeSelectedGroup.people.length > 0 ? (
-                activeSelectedGroup.people.map((person) => (
+                activeSelectedGroup.people.map((person, personIndex) => (
                   <div className="adm-week-grid adm-week-row" key={person.id}>
                     <div className="adm-week-person" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center' }}>
                       <span style={{ fontWeight: '700' }}>{person.name}</span>
@@ -483,6 +487,8 @@ function AdminAttendance({ registerBack }) {
                       const cellKey = `${person.id}|${dKey}`;
                       const isMenuOpen = openCellKey === cellKey;
                       const isSavingCell = savingCellKey === cellKey;
+                      const isUpward = (activeSelectedGroup.people.length >= 2 && personIndex === activeSelectedGroup.people.length - 1) ||
+                                       (activeSelectedGroup.people.length >= 3 && personIndex === activeSelectedGroup.people.length - 2);
 
                       return (
                         <div className={`adm-week-cell ${isMenuOpen ? 'is-editing' : ''}`} key={dKey}>
@@ -507,7 +513,7 @@ function AdminAttendance({ registerBack }) {
 
                           {/* The editor: present / absent / clear. */}
                           {isMenuOpen && (
-                            <div className="adm-week-cell-menu" role="menu">
+                            <div className={`adm-week-cell-menu ${isUpward ? 'is-upward' : ''}`} role="menu">
                               <button type="button" className="is-present" onClick={() => handleCellChoice(person, dKey, 'present')} disabled={isSavingCell}>
                                 נוכח
                               </button>
