@@ -8,39 +8,18 @@ import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 // Firestore helpers for reading and writing documents.
 import { collection, doc, getDocs, query, setDoc, where, writeBatch } from 'firebase/firestore';
 
-// Storage helpers for uploading a group's cover image.
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-
-// Our Firestore database + Storage instances.
-import { db, storage } from '../../firebase';
+// Our Firestore database instance.
+import { db } from '../../firebase';
 
 // The per-group details view.
 import GroupDetails from './GroupDetails';
 
-// The styled cover-image picker used in the create / edit modals.
-import CoverImageField from './CoverImageField';
-
 // The closed list of activity times (בוקר / צהריים / ערב).
 import { GROUP_TIMES } from '../../utils/groupOptions';
 
-// Downloads the empty groups template (dropdowns for time/guide/day).
-import { downloadGroupsTemplate } from '../../utils/excelTemplates';
-
-// The approved pure group-import engine: file/header analysis, preflight +
-// resolve, the active-guide candidate builder, write-plan builder + the
-// sequential orchestrator. Only `ready` rows ever reach the writer.
-import {
-  analyzeGroupImportHeaders,
-  detectGroupImportFileType,
-  buildGroupImportGuides,
-  preflightGroupImport,
-  resolveGroupImport,
-  buildGroupImportPlans,
-  commitGroupPlans,
-} from '../../utils/groupImport';
-
-// The real, atomic single-group Firestore writer (shared with the emulator test).
-import { commitOneGroup } from '../../utils/groupImportWriter';
+// Builds the list of active guides (role "guide", not disabled), each merged
+// with its guides/{uid} group mapping — used to populate the assign-guide picker.
+import { buildGroupImportGuides } from '../../utils/groupImport';
 
 // Shared collapsible advanced-search bar (free text + per-field filters).
 import SearchFilters from '../shared/SearchFilters/SearchFilters';
@@ -57,38 +36,6 @@ const toRecord = (documentSnapshot) => ({
 });
 
 
-// Image types we allow uploading (kept in sync with storage.rules).
-const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-
-// Basic client-side check before uploading a cover image. Returns true when
-// the file is an allowed image type and small enough; otherwise warns.
-const isValidImage = (file) => {
-  if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-    alert('יש לבחור תמונה מסוג JPG, PNG או WEBP.');
-    return false;
-  }
-
-  if (file.size > 5 * 1024 * 1024) {
-    alert('התמונה גדולה מדי (מקסימום 5MB).');
-    return false;
-  }
-
-  return true;
-};
-
-
-// Upload a cover image to Storage under the group's own folder and return its
-// public download URL. The timestamp in the name avoids stale-cache issues
-// when an image is replaced.
-const uploadCoverImage = async (file, groupId) => {
-  const extension = (file.name.split('.').pop() || 'jpg').toLowerCase();
-  const storageRef = ref(storage, `groups/${groupId}/cover-${Date.now()}.${extension}`);
-
-  await uploadBytes(storageRef, file);
-  return getDownloadURL(storageRef);
-};
-
-
 // Best available display name for a guide, with graceful fallbacks.
 const getGuideName = (guide) => {
   // No guide.
@@ -103,46 +50,6 @@ const getGuideName = (guide) => {
 };
 
 
-// Compose the Hebrew import summary. Each outcome is reported separately:
-// written groups, rows rejected in validation/matching (by row number only),
-// the row whose WRITE failed, groups not attempted after it, and a refresh
-// failure on its own line. No raw rows or personal details are printed.
-const buildGroupImportReport = ({
-  written,
-  rejectedExcelRows = [],
-  blankSkipped = 0,
-  failedExcelRow = null,
-  notAttempted = 0,
-  refreshOk = true,
-}) => {
-  const lines = [`נכתבו ${written} קבוצות חדשות.`];
-
-  if (rejectedExcelRows.length > 0) {
-    lines.push(`${rejectedExcelRows.length} שורות נדחו בוולידציה או בהתאמה ולא נכתבו (שורות: ${rejectedExcelRows.join(', ')}).`);
-  }
-
-  if (blankSkipped > 0) {
-    lines.push(`${blankSkipped} שורות ריקות דולגו.`);
-  }
-
-  const hadWriteFailure = failedExcelRow !== null && failedExcelRow !== undefined;
-  if (hadWriteFailure) {
-    lines.push(`הכתיבה נעצרה בשורה ${failedExcelRow} — אותה קבוצה לא נכתבה.`);
-    lines.push(`${notAttempted} קבוצות שאחריה לא נוסו.`);
-  }
-
-  // A refresh failure is a DIFFERENT problem from an import failure.
-  if (!refreshOk) {
-    lines.push('רענון הנתונים לאחר הייבוא נכשל — אין לייבא שוב עד לרענון מוצלח של המסך.');
-  } else if (hadWriteFailure) {
-    lines.push('לאחר רענון מוצלח, תקנו את השורה שנכשלה וייבאו מחדש רק את הקבוצות שטרם נכתבו.');
-  }
-
-  lines.push('מניעת הכפילויות מבוססת על נתוני הרגע (snapshot) ואינה נעילה גלובלית.');
-  return lines.join('\n');
-};
-
-
 const GroupManagement = ({ registerBack }) => {
   const isMountedRef = useRef(true);
 
@@ -153,15 +60,6 @@ const GroupManagement = ({ registerBack }) => {
   const [groups, setGroups] = useState([]);
   const [volunteers, setVolunteers] = useState([]);
   const [guides, setGuides] = useState([]);
-
-  // Excel import: in-flight flag + the hidden file input.
-  const [isImporting, setIsImporting] = useState(false);
-  const importFileRef = useRef(null);
-
-  // Fail-closed readiness: import is allowed ONLY after all four core sources
-  // (groups, volunteers, users, guide links) have loaded successfully. Any load
-  // failure leaves this false and blocks a new import, without wiping old state.
-  const [importDataReady, setImportDataReady] = useState(false);
 
   // Dashboard back button: close the details view first, then leave.
   useEffect(() => {
@@ -180,12 +78,6 @@ const GroupManagement = ({ registerBack }) => {
   const [newGroupTime, setNewGroupTime] = useState('');
   const [newGroupDescription, setNewGroupDescription] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-
-  // The new group's id is generated up front so its cover image can be uploaded
-  // (to groups/{id}/...) before the document itself is created on submit.
-  const [newGroupId, setNewGroupId] = useState('');
-  const [newGroupImageUrl, setNewGroupImageUrl] = useState('');
-  const [uploadingNewImage, setUploadingNewImage] = useState(false);
 
   // Search text for filtering the list.
   const [searchQuery, setSearchQuery] = useState('');
@@ -220,10 +112,7 @@ const GroupManagement = ({ registerBack }) => {
   // "Edit group" modal state.
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [groupToEdit, setGroupToEdit] = useState(null);
-  const [editForm, setEditForm] = useState({ groupName: '', time: '', description: '', imageUrl: '' });
-
-  // True while a cover image is uploading to Storage.
-  const [uploadingImage, setUploadingImage] = useState(false);
+  const [editForm, setEditForm] = useState({ groupName: '', time: '', description: '' });
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -232,17 +121,13 @@ const GroupManagement = ({ registerBack }) => {
     };
   }, []);
 
-  // Load the four core sources together and gate import readiness on all of
-  // them. Returns true only when every source loaded; false on any failure
-  // (old state is kept, import stays blocked). Used both on mount and as the
-  // post-import refresh.
+  // Load the four core sources together. Used both on mount and as the refresh
+  // after any change (create / edit / assign / delete a group).
   const fetchData = useCallback(async () => {
     if (!isMountedRef.current) {
-      return false;
+      return;
     }
 
-    // Block import while (re)loading; only a full success re-enables it.
-    setImportDataReady(false);
     try {
       // Read all four collections in parallel. Names come from "users";
       // groupId/groupName mappings come from the "guides" link documents.
@@ -253,7 +138,7 @@ const GroupManagement = ({ registerBack }) => {
         getDocs(collection(db, 'guides')),
       ]);
       if (!isMountedRef.current) {
-        return false;
+        return;
       }
 
       const users = usersSnap.docs.map(toRecord);
@@ -263,17 +148,11 @@ const GroupManagement = ({ registerBack }) => {
       setVolunteers(volunteersSnap.docs.map(toRecord));
 
       // Active guides only (role "guide", not disabled), each merged with its
-      // guides/{uid} group mapping — the single active-guide list used by both
-      // the template and the import.
+      // guides/{uid} group mapping — used to populate the assign-guide picker.
       setGuides(buildGroupImportGuides(users, guideLinks));
-
-      // All four succeeded → import is allowed.
-      setImportDataReady(true);
-      return true;
     } catch (error) {
       console.error('שגיאה בשליפת הנתונים:', error);
-      // Keep whatever was loaded before; readiness stays false → import blocked.
-      return false;
+      // Keep whatever was loaded before.
     }
   }, []);
 
@@ -282,19 +161,15 @@ const GroupManagement = ({ registerBack }) => {
     fetchData();
   }, [fetchData]);
 
-  // Open the "add group" modal with empty fields. We pre-generate the new
-  // group's id so its cover image can be uploaded before the group is created.
+  // Open the "add group" modal with empty fields.
   const openAddModal = () => {
     setNewGroupName('');
     setNewGroupTime('');
     setNewGroupDescription('');
-    setNewGroupImageUrl('');
-    setNewGroupId(doc(collection(db, 'groups')).id);
     setIsAddModalOpen(true);
   };
 
-  // Create a new group document (at the pre-generated id, so it matches any
-  // image already uploaded to that id's folder).
+  // Create a new group document. Firestore generates the id for us.
   const handleCreateGroup = async (event) => {
     event.preventDefault();
 
@@ -303,14 +178,16 @@ const GroupManagement = ({ registerBack }) => {
     if (!groupName) return;
 
     try {
-      // Create the group (no guide assigned yet), cover image included.
-      await setDoc(doc(db, 'groups', newGroupId), {
+      // A fresh document reference with an auto-generated id.
+      const newGroupRef = doc(collection(db, 'groups'));
+
+      // Create the group (no guide assigned yet).
+      await setDoc(newGroupRef, {
         groupName,
         guideId: '',
         guideName: '',
         time: newGroupTime.trim(),
         description: newGroupDescription.trim(),
-        imageUrl: newGroupImageUrl,
         createdAt: new Date(),
       });
 
@@ -322,7 +199,6 @@ const GroupManagement = ({ registerBack }) => {
       setNewGroupName('');
       setNewGroupTime('');
       setNewGroupDescription('');
-      setNewGroupImageUrl('');
       setIsAddModalOpen(false);
       await fetchData();
     } catch (error) {
@@ -452,76 +328,8 @@ const GroupManagement = ({ registerBack }) => {
       // is valid, so saving the form also cleans the old value.
       time: GROUP_TIMES.includes(group.time) ? group.time : '',
       description: group.description || '',
-      imageUrl: group.imageUrl || '',
     });
     setIsEditModalOpen(true);
-  };
-
-  // Upload a chosen image for the group being EDITED. The URL is kept on the
-  // form and written to Firestore when the admin saves.
-  const handleImageUpload = async (event) => {
-    const file = event.target.files && event.target.files[0];
-    if (!file || !groupToEdit || !isValidImage(file)) {
-      event.target.value = '';
-      return;
-    }
-
-    setUploadingImage(true);
-
-    try {
-      const downloadUrl = await uploadCoverImage(file, groupToEdit.id);
-      if (!isMountedRef.current) {
-        return;
-      }
-      setEditForm((previous) => ({ ...previous, imageUrl: downloadUrl }));
-    } catch (error) {
-      console.error('שגיאה בהעלאת התמונה:', error);
-      alert('אירעה שגיאה בהעלאת התמונה. ודא/י שחוקי ה-Storage נפרסו.');
-    } finally {
-      if (isMountedRef.current) {
-        setUploadingImage(false);
-
-        // Reset the input so the same file can be re-selected if needed.
-        event.target.value = '';
-      }
-    }
-  };
-
-  // Clear the edited group's image (takes effect when the form is saved).
-  const handleRemoveImage = () => {
-    setEditForm((previous) => ({ ...previous, imageUrl: '' }));
-  };
-
-  // Upload a chosen image for the NEW group (to its pre-generated id folder).
-  const handleNewImageUpload = async (event) => {
-    const file = event.target.files && event.target.files[0];
-    if (!file || !newGroupId || !isValidImage(file)) {
-      event.target.value = '';
-      return;
-    }
-
-    setUploadingNewImage(true);
-
-    try {
-      const downloadUrl = await uploadCoverImage(file, newGroupId);
-      if (!isMountedRef.current) {
-        return;
-      }
-      setNewGroupImageUrl(downloadUrl);
-    } catch (error) {
-      console.error('שגיאה בהעלאת התמונה:', error);
-      alert('אירעה שגיאה בהעלאת התמונה. ודא/י שחוקי ה-Storage נפרסו.');
-    } finally {
-      if (isMountedRef.current) {
-        setUploadingNewImage(false);
-        event.target.value = '';
-      }
-    }
-  };
-
-  // Clear the new group's chosen image.
-  const handleRemoveNewImage = () => {
-    setNewGroupImageUrl('');
   };
 
   // Save edits to a group's name and time.
@@ -537,18 +345,16 @@ const GroupManagement = ({ registerBack }) => {
 
     const time = editForm.time.trim();
     const description = editForm.description.trim();
-    const imageUrl = editForm.imageUrl || '';
 
     try {
       // Update the group and the guide's denormalized name together (atomic).
       const batch = writeBatch(db);
 
-      // Update the group document (the cover image included).
+      // Update the group document.
       batch.update(doc(db, 'groups', groupToEdit.id), {
         groupName,
         time,
         description,
-        imageUrl,
       });
 
       // Keep the assigned guide's denormalized group name in sync.
@@ -628,122 +434,6 @@ const GroupManagement = ({ registerBack }) => {
   };
 
   // Open a group's details view.
-  // Import groups from the Excel template through the approved pure engine, then
-  // write each group as ONE atomic batch. No first-match, no silent skip/reassign:
-  // only fully-resolved rows are written, and every other row is reported.
-  const handleGroupsFileUpload = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    // Fail-closed: never import against partial / not-yet-loaded data.
-    if (!importDataReady) {
-      alert('הנתונים עדיין נטענים או שטעינתם נכשלה. רעננו את המסך ונסו שוב לפני הייבוא.');
-      if (importFileRef.current) importFileRef.current.value = null;
-      return;
-    }
-
-    setIsImporting(true);
-
-    try {
-      // Parse the workbook (the Excel reader loads on demand).
-      const XLSX = await import('xlsx');
-      const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      if (!isMountedRef.current) {
-        return;
-      }
-
-      // 1) Inspect the RAW header row BEFORE object parsing.
-      const headerRow = XLSX.utils.sheet_to_json(worksheet, { header: 1 })[0] || [];
-
-      // Reject a volunteers / mixed / unrecognized file up front — before object
-      // parsing, preflight or any Firebase access.
-      const fileType = detectGroupImportFileType(headerRow);
-      if (fileType === 'volunteers') {
-        alert('הקובץ שנבחר הוא תבנית מתנדבים. במסך הקבוצות יש להעלות את תבנית הקבוצות בלבד.');
-        return;
-      }
-      if (fileType === 'ambiguous') {
-        alert('הקובץ מכיל גם כותרות של קבוצות וגם של מתנדבים. השתמשו בתבנית הקבוצות בלבד, ללא עמודות של מתנדבים.');
-        return;
-      }
-      if (fileType !== 'groups') {
-        alert('הקובץ אינו מזוהה כתבנית קבוצות. הורידו את תבנית הקבוצות, מלאו אותה ונסו שוב.');
-        return;
-      }
-
-      // Duplicate / ambiguous headers stop the import before any parsing/write.
-      const headerCheck = analyzeGroupImportHeaders(headerRow);
-      if (!headerCheck.ok) {
-        const message = headerCheck.code === 'AMBIGUOUS_HEADERS'
-          ? 'נמצאו שתי כותרות שונות לאותו שדה (למשל "שם קבוצה *" ו"שם קבוצה"). השאירו עמודה אחת בלבד מכל סוג.'
-          : 'נמצאו כותרות כפולות בקובץ. ודאו שכל כותרת מופיעה פעם אחת בלבד.';
-        alert(message);
-        return;
-      }
-
-      // 2) Only now read the data rows in object mode and run the pure pipeline.
-      const jsonRows = XLSX.utils.sheet_to_json(worksheet);
-      const {
-        valid, rejected: preflightRejected, blankSkipped, identities,
-      } = preflightGroupImport(jsonRows);
-      const { ready, rejected: resolveRejected } = resolveGroupImport(valid, {
-        existingGroups: groups,
-        guides,
-        volunteers,
-        allRowIdentities: identities,
-      });
-
-      // Unite preflight + resolve rejections by Excel row (numbers only).
-      const rejectedExcelRows = [...new Set(
-        [...preflightRejected, ...resolveRejected].map((r) => r.excelRow),
-      )].sort((a, b) => a - b);
-
-      // Nothing to write — report and stop (no batch, no refresh needed).
-      if (ready.length === 0) {
-        alert(buildGroupImportReport({ written: 0, rejectedExcelRows, blankSkipped }));
-        return;
-      }
-
-      // 3) Build plans (ready only) and commit one atomic batch per group,
-      //    stopping at the first failure.
-      const plans = buildGroupImportPlans(ready);
-      const result = await commitGroupPlans(plans, (plan) => commitOneGroup(db, plan));
-      if (!isMountedRef.current) {
-        return;
-      }
-
-      // 4) Refresh; a refresh failure is reported separately and keeps import
-      //    blocked (readiness stays false until a clean reload).
-      const refreshOk = await fetchData();
-      if (!isMountedRef.current) {
-        return;
-      }
-
-      alert(buildGroupImportReport({
-        written: result.writtenGroups,
-        rejectedExcelRows,
-        blankSkipped,
-        failedExcelRow: result.failedExcelRow,
-        notAttempted: result.notAttemptedGroups,
-        refreshOk,
-      }));
-    } catch (error) {
-      if (!isMountedRef.current) {
-        return;
-      }
-      console.error('שגיאה בייבוא קבוצות:', error);
-      alert('אירעה שגיאה בייבוא הקובץ. ודאו שזהו קובץ התבנית.');
-    } finally {
-      if (isMountedRef.current) {
-        setIsImporting(false);
-        if (importFileRef.current) {
-          importFileRef.current.value = null;
-        }
-      }
-    }
-  };
-
   const handleViewDetails = (groupId) => {
     setSelectedGroupId(groupId);
   };
@@ -847,8 +537,8 @@ const GroupManagement = ({ registerBack }) => {
     <main className="mgmt-container" dir="rtl">
       <section className="mgmt-card">
 
-        {/* Header: the group count on one side, and the action buttons (create
-            / import / download) on the same row — raised up here from below. */}
+        {/* Header: the group count on one side, the "create group" button on
+            the other. */}
         <header className="mgmt-header">
           <div className="mgmt-count">
             <span>{filteredGroups.length}</span>
@@ -857,42 +547,6 @@ const GroupManagement = ({ registerBack }) => {
 
           <div className="mgmt-toolbar">
             <button className="mgmt-primary-btn" onClick={openAddModal}>+ צור קבוצה חדשה</button>
-
-            {/* Hidden file input + Excel import / empty-template buttons. */}
-            <input
-              type="file"
-              accept=".xlsx, .xls, .csv"
-              style={{ display: 'none' }}
-              ref={importFileRef}
-              onChange={handleGroupsFileUpload}
-            />
-            <button
-              className="mgmt-secondary-btn"
-              onClick={() => importFileRef.current?.click()}
-              disabled={isImporting || !importDataReady}
-              title={!importDataReady ? 'הנתונים נטענים — הייבוא ייפתח לאחר טעינה מלאה' : undefined}
-            >
-              {isImporting ? '⏳ מייבא...' : '📥 ייבוא קבוצות'}
-            </button>
-            <button
-              className="mgmt-secondary-btn"
-              onClick={async () => {
-                // Pull users + guide links + volunteers fresh at click time, and
-                // build the SAME active-guide list the import uses.
-                const [usersSnap, guideLinksSnap, volunteersSnap] = await Promise.all([
-                  getDocs(collection(db, 'users')),
-                  getDocs(collection(db, 'guides')),
-                  getDocs(collection(db, 'volunteers')),
-                ]);
-                const freshGuides = buildGroupImportGuides(
-                  usersSnap.docs.map(toRecord),
-                  guideLinksSnap.docs.map(toRecord),
-                );
-                downloadGroupsTemplate(freshGuides, volunteersSnap.docs.map(toRecord));
-              }}
-            >
-              ⬇️ הורדת תבנית אקסל
-            </button>
           </div>
         </header>
 
@@ -1041,19 +695,10 @@ const GroupManagement = ({ registerBack }) => {
                 />
               </div>
 
-              {/* Cover image for the new group. */}
-              <CoverImageField
-                label="תמונת הקבוצה:"
-                imageUrl={newGroupImageUrl}
-                uploading={uploadingNewImage}
-                onSelect={handleNewImageUpload}
-                onRemove={handleRemoveNewImage}
-              />
-
               {/* Cancel / create. */}
               <div className="modal-actions">
                 <button type="button" className="btn btn-outline" onClick={() => setIsAddModalOpen(false)}>ביטול</button>
-                <button type="submit" className="btn btn-success" disabled={!newGroupName.trim() || uploadingNewImage}>צור קבוצה</button>
+                <button type="submit" className="btn btn-success" disabled={!newGroupName.trim()}>צור קבוצה</button>
               </div>
             </form>
           </div>
@@ -1139,15 +784,6 @@ const GroupManagement = ({ registerBack }) => {
                 />
               </div>
 
-              {/* Cover image — uploaded to Storage, shown on the public showcase. */}
-              <CoverImageField
-                label="תמונת הקבוצה:"
-                imageUrl={editForm.imageUrl}
-                uploading={uploadingImage}
-                onSelect={handleImageUpload}
-                onRemove={handleRemoveImage}
-              />
-
               {/* Delete (pushed to the far side) · Cancel / save. */}
               <div className="modal-actions">
                 <button
@@ -1158,7 +794,7 @@ const GroupManagement = ({ registerBack }) => {
                   מחיקת קבוצה
                 </button>
                 <button type="button" className="btn btn-outline" onClick={() => setIsEditModalOpen(false)}>ביטול</button>
-                <button type="submit" className="btn btn-success" disabled={!editForm.groupName.trim() || uploadingImage}>שמור שינויים</button>
+                <button type="submit" className="btn btn-success" disabled={!editForm.groupName.trim()}>שמור שינויים</button>
               </div>
             </form>
           </div>

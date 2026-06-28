@@ -1,7 +1,7 @@
-// CoverImageField — a friendly "pick an image" control shared by the group
+// CoverImageField — a friendly "pick an image" control used by the program
 // create and edit modals. It hides the plain (ugly) native file input behind a
 // styled drop-zone label, previews the chosen image, and offers a remove
-// action. The actual upload happens in the parent, which knows the group id.
+// action. The actual upload happens in the parent, which knows the program id.
 
 function CoverImageField({ label, imageUrl, uploading, onSelect, onRemove }) {
   return (
@@ -11,7 +11,7 @@ function CoverImageField({ label, imageUrl, uploading, onSelect, onRemove }) {
       {/* Preview of the current / just-uploaded image. */}
       {imageUrl && (
         <div className="cover-field-preview">
-          <img src={imageUrl} alt="תצוגה מקדימה של תמונת הקבוצה" />
+          <img src={imageUrl} alt="תצוגה מקדימה של התמונה" />
         </div>
       )}
 

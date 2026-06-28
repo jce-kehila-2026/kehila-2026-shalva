@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { collection, doc, getDocs, setDoc, deleteDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { db, storage } from '../../firebase';
-import CoverImageField from '../GroupManagement/CoverImageField';
+import CoverImageField from './CoverImageField';
 import SearchFilters from '../shared/SearchFilters/SearchFilters';
 import '../shared/ManagementScreen.css';
 import '../GroupManagement/GroupManagement.css';
