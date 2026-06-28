@@ -2,7 +2,7 @@
 // guide, and allows clicking a group to view a full weekly attendance table.
 
 // React hooks for state, effects and derived values.
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 // Firestore helpers: read the collections, and write/delete a one-time cell mark.
 import { collection, deleteDoc, doc, getDocs, setDoc } from 'firebase/firestore';
@@ -116,24 +116,40 @@ function AdminAttendance({ registerBack }) {
   // The cell whose edit menu is open: `${volunteerId}|${dateKey}` (null = none).
   const [openCellKey, setOpenCellKey] = useState(null);
 
+  // Which way that cell's editor opens: 'down' (default) or 'up'. We open it
+  // upward when there isn't room below inside the scrollable board, so the
+  // bottom-row menu isn't clipped (which made it look empty).
+  const [openCellDir, setOpenCellDir] = useState('down');
+
   // The cell currently being written, so its menu can show a saving state.
   const [savingCellKey, setSavingCellKey] = useState(null);
+
+  // The active week's Sunday.
+  const [currentWeekStart, setCurrentWeekStart] = useState(() => getStartOfWeek(new Date()));
+
+  // The scrollable weekly board — measured to decide the editor's open direction.
+  const weekBoardRef = useRef(null);
+
+  // Return to the group list AND reset the view to the current week, so the next
+  // time a group is opened it always starts on this week — not the last week the
+  // admin happened to browse to.
+  const handleBackToList = useCallback(() => {
+    setSelectedGroup(null);
+    setOpenCellKey(null);
+    setCurrentWeekStart(getStartOfWeek(new Date()));
+  }, []);
 
   // Dashboard back button: the weekly table returns to the group list first.
   useEffect(() => {
     if (!registerBack) return;
     registerBack(() => {
       if (selectedGroup) {
-        setSelectedGroup(null);
-        setCurrentWeekStart(getStartOfWeek(new Date()));
+        handleBackToList();
         return true;
       }
       return false;
     });
-  }, [registerBack, selectedGroup]);
-
-  // The active week's Sunday.
-  const [currentWeekStart, setCurrentWeekStart] = useState(() => getStartOfWeek(new Date()));
+  }, [registerBack, selectedGroup, handleBackToList]);
 
   const weekDays = useMemo(() => getWeekDays(currentWeekStart), [currentWeekStart]);
   const weekDaysKeys = useMemo(() => weekDays.map(getDayKey), [weekDays]);
@@ -397,10 +413,7 @@ function AdminAttendance({ registerBack }) {
               <p>מדריך/ה: {activeSelectedGroup.guideName}</p>
             </div>
 
-            <button type="button" className="adm-att-back-btn" onClick={() => {
-              setSelectedGroup(null);
-              setCurrentWeekStart(getStartOfWeek(new Date()));
-            }}>
+            <button type="button" className="adm-att-back-btn" onClick={handleBackToList}>
               חזרה לרשימה
             </button>
           </header>
@@ -452,7 +465,7 @@ function AdminAttendance({ registerBack }) {
             <span><span style={{ fontSize: '15px', fontWeight: '800', marginInlineEnd: '3px' }}>—</span> לא משובץ ליום זה</span>
           </div>
 
-          <div className="adm-week-board">
+          <div className="adm-week-board" ref={weekBoardRef}>
             <div className="adm-week-grid adm-week-grid-head">
               <div className="adm-week-person-head">מתנדב</div>
               {weekDays.map((day) => {
@@ -472,7 +485,7 @@ function AdminAttendance({ registerBack }) {
 
             <div className="adm-week-body">
               {activeSelectedGroup.people.length > 0 ? (
-                activeSelectedGroup.people.map((person, personIndex) => (
+                activeSelectedGroup.people.map((person) => (
                   <div className="adm-week-grid adm-week-row" key={person.id}>
                     <div className="adm-week-person" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center' }}>
                       <span style={{ fontWeight: '700' }}>{person.name}</span>
@@ -487,8 +500,6 @@ function AdminAttendance({ registerBack }) {
                       const cellKey = `${person.id}|${dKey}`;
                       const isMenuOpen = openCellKey === cellKey;
                       const isSavingCell = savingCellKey === cellKey;
-                      const isUpward = (activeSelectedGroup.people.length >= 2 && personIndex === activeSelectedGroup.people.length - 1) ||
-                                       (activeSelectedGroup.people.length >= 3 && personIndex === activeSelectedGroup.people.length - 2);
 
                       return (
                         <div className={`adm-week-cell ${isMenuOpen ? 'is-editing' : ''}`} key={dKey}>
@@ -499,7 +510,28 @@ function AdminAttendance({ registerBack }) {
                           <button
                             type="button"
                             className="adm-week-cell-btn"
-                            onClick={() => setOpenCellKey(isMenuOpen ? null : cellKey)}
+                            onClick={(event) => {
+                              // Toggling a menu that's already open just closes it.
+                              if (isMenuOpen) {
+                                setOpenCellKey(null);
+                                return;
+                              }
+
+                              // Decide which way the editor should open. If there
+                              // isn't enough room below the cell — inside the
+                              // scrollable board and within the screen — open it
+                              // upward so it isn't clipped (which looked empty).
+                              const cellBottom = event.currentTarget.getBoundingClientRect().bottom;
+                              const board = weekBoardRef.current;
+                              const boardBottom = board
+                                ? board.getBoundingClientRect().bottom
+                                : window.innerHeight;
+                              const limitBottom = Math.min(boardBottom, window.innerHeight);
+
+                              // ~150px is the editor's height (three buttons + padding).
+                              setOpenCellDir(limitBottom - cellBottom < 150 ? 'up' : 'down');
+                              setOpenCellKey(cellKey);
+                            }}
                             title={getStatusLabel(status)}
                             aria-label={`${person.name} — ${getStatusLabel(status)}. עריכת נוכחות`}
                             disabled={isSavingCell}
@@ -513,7 +545,7 @@ function AdminAttendance({ registerBack }) {
 
                           {/* The editor: present / absent / clear. */}
                           {isMenuOpen && (
-                            <div className={`adm-week-cell-menu ${isUpward ? 'is-upward' : ''}`} role="menu">
+                            <div className={`adm-week-cell-menu ${openCellDir === 'up' ? 'is-up' : ''}`} role="menu">
                               <button type="button" className="is-present" onClick={() => handleCellChoice(person, dKey, 'present')} disabled={isSavingCell}>
                                 נוכח
                               </button>

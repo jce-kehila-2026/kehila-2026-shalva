@@ -157,13 +157,23 @@ function DocumentUploadForm({ registrantId = '', prefillName = '', docType = '' 
       <section className="sig-section">
         <h2 className="sig-section-title">העלאת קובץ (PDF או תמונה)</h2>
         <div className="sig-field sig-field--wide">
-          <input
-            type="file"
-            accept=".pdf,image/*"
-            onChange={handleFileChange}
-            required
-            style={{ border: 'none', padding: '10px 0' }}
-          />
+          {/* The whole control is a <label>: tapping anywhere opens the file
+              dialog. The native input is hidden visually (not display:none, so
+              `required` validation and mobile pickers still work) and replaced
+              by a styled button + the chosen file name. */}
+          <label className="sig-file">
+            <input
+              type="file"
+              accept=".pdf,image/*"
+              onChange={handleFileChange}
+              required
+              className="sig-file-input"
+            />
+            <span className="sig-file-btn">📎 בחירת קובץ</span>
+            <span className="sig-file-name">
+              {file ? file.name : 'לא נבחר קובץ — PDF או תמונה'}
+            </span>
+          </label>
         </div>
 
         {errorText && <p className="sig-error" role="alert">{errorText}</p>}

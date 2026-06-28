@@ -554,12 +554,7 @@
   border-radius: var(--radius);
   background: var(--surface);
   overflow: auto;
-  max-height: min(75vh, 750px);
-  min-height: 180px;
-}
-
-.adm-week-body {
-  padding-bottom: 20px;
+  max-height: min(58vh, 520px);
 }
 
 .adm-week-grid {
@@ -693,10 +688,11 @@
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18);
 }
 
-.adm-week-cell-menu.is-upward {
+/* Open upward instead — used for cells near the bottom of the board, so the
+   popover stays inside the visible (scrollable) area rather than being clipped. */
+.adm-week-cell-menu.is-up {
   top: auto;
   bottom: calc(100% + 4px);
-  box-shadow: 0 -10px 30px rgba(15, 23, 42, 0.18);
 }
 
 .adm-week-cell-menu button {
@@ -1047,8 +1043,6 @@
   .adm-week-board {
     max-height: none;
     overflow: visible;
-    min-height: 0;
-    padding-bottom: 0;
   }
 
   .adm-week-grid {
