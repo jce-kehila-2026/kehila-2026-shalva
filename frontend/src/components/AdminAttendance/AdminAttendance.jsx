@@ -488,7 +488,7 @@ function AdminAttendance({ registerBack }) {
                 activeSelectedGroup.people.map((person) => (
                   <div className="adm-week-grid adm-week-row" key={person.id}>
                     <div className="adm-week-person" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center' }}>
-                      <span style={{ fontWeight: '700' }}>{person.name}</span>
+                      <span style={{ fontWeight: '700' }} title={person.name}>{person.name}</span>
                       {person.day && (
                         <small style={{ color: 'var(--brand-600)', fontSize: '10px', fontWeight: '700', marginTop: '1px' }}>
                           {person.day}

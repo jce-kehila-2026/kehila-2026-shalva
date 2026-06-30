@@ -629,9 +629,17 @@
   color: var(--text);
   font-size: 13.5px;
   font-weight: 800;
+  /* Let this grid cell shrink to its track instead of growing to fit a long
+     name (a flex/grid item's auto minimum is its content size). Without this the
+     name pushes the cell past the table's edge. */
+  min-width: 0;
 }
 
 .adm-week-person span {
+  /* min-width:0 defeats the flex auto-minimum and max-width caps the span to the
+     cell, so the ellipsis below can actually take effect for long names. */
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1069,6 +1077,18 @@
   .adm-week-person {
     padding: 7px 6px;
     font-size: 12.5px;
+  }
+
+  /* The name column is very narrow on phones, so a single ellipsised line would
+     show only a few characters — and previously the name spilled past the cell
+     and table border entirely. Let it wrap onto multiple lines instead: always
+     contained inside the cell, and fully readable. */
+  .adm-week-person span {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+    line-height: 1.2;
   }
 
   .adm-week-cell {
