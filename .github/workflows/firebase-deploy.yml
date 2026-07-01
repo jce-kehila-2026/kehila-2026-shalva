@@ -1,0 +1,83 @@
+# Deploy the Kehila Hub to Firebase on every push to main.
+#
+# What gets deployed (see firebase.json for the mapping):
+#   - firestore  -> firestore.rules + firestore.indexes.json
+#   - storage    -> storage.rules
+#   - hosting    -> the built site in frontend/dist
+#
+# Two kinds of secrets are needed (add them in GitHub -> Settings -> Secrets and
+# variables -> Actions). The reason they live in secrets and not in the repo is
+# the same reason .env.local is git-ignored:
+#
+#   Build-time config (baked into the JS bundle by Vite):
+#     VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID,
+#     VITE_FIREBASE_STORAGE_BUCKET, VITE_FIREBASE_MESSAGING_SENDER_ID,
+#     VITE_FIREBASE_APP_ID
+#
+#   Deploy credential (lets the CLI act on the project without a human login):
+#     FIREBASE_SERVICE_ACCOUNT  -> the full JSON of a service-account key.
+#     Create it in Firebase Console -> Project settings -> Service accounts ->
+#     "Generate new private key", then paste the whole file into the secret.
+
+name: Deploy to Firebase
+
+# Run on every push to main, and allow a manual run from the Actions tab.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# If several pushes land quickly, only keep the newest deploy running.
+concurrency:
+  group: firebase-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Get the repository contents.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Set up Node, caching the frontend's npm downloads for faster runs.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # 3. Install exactly the locked dependencies (reproducible builds).
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      # 4. Build the production bundle. Vite reads the VITE_FIREBASE_* values from
+      #    the environment here and compiles them into the static files.
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+        run: npm run build
+
+      # 5. Deploy rules, indexes, storage rules, and hosting in one go.
+      #    Runs from the repo root because that is where firebase.json lives.
+      #    The service-account JSON is written to a temp file, and the CLI picks
+      #    it up via GOOGLE_APPLICATION_CREDENTIALS (Application Default Creds).
+      - name: Deploy to Firebase
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-service-account.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-service-account.json"
+          npx --yes firebase-tools@14 deploy \
+            --only firestore,storage,hosting \
+            --project shalva-jce \
+            --non-interactive

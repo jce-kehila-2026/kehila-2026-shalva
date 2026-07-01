@@ -27,7 +27,9 @@ backend/privateKey.json
 
 # Firebase
 .firebase/
-.firebaserc
+# NOTE: .firebaserc IS committed on purpose — it only holds the default project
+# id (shalva-jce), which is public (it's part of the hosting URL), and both local
+# and CI `firebase deploy` need it to know which project to target.
 .env.local
 # Playwright E2E artifacts (screenshots, reports, traces)
 test-results/
