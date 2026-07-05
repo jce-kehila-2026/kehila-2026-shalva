@@ -31,6 +31,8 @@ const SIGN_IN_ERROR_MESSAGES = {
   'auth/invalid-credential': INVALID_CREDENTIALS_MESSAGE,
   'auth/too-many-requests': 'יותר מדי ניסיונות. נסו שוב מאוחר יותר.',
   'auth/network-request-failed': 'יש בעיית רשת. בדקו את החיבור לאינטרנט ונסו שוב.',
+  'auth/invalid-api-key': 'שגיאת תצורת מערכת: מפתח API לא תקין. פנו למנהל המערכת.',
+  'auth/api-key-not-valid.-please-pass-a-valid-api-key.': 'שגיאת תצורת מערכת: מפתח API חסום או לא תקין (בדקו הגבלות דומיין ב-GCP).',
 };
 
 // Password-reset error codes → friendly Hebrew. A smaller set of codes is
@@ -39,7 +41,10 @@ const RESET_ERROR_MESSAGES = {
   'auth/invalid-email': 'כתובת האימייל אינה תקינה.',
   'auth/too-many-requests': 'יותר מדי ניסיונות. נסו שוב מאוחר יותר.',
   'auth/network-request-failed': 'יש בעיית רשת. בדקו את החיבור לאינטרנט ונסו שוב.',
+  'auth/invalid-api-key': 'שגיאת תצורת מערכת: מפתח API לא תקין. פנו למנהל המערכת.',
+  'auth/api-key-not-valid.-please-pass-a-valid-api-key.': 'שגיאת תצורת מערכת: מפתח API חסום או לא תקין (בדקו הגבלות דומיין ב-GCP).',
 };
+
 
 // Pick a friendly message for a Firebase error, falling back to a generic one.
 const getAuthErrorMessage = (error, messages, fallbackMessage) =>
