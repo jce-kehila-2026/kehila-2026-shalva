@@ -58,6 +58,7 @@ const ProgramManagement = () => {
   const [programToEdit, setProgramToEdit] = useState(null);
   const [editForm, setEditForm] = useState({ name: '', description: '', imageUrl: '' });
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!isMountedRef.current) {
@@ -213,15 +214,15 @@ const ProgramManagement = () => {
   };
 
   // Handle deleting program
-  const handleDeleteProgram = async () => {
+  const confirmDeleteProgram = async () => {
     if (!programToEdit) return;
-    if (!window.confirm(`האם למחוק את התוכנית "${programToEdit.name}"?`)) return;
 
     try {
       await deleteDoc(doc(db, 'programs', programToEdit.id));
       if (!isMountedRef.current) {
         return;
       }
+      setIsDeleteConfirmOpen(false);
       setIsEditModalOpen(false);
       setProgramToEdit(null);
       await fetchData();
@@ -433,7 +434,7 @@ const ProgramManagement = () => {
                 <button
                   type="button"
                   className="mgmt-danger-btn group-delete-btn"
-                  onClick={handleDeleteProgram}
+                  onClick={() => setIsDeleteConfirmOpen(true)}
                 >
                   מחק תוכנית
                 </button>
@@ -445,6 +446,37 @@ const ProgramManagement = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Program Confirmation Modal */}
+      {isDeleteConfirmOpen && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" style={{ zIndex: 1100 }}>
+          <div className="modal-content" style={{ maxWidth: '380px' }}>
+            <div className="modal-header">מחיקת תוכנית</div>
+            <div style={{ marginBottom: '20px', fontSize: '15px', color: 'var(--text)' }}>
+              האם את/ה בטוח/ה שברצונך למחוק את התוכנית <strong>{programToEdit?.name}</strong>?
+              <span style={{ fontSize: '13px', color: 'var(--danger)', marginTop: '8px', display: 'block' }}>
+                פעולה זו אינה הפיכה ותמחק את התוכנית לצמיתות.
+              </span>
+            </div>
+            <div className="mgmt-form-actions" style={{ gap: '10px' }}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setIsDeleteConfirmOpen(false)}
+              >
+                ביטול
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={confirmDeleteProgram}
+              >
+                מחק תוכנית
+              </button>
+            </div>
           </div>
         </div>
       )}
