@@ -67,12 +67,7 @@ const IDLE_LIMIT_MS = 5 * 60 * 1000;
 
 function App() {
   // The signed-in user (null when logged out).
-  const [user, _setUser] = useState(null);
-  const userRef = useRef(null);
-  const setUser = (val) => {
-    _setUser(val);
-    userRef.current = val;
-  };
+  const [user, setUser] = useState(null);
 
   // True while the auth session is being resolved.
   const [loading, setLoading] = useState(true);
@@ -119,16 +114,6 @@ function App() {
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (!isActive) {
-        return;
-      }
-
-      // If we already have the user profile loaded and the UID matches, we can skip
-      // fetching the profile again (avoids redundant reads and transient offline boot-outs).
-      if (currentUser && userRef.current && userRef.current.uid === currentUser.uid) {
-        if (!initialAuthResolved.current) {
-          initialAuthResolved.current = true;
-          setLoading(false);
-        }
         return;
       }
 
@@ -184,11 +169,9 @@ function App() {
           return;
         }
 
-        // On error, treat the user as logged out only if we don't already have a valid session.
+        // On error, treat the user as logged out.
         console.error('Error fetching user role:', error);
-        if (!userRef.current) {
-          setUser(null);
-        }
+        setUser(null);
       } finally {
         if (isActive) {
           initialAuthResolved.current = true;
