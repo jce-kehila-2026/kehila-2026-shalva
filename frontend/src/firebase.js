@@ -48,10 +48,8 @@ const firebaseConfig = useEmulators
     };
 
 
-// During normal development (NOT emulator mode), fail loudly if any live config
-// value is missing (a forgotten/incomplete .env.local). Without this, the app
-// would start and only later crash with Firebase's cryptic "auth/invalid-api-key".
-if (import.meta.env.DEV && !useEmulators) {
+// Fail loudly or log a warning if any live config value is missing (e.g. forgotten GitHub Secrets or .env).
+if (!useEmulators) {
   // Collect the names of every config field that came back empty.
   const missingKeys = Object.entries(firebaseConfig)
     .filter(([, value]) => !value)
@@ -60,7 +58,7 @@ if (import.meta.env.DEV && !useEmulators) {
   if (missingKeys.length > 0) {
     console.warn(
       'Firebase config is missing: ' + missingKeys.join(', ') +
-      '. Check that frontend/.env.local exists and has all the VITE_FIREBASE_* values.'
+      '. Check that environment variables / GitHub Secrets (VITE_FIREBASE_*) are set during build.'
     );
   }
 }
